@@ -1,0 +1,24 @@
+name = "paralever"
+version = "0.1.0"
+defaultTargets = ["paralever"]
+
+[[lean_lib]]
+name = "Paralever"
+
+[[lean_exe]]
+name = "paralever"
+root = "Main"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.32.2"
+
+# iris-lean: we use only the BI interface, the proof mode, and the heap algebra.
+# The package root is the `Iris` subdirectory of the repo.
+# See the plan: we deliberately do NOT depend on Iris/ProgramLogic or Iris/HeapLang.
+[[require]]
+name = "iris"
+git = "https://github.com/leanprover-community/iris-lean"
+subDir = "Iris"
+rev = "v4.32.2"
