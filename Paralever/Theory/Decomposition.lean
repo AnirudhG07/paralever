@@ -14,34 +14,19 @@ namespace Paralever
 
 /-- Locations `p` doesn't write are untouched by its canonical run. The base fact the locality
 lemma builds on. -/
+@[simp, grind .]
 theorem runSeq_frame {τ : Type} (p : ParM τ) (σ : State) :
     ∀ l, l ∉ (accesses p σ).writes → (runSeq p σ).2 l = σ l := by
   induction p generalizing σ with
   | pure a => intro l _; rfl
-  | read l' k ih =>
-      intro l hl
-      simp only [accesses] at hl
-      simp only [runSeq]
-      exact ih (σ l') σ l hl
-  | write l' v k ih =>
-      intro l hl
-      simp only [accesses, Footprint.union] at hl
-      have hne : l ≠ l' := by intro h; apply hl; subst h; simp
-      have hl' : l ∉ (accesses (k ()) (σ.update l' v)).writes := by
-        intro hmem; exact hl (by right; exact hmem)
-      simp only [runSeq]
-      rw [ih () (σ.update l' v) l hl', State.update_other]
-      exact hne
-  | par p q k ihp ihq ihk =>
-      intro l hl
-      simp only [accesses, Footprint.union, List.mem_append, not_or] at hl
-      obtain ⟨h1, h2, h3⟩ := hl
-      simp only [runSeq]
-      rw [ihk _ _ l h3, ihq _ l h2, ihp σ l h1]
+  | read l' k ih => grind
+  | write l' v k ih =>  grind
+  | par p q k ihp ihq ihk => grind
 
 /-- Both components disjoint from `F`, as a conjunction rather than one combined `reads++writes`
 list — this is what actually projects cleanly through `Footprint.union`'s nesting; the combined
 form fights every `par`-case proof because `union` interleaves reads and writes separately. -/
+@[simp, grind .]
 def FDisjoint (F : List Loc) (f : Footprint) : Prop := Disjoint F f.reads ∧ Disjoint F f.writes
 
 theorem FDisjoint.left {F : List Loc} {a b : Footprint} (h : FDisjoint F (Footprint.union a b)) :
@@ -67,47 +52,24 @@ theorem accesses_runSeq_locality {τ : Type} (p : ParM τ) (σ σ' : State) (F :
   induction p generalizing σ σ' with
   | pure a => exact ⟨rfl, rfl, fun l _ => hagree l ‹_›⟩
   | read l k ih =>
-      have hlF : l ∉ F := fun hl => hF.1 l hl (by simp [accesses, Footprint.union])
-      have hlv : σ l = σ' l := hagree l hlF
-      have hF' : FDisjoint F (accesses (k (σ' l)) σ) := by
-        constructor
-        · intro x hx hmem; exact hF.1 x hx (by simp [accesses, Footprint.union, hlv, hmem])
-        · intro x hx hmem; exact hF.2 x hx (by simp [accesses, Footprint.union, hlv, hmem])
-      obtain ⟨e1, e2, e3⟩ := ih (σ' l) σ σ' hF' hagree
-      simp only [accesses, runSeq, hlv]
-      exact ⟨by rw [e1], e2, e3⟩
+      grind only [FDisjoint, = accesses.eq_2, = runSeq.eq_2, = Disjoint.eq_1,
+        = Footprint.union.eq_1, = List.cons_append, = List.mem_cons, = List.mem_append]
   | write l v k ih =>
-      have hF' : FDisjoint F (accesses (k ()) (σ.update l v)) := by
-        constructor
-        · intro x hx hmem; exact hF.1 x hx (by simp [accesses, Footprint.union, hmem])
-        · intro x hx hmem; exact hF.2 x hx (by simp [accesses, Footprint.union, hmem])
-      have hagree' : ∀ l', l' ∉ F → (σ.update l v) l' = (σ'.update l v) l' := by
-        intro l' hl'
-        by_cases heq : l' = l
-        · simp [State.update, heq]
-        · rw [State.update_other σ v heq, State.update_other σ' v heq]
-          exact hagree l' hl'
-      obtain ⟨e1, e2, e3⟩ := ih () (σ.update l v) (σ'.update l v) hF' hagree'
-      simp only [accesses, runSeq]
-      exact ⟨by rw [e1], e2, e3⟩
+      grind only [accesses, FDisjoint, runSeq, Footprint.union, = Disjoint.eq_1, = List.cons_append,
+        State.update_other, State.update_same, = List.mem_append, ← List.not_mem_nil]
   | par p q k ihp ihq ihk =>
       have hFp : FDisjoint F (accesses p σ) := hF.left
       obtain ⟨ep1, ep2, ep3⟩ := ihp σ σ' hFp hagree
       have hFq : FDisjoint F (accesses q (runSeq p σ).2) := hF.right.left
-      obtain ⟨eq1, eq2, eq3⟩ := ihq (runSeq p σ).2 (runSeq p σ').2 hFq ep3
-      have hFk : FDisjoint F
-          (accesses (k ((runSeq p σ).1, (runSeq q (runSeq p σ).2).1)) (runSeq q (runSeq p σ).2).2) :=
-        hF.right.right
-      obtain ⟨ek1, ek2, ek3⟩ := ihk _ _ _ hFk eq3
-      rw [ep2, eq2] at ek1 ek2 ek3
-      simp only [accesses, runSeq, ep2, eq2]
-      exact ⟨by rw [ep1, eq1, ek1], ek2, ek3⟩
+      grind only [accesses, runSeq, FDisjoint, Footprint.union, = Disjoint.eq_1,
+        usr List.append_assoc, = List.mem_append]
 
 /-- What `accesses`'s definition asymmetrically assumed (`docs/access.md`) is now a theorem, not
 a hand-wave: under `Indep`, `q`'s canonical run from the post-`p` state `σ₁` agrees with its run
 from the original `σ` — i.e. `q` really is computed in isolation, matching Brookes' `s₁ ∗ s₂`
 splitting. `Indep`'s write-disjointness components are exactly `FDisjoint` at `F := p`'s writes;
 `runSeq_frame` is exactly the agreement hypothesis `accesses_runSeq_locality` needs. -/
+@[simp, grind .]
 theorem accesses_runSeq_isolated {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
     (h : Indep (accesses p σ) (accesses q (runSeq p σ).2)) :
     accesses q (runSeq p σ).2 = accesses q σ ∧
@@ -117,6 +79,7 @@ theorem accesses_runSeq_isolated {α β : Type} (p : ParM α) (q : ParM β) (σ 
   obtain ⟨e1, e2, _⟩ := accesses_runSeq_locality q (runSeq p σ).2 σ (accesses p σ).writes hF hagree
   exact ⟨e1, e2⟩
 
+@[simp, grind .]
 theorem runSeq_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
     runSeq (ParM.bind p f) σ = runSeq (f (runSeq p σ).1) (runSeq p σ).2 := by
   induction p generalizing σ with
@@ -129,6 +92,7 @@ theorem runSeq_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : Stat
 part plus well-formedness of the continuation *at the canonical outcome*. General and reusable —
 this is what makes `wellFormed_of_seqPair` (and its N-ary generalization) mechanical rather than a
 repeat of the `par` case's difficulty. -/
+@[simp, grind .]
 theorem WellFormed_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
     WellFormed (ParM.bind p f) σ ↔
     WellFormed p σ ∧ WellFormed (f (runSeq p σ).1) (runSeq p σ).2 := by
@@ -137,15 +101,12 @@ theorem WellFormed_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : 
   | read l k ih => exact ih (σ l) f σ
   | write l v k ih => exact ih () f (σ.update l v)
   | par p q k ihp ihq ihk =>
-      simp only [ParM.bind, WellFormed, runSeq]
-      rw [ihk _ f _]
-      constructor
-      · rintro ⟨h1, h2, h3, h4, h5⟩; exact ⟨⟨h1, h2, h3, h4⟩, h5⟩
-      · rintro ⟨⟨h1, h2, h3, h4⟩, h5⟩; exact ⟨h1, h2, h3, h4, h5⟩
+      grind only [ParM.bind, WellFormed, runSeq]
 
 /-- The canonical reference value does not distinguish `parPair` from `seqPair` — `runSeq` was
 already defined by running `par`'s branches sequentially. No `Indep` needed for this fact; the
 difference between parallel and sequential only shows up operationally, in `Reaches`. -/
+@[simp, grind .]
 theorem runSeq_par_eq_seq {α β : Type} (p : ParM α) (q : ParM β) (σ : State) :
     runSeq (ParM.parPair p q) σ = runSeq (ParM.seqPair p q) σ := by
   unfold ParM.seqPair
@@ -168,21 +129,13 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
       constructor
       · intro h
         have h2 := Reaches.terminal (c := Conf.run (ParM.pure a) σ) rfl h
-        simp only [Conf.run.injEq, ParM.pure.injEq] at h2
-        simp [runSeq, h2.1, h2.2]
-      · intro h
-        simp only [runSeq, Prod.mk.injEq] at h
-        obtain ⟨h5, h4⟩ := h
-        subst h5; subst h4
-        exact Reaches.refl
+        simp_all
+      · grind [Reaches]
   | read l k ih =>
       intro σ r σ' hwf
       have hstep : stepC (Conf.run (ParM.read l k) σ) = [Conf.run (k (σ l)) σ] := rfl
       constructor
-      · intro h
-        rcases Reaches.single_step hstep h with heq | h'
-        · exact absurd heq (by simp)
-        · exact (ih (σ l) σ r σ' hwf).mp h'
+      · grind [Reaches.single_step]
       · intro h
         refine Reaches.trans ?_ ((ih (σ l) σ r σ' hwf).mpr h)
         exact Reaches.tail Reaches.refl (by rw [hstep]; exact List.mem_singleton_self _)
@@ -190,10 +143,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
       intro σ r σ' hwf
       have hstep : stepC (Conf.run (ParM.write l v k) σ) = [Conf.run (k ()) (σ.update l v)] := rfl
       constructor
-      · intro h
-        rcases Reaches.single_step hstep h with heq | h'
-        · exact absurd heq (by simp)
-        · exact (ih () (σ.update l v) r σ' hwf).mp h'
+      · grind[Reaches.single_step]
       · intro h
         refine Reaches.trans ?_ ((ih () (σ.update l v) r σ' hwf).mpr h)
         exact Reaches.tail Reaches.refl (by rw [hstep]; exact List.mem_singleton_self _)

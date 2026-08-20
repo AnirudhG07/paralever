@@ -66,6 +66,8 @@ side conditions. This is the **frame problem**.
 **Q1.** Why is `{P} C₁ {R}, {R} C₂ {Q} ⊢ {P} C₁;C₂ {Q}` insufficient for `C₁ ∥ C₂`? What can `C₂`
 do that breaks the reasoning for `C₁`?
 
+**Ans:** Consider `{x = 5} [p] := 5 {x = 5}, {x = 5} [p] := 8 {x = 5}`, now if `C₁` and `C₂` run in parallel, they can both write to the same location pointed by `p`(which is `x`), for `C₁` it is fine, but `C₂` will change the value of `x` to 8. If `C₂` runs first, then `C₁` will read the value of `x` as 8, which is not equal to 5. Hence it is insufficient for `C₁ ∥ C₂`.
+
 ---
 
 ## 2. Separation logic — ownership as the fix
@@ -383,6 +385,24 @@ indep_safe : Indep (accesses p σ) (accesses q σ) → Safe (.run (parPair p q) 
 Bernstein is then *one sufficient condition* for safety, not part of the metatheorem — so Tier-1
 footprints, the Tier-2 ownership logic, and any future criterion (movers, confluence) all target
 the same obligation.
+
+## Final verdict
+
+We use the `ParM`/`WellFormed` interleaving model, not the `Task`-based model, as the source of
+truth for correctness, because it is the only one of the two that proves anything about
+*interference*: it is our mechanization of Brookes' Parallel Decomposition Lemma (*A Semantics for
+Concurrent Separation Logic*, CONCUR'04 — §5), via Vafeiadis' operational reformulation (*CSL and
+Operational Semantics*, MFPS'11), and it holds for *every* schedule, not one measured run. The
+final lemma is `par_seq_eq`/`parAll_par_seq_eq` (`Theory/Sequentialize.lean`): `ParSeqEq (parPair p
+q) (seqPair p q) σ` whenever `WellFormed (parPair p q) σ` — and the condition actually discharged
+per program is `WellFormed` itself, i.e. Bernstein's independence (`w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅`,
+shared reads always allowed) checked at *every* `par` node in the term, not only the outermost one
+(§9's counterexample is exactly why the outermost check alone is unsound). The `Task` model
+(`Compile/TaskFacts.lean`) is kept as a deliberately weaker, complementary check: it proves the
+compiled program computes the right *value* by direct computation, and — checked empirically, not
+by Lean's proof, since `Task`'s real concurrency is invisible to the type theory — that the spawned
+work's wall-clock windows genuinely overlap; it says nothing about interference because `Task` is
+`rfl`-trivial in the logic and has no way to represent a race in the first place.
 
 ---
 

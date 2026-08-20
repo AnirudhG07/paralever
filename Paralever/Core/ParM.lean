@@ -33,6 +33,7 @@ namespace ParM
 variable {α β γ : Type}
 
 /-- Graft `f` onto every leaf of `p`. -/
+@[simp, grind .]
 def bind : ParM α → (α → ParM β) → ParM β
   | .pure a,      f => f a
   | .read l k,    f => .read l (fun v => bind (k v) f)
@@ -50,15 +51,18 @@ def wr (l : Loc) (v : Val) : ParM Unit := .write l v .pure
 def parPair (p : ParM α) (q : ParM β) : ParM (α × β) := .par p q .pure
 
 /-- Sequential counterpart of `parPair`: the right-hand side of the sequentialization theorem. -/
+@[simp, grind .]
 def seqPair (p : ParM α) (q : ParM β) : ParM (α × β) :=
   bind p (fun a => bind q (fun b => .pure (a, b)))
 
 /-- N-ary parallelism, derived from binary `par` — the nesting fixes an association, not a
 serialization, so this is genuinely k-way parallel. -/
+@[simp, grind .]
 def parAll : List (ParM α) → ParM (List α)
   | []      => .pure []
   | p :: ps => bind (parPair p (parAll ps)) (fun r => .pure (r.1 :: r.2))
 
+@[simp, grind .]
 def seqAll : List (ParM α) → ParM (List α)
   | []      => .pure []
   | p :: ps => bind (seqPair p (seqAll ps)) (fun r => .pure (r.1 :: r.2))
@@ -83,7 +87,7 @@ is wrong — do not weaken it to hold only under `run`. -/
   | write l v k ih => exact congrArg (ParM.write l v) (funext ih)
   | par p q k _ _ ih => exact congrArg (ParM.par p q) (funext ih)
 
-theorem bind_assoc (p : ParM α) (f : α → ParM β) (g : β → ParM γ) :
+@[simp, grind .] theorem bind_assoc (p : ParM α) (f : α → ParM β) (g : β → ParM γ) :
     bind (bind p f) g = bind p (fun a => bind (f a) g) := by
   induction p with
   | pure a => rfl
