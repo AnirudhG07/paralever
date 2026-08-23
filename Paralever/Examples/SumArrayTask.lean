@@ -1,23 +1,23 @@
 import Paralever.Compile.TaskFacts
-import Paralever.Examples.Reduce
+import Paralever.Examples.SumArray
 
-/-! # Reduce, the "second model": real `Task`, no `ParM`
+/-! # SumArray, the "second model": real `Task`, no `ParM`
 
-`Examples/Reduce.lean` proves `sumRange_par_seq_eq` against `ParM`'s abstract interleaving
+`Examples/SumArray.lean` proves `sumRange_par_seq_eq` against `ParM`'s abstract interleaving
 semantics — general (any schedule), but gated on `WellFormed` and on the one open case in
 `Theory/Decomposition.lean`.
 
 This file proves the *same reduce algorithm* correct a completely different way: write it
 directly against Lean's real `Task` (genuine `Task.spawn`, not the `ParM` model), and check
-correctness by computation against `sumRangePure` — the identical pure spec `Reduce.lean` already
+correctness by computation against `sumRangePure` — the identical pure spec `SumArray.lean` already
 uses, so both models are answerable to the same ground truth. See `Compile/TaskFacts.lean` for
 why this method is complete-but-weaker: no `WellFormed`, no schedule quantification, but also no
 ability to even express a data race, since `Task` is `rfl`-trivial in the logic.
 -/
 
-namespace Paralever.Examples.ReduceTask
+namespace Paralever.Examples.SumArrayTask
 
-open Paralever Paralever.Examples.Reduce
+open Paralever Paralever.Examples.SumArray
 
 /-- Sum one chunk as a genuinely spawned `Task` — this call really does hand work to Lean's task
 scheduler, unlike anything in `ParM`. -/
@@ -41,10 +41,10 @@ theorem sumRangeParTask_eq (vals : List Int) (chunks : ChunkPlan) :
   rw [List.map_map]
   rfl
 
-/-! Concrete checks, both even and uneven chunking, reusing `Reduce.lean`'s exact fixtures — same
+/-! Concrete checks, both even and uneven chunking, reusing `SumArray.lean`'s exact fixtures — same
 inputs the `ParM` model was checked against. -/
 
 example : (sumRangeParTask vals8 evenPlan8).get = 36 := rfl
 example : (sumRangeParTask vals8 unevenPlan8).get = 36 := rfl
 
-end Paralever.Examples.ReduceTask
+end Paralever.Examples.SumArrayTask

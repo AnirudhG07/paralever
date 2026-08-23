@@ -1,4 +1,4 @@
-import Paralever.Theory.Decomposition
+import Paralever.Theory.WellFormedCanonical
 
 /-! # The sequentialization theorem
 

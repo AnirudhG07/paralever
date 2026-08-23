@@ -278,7 +278,7 @@ Paralever/
   Notation/            -- ∥, A[i], regions, parallel-for
   Pragma/              -- #parallel, collapse, reduction, private
   Compile/ToTask.lean  -- ParM → Task.spawn + Task.mapList; preservation
-  Examples/{Reduce, Sort, MatMul, LoopPar}.lean
+  Examples/{SumArray, Sort, MatMul, LoopPar}.lean
 ```
 
 ## Milestones

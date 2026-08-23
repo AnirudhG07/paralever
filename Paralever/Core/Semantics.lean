@@ -47,6 +47,7 @@ def isWrite : Label → Bool
   | .read _  => false
 
 /-- Same location, at least one write. Bernstein's criterion for a single step. -/
+@[simp, grind .]
 def conflicts (a b : Label) : Bool :=
   a.loc == b.loc && (a.isWrite || b.isWrite)
 

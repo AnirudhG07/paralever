@@ -1,6 +1,8 @@
 # The decomposition proof
 
-Rationale for `Paralever/Theory/Decomposition.lean` and the `WellFormed` predicate in
+Rationale for `Paralever/Theory/WellFormedCanonical.lean` (the theorem itself and its
+dedicated supporting lemmas) and `Paralever/Theory/Decomposition.lean` (general `runSeq`/
+`WellFormed`-through-`bind` facts reused elsewhere). `WellFormed` itself lives in
 `Core/Access.lean`.
 
 ## Top-level `Indep` is not enough — `WellFormed` is recursive
@@ -32,13 +34,16 @@ obligation should actually check.
 
 ## Proof architecture — status
 
-Four pieces. Three are fully proved (checked via `#print axioms`, no `sorryAx`); one remains.
+**All four pieces are fully proved** (checked via `#print axioms`: `propext`, `Classical.choice`,
+`Quot.sound` — no `sorryAx`; `Classical.choice` is pre-existing, inherited transitively from
+`grind`-based lemmas elsewhere in the codebase, not introduced by this proof). Zero `sorry` in the
+project.
 
 **1. `Reaches.terminal` / `Reaches.single_step`** (`Core/Semantics.lean`) — ✅ proved. Generic
 facts about `Reaches` on configurations with zero or one successor. Needed because `read`/`write`
 steps are deterministic (exactly one successor each); only `par` genuinely branches.
 
-**2. Locality** (`Theory/Decomposition.lean`) — ✅ proved, in three layers:
+**2. Locality** (`Theory/WellFormedCanonical.lean`) — ✅ proved, in three layers:
 - `runSeq_frame`: locations `p` doesn't write are untouched by its canonical run.
 - `FDisjoint`/`.left`/`.right`: disjointness stated as *reads and writes separately*
   (`Disjoint F f.reads ∧ Disjoint F f.writes`) rather than one `Disjoint F (reads++writes)` list —
@@ -55,7 +60,7 @@ steps are deterministic (exactly one successor each); only `par` genuinely branc
   What `docs/access.md` called an asymmetry that "vanishes under `Indep`" is now a theorem, not a
   hand-wave.
 
-**3. `wellFormed_canonical`** (the crux, still open) — under `WellFormed p σ`, the *only*
+**3. `wellFormed_canonical`** (the crux — ✅ fully proved) — under `WellFormed p σ`, the *only*
 configuration `p` reaches via the real nondeterministic `step`/`Reaches` is the canonical
 `runSeq p σ`:
 
@@ -64,16 +69,65 @@ theorem wellFormed_canonical (p : ParM τ) (σ : State) (h : WellFormed p σ) (r
     Reaches (.run p σ) (.run (.pure r) σ') ↔ (r, σ') = runSeq p σ
 ```
 
-`pure`/`read`/`write` are ✅ proved (immediate from (1) plus the definitions). `par` is `sorry`.
-With locality (2) now available, what remains is specifically the **operational** half — relating
-the real `step`/`Reaches` interleaving to the canonical value, not `runSeq` to itself:
-- **Join-point decomposition**: any interleaved run of `.par p q k` factors into a prefix of `p`'s
-  own reachable steps interleaved with a prefix of `q`'s, up to the point both finish. Forced by
-  `step`'s own shape (a `.par p' q' k` config stays a `.par` node, progressing whichever side isn't
-  done, until *both* are `.pure` — only then does it transition into `k`).
-- **The diamond step**: two actions from different, independent branches commute
-  (`State.update_comm`, already proved in `Core/Semantics.lean`) — this is what makes the
-  interleaving order irrelevant once the join-point structure is established.
+`pure`/`read`/`write` are immediate from (1) plus the definitions. `par` — the genuinely hard case,
+Brookes' Parallel Decomposition Lemma mechanized for this operational semantics — is now also
+proved, via the **operational** half described below: relating the real `step`/`Reaches`
+interleaving to the canonical value, not `runSeq` to itself.
+- **Join-point decomposition** — ✅ proved, `par_dichotomy`. Any interleaved run of `.par p q k`
+  is, at every point, either still in `par` form, has passed through the join into `k`'s
+  continuation, or has crashed — nothing else is possible. This pins down *that* a join happens
+  and that nothing else can; it does **not** yet pin down *which* `(a, b, σ'')` the join lands on.
+- **One-step non-racing from top-level `Indep`** — ✅ proved, `no_race_of_indep` (built on the
+  purely structural `nextAccs_subset_accesses`: a program's *immediate* next label is always
+  already inside its own `accesses`, no `Reaches` involved). This is what lets `reaches_par_left`/
+  `reaches_par_right` (✅ proved) lift a *self-contained* run of one branch into the `.par` context
+  while the other branch sits completely still — the schedule "run `p` to completion, then run
+  `q`" is always legal once `p`, `q` are independent, `q` untouched.
+- **The single-step canonical invariant** — ✅ proved, `step_combined`. This superseded an earlier
+  line of attack (general containment of *every* reachable config against the *original* top-level
+  footprint, at arbitrary depth) that ran into real difficulty: that version's "reached a join
+  point" case needed `wellFormed_canonical`'s own uniqueness direction as an ingredient, making it
+  a three-way mutual induction with no clean base case. The unlock came from a different question:
+  *why does the theorem need `WellFormed` at all?* `step`'s racing check is re-evaluated fresh at
+  every single step, not once at the top — so a real step that doesn't crash is automatically
+  non-racing *at that instant*, for free, no matter how deep the program is nested. The part that
+  actually needs independence is narrower: when the *right* branch of a `.par` moves before the
+  left one, its real starting state is the raw joint state, not the canonical reference point
+  `σ₁ := (runSeq p σ).2` the whole theorem is stated against, and only `Indep` guarantees replaying
+  its step against `σ₁` gives the same result. `step_combined` proves exactly this — one step never
+  changes `runSeq`'s value and never lets a location outside the original footprint leak in — by
+  induction on the moving program, with no appeal to an arbitrary-depth containment argument: the
+  hard "right branch moves first" case uses `step_locality` (an operational analogue of
+  `accesses_runSeq_locality`) to replay that step against `σ₁`, then needs the *footprint* half of
+  its own conclusion, applied one level down via the induction hypothesis, to pin the replayed
+  state down exactly rather than just up to agreement outside some set — which is why the theorem
+  is genuinely proved as one combined statement (`runSeq` invariance + footprint containment
+  together), not two separate lemmas proved in sequence.
+- **Preservation and chaining** — ✅ proved. Iterating `step_combined` along a *whole* `Reaches`
+  chain — from the join point `par_dichotomy` finds, back to the start — needs `WellFormed`
+  re-established at every intermediate step, to invoke `step_combined` again:
+  - `step_subset_rw`: the finer, `.reads`/`.writes`-tracked-separately version of
+    `step_combined`'s containment conjunct — needed because reconstructing `Indep`'s three
+    separate Bernstein conditions after a step isn't possible from the combined, read-and-write-
+    together `FDisjoint` version alone.
+  - `WellFormed_preserved`: subject reduction — `WellFormed` survives one real step, whichever
+    branch moved, at any nesting depth. Its compound-branch case doesn't re-derive containment
+    from scratch; it uses the structurally-smaller induction hypothesis (itself
+    `WellFormed_preserved`) for that branch's own `WellFormed`, and `step_subset_rw` only to check
+    `Indep` monotonically shrinks.
+  - `runSeq_invariant_chain` / `subset_chain`: `step_combined` / `step_subset_rw` iterated along a
+    whole chain via `WellFormed_preserved`, giving the uniqueness direction (any real, non-crashing
+    execution's value matches the canonical one) and the containment needed for `reaches_par_left`/
+    `reaches_par_right`'s non-racing side condition on the existence direction — for a branch of
+    *any* nesting depth, no separate general-containment development needed.
+  - `no_race_contained`: `no_race_of_indep` generalized to take containment as explicit hypotheses,
+    for use once labels are bounded by an *original* footprint several steps back rather than their
+    own current one.
+
+  Assembled in `wellFormed_canonical`'s `.par` case: the → direction is `runSeq_invariant_chain`
+  applied to the given `Reaches`; the ← direction explicitly constructs the "run `p` fully, then
+  run `q`, then step into `k`" witness schedule via `reaches_par_left`/`reaches_par_right`, with
+  `subset_chain` + `no_race_contained` discharging the non-racing side conditions.
 
 **4. `runSeq (parPair p q) σ = runSeq (seqPair p q) σ`** — ✅ proved (`runSeq_par_eq_seq`). A fact
 purely about the *definitions*, no operational semantics involved. `runSeq` already treats
@@ -102,9 +156,8 @@ conjuncts.
 
 `parAll_eq_seqAll` (`Theory/Sequentialize.lean`), exactly as predicted: built the same way as
 `par_eq_seq` (`wellFormed_canonical` on each side + a definitional bridge), by induction on the
-list. `runSeq_parAll_eq_seqAll` and `wellFormed_of_seqAll` are both fully proved, no `sorry`. The
-metatheorem itself inherits the same and only open dependency as `par_eq_seq` — the `par` case of
-`wellFormed_canonical` — nothing new.
+list. `runSeq_parAll_eq_seqAll` and `wellFormed_of_seqAll` are both fully proved, no `sorry`, and
+now (with `wellFormed_canonical` complete) so is `parAll_par_seq_eq` itself.
 
 `wellFormed_of_seqPair` also went from `sorry` to a real proof along the way, via a new general
 lemma `WellFormed_bind` (well-formedness distributes through `bind`: the whole is well-formed iff
@@ -112,6 +165,8 @@ the first part is and the continuation is well-formed *at the canonical outcome*
 kind of fact that made the N-ary case mechanical rather than a repeat of the `par` case's
 difficulty.
 
-**Current total: exactly one `sorry` in the codebase** — `wellFormed_canonical`'s `par` case,
-tracked as a TODO there. Everything else in `Core/` and `Theory/` is sorry-free and axiom-checked
-(`propext`/`Quot.sound` only, no `sorryAx`, no `Classical.choice`).
+**Current total: zero `sorry` in the codebase.** `wellFormed_canonical`, `par_seq_eq`, and
+`parAll_par_seq_eq` are all fully proved — checked via `#print axioms` on each:
+`[propext, Classical.choice, Quot.sound]`, no `sorryAx`. `Classical.choice` is inherited
+transitively through `grind`-annotated lemmas already in the codebase (e.g. `runSeq_frame`);
+it is not something this proof itself needed to introduce.

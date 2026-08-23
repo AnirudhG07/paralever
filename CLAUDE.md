@@ -100,6 +100,6 @@ Paralever/
   Notation/  ∥, A[i], regions, region_disjoint
   Pragma/    #parallel for, collapse, reduction, private
   Compile/   ToTask.lean
-  Examples/  Reduce, Sort, MatMul, LoopPar
+  Examples/  SumArray, Sort, MatMul, LoopPar
 docs/        design rationale (program-model.md, ...)
 ```

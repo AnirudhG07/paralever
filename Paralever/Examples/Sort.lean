@@ -1,34 +1,52 @@
 import Paralever.Theory.Sequentialize
 
-/-! # Example: independent sub-sorts
+/-! # Example: independent compare-swap rounds
 
-A 4-element array split into two halves; each half is "sorted" by one compare-swap. The two
-halves touch disjoint locations, so `par_seq_eq` applies directly — no new proof technique, just
-an instance of the metatheorem.
+`compareSwap i j` reads and writes both `i` and `j`, so — unlike `SumArray.lean`'s `sumRange`,
+which never writes — independence here is not free: two swaps `(i,j)` and `(i',j')` are Bernstein-
+independent iff `{i,j}` and `{i',j'}` are disjoint, and that has to be checked, not assumed. This
+file is the contrasting case `SumArray.lean`'s docstring points at.
 
-Deliberately stops at the two sub-sorts. Merging the results back together reads *across* both
-halves and is therefore not independent — merging is inherently sequential and outside this
-example's scope; see `docs/theory.md` §11 for the general pattern (sort/merge is example 2 of
-`PLAN.md`'s flagship set).
+**§1**: the original two-half warm-up (`sortLeftHalf`/`sortRightHalf`), independence by `decide`.
 
-`par_seq_eq` here still carries the one open dependency tracked as a TODO in
+**§2 (variation)**: `SwapPlan := List (Loc × Loc)` generalizes to *any number* of independent
+swaps, not just two fixed halves — the odd-even-transposition-sort building block. Independence
+is discharged by one hypothesis, `plan.locs.Nodup` (no location used by more than one pair in the
+whole plan), via the general Bernstein-from-subsets lemma `indep_of_footprint_subset`.
+
+`swapRound_par_seq_eq`/`sort_par_seq_eq` carry the one open dependency tracked as a TODO in
 `Theory/Decomposition.lean` (`wellFormed_canonical`'s `par` case) — see `docs/decomposition.md`.
-Everything else in this file is sorry-free.
+Everything else in this file is sorry-free. A real `Task`-based compiled variant with an actual
+wall-clock benchmark is in `SortTask.lean`.
 -/
 
 namespace Paralever.Examples.Sort
 
 open ParM
 
-/-- Compare-and-swap two locations into ascending order. -/
-def compareSwap (i j : Loc) : ParM Unit := do
-  let a ← rd i
-  let b ← rd j
-  match a, b with
-  | .int x, .int y =>
-      if y < x then do wr i (.int y); wr j (.int x)
-      else return ()
-  | _, _ => return ()
+/-- `accesses` through `bind` — same fact as `SumArray.accesses_bind`, needed again here since
+`compareSwap` (unlike `sumRange`) actually writes, so the footprint argument below needs it. -/
+theorem accesses_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
+    accesses (ParM.bind p f) σ =
+    Footprint.union (accesses p σ) (accesses (f (runSeq p σ).1) (runSeq p σ).2) := by
+  induction p generalizing σ with
+  | pure a => rfl
+  | read l k ih => grind
+  | write l v k ih => grind
+  | par p q k ihp ihq ihk => grind
+
+/-- Compare-and-swap two locations into ascending order. Written in raw `ParM` constructors (not
+`do`-notation), same reason as `SumArray.sumRange`: keeps the inductive proofs below unfolding by
+`simp`/`rfl` without fighting the `Monad` instance. -/
+def compareSwap (i j : Loc) : ParM Unit :=
+  .read i (fun a => .read j (fun b =>
+    match a, b with
+    | .int x, .int y =>
+        if y < x then .write i (.int y) (fun _ => .write j (.int x) (fun _ => .pure ()))
+        else .pure ()
+    | _, _ => .pure ()))
+
+/-! ### §1 — the original two-half warm-up -/
 
 /-- "Sorting" a 2-element range is exactly one compare-swap. -/
 def sortLeftHalf : ParM Unit := compareSwap 0 1
@@ -56,15 +74,123 @@ theorem wellFormed_sort : WellFormed (parPair sortLeftHalf sortRightHalf) σ0 :=
 
 /-- The metatheorem, instantiated: running both sub-sorts in parallel reaches exactly the outcomes
 running them in sequence does. -/
-theorem sort_par_seq_eq : ParSeqEq (parPair sortLeftHalf sortRightHalf) (seqPair sortLeftHalf sortRightHalf) σ0 :=
+theorem sort_par_seq_eq :
+    ParSeqEq (parPair sortLeftHalf sortRightHalf) (seqPair sortLeftHalf sortRightHalf) σ0 :=
   par_seq_eq sortLeftHalf sortRightHalf σ0 wellFormed_sort
-
-/-! The canonical outcome (`runSeq`, sorry-free — see `docs/decomposition.md` for why this is
-what both sides funnel through under well-formedness): each half ends up sorted independently. -/
 
 example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 0 = .int 3 := rfl
 example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 1 = .int 5 := rfl
 example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 2 = .int 1 := rfl
 example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 3 = .int 8 := rfl
+
+/-! ### §2 (variation) — any number of independent swaps -/
+
+/-- A parallelization plan for compare-swap: one pair per swap, any number of pairs, any indices
+— the odd-even-transposition-sort building block, generalizing §1's fixed two halves. -/
+abbrev SwapPlan := List (Loc × Loc)
+
+/-- All locations touched by the whole plan. -/
+def SwapPlan.locs (plan : SwapPlan) : List Loc := plan.flatMap (fun (i, j) => [i, j])
+
+theorem SwapPlan.locs_cons (p : Loc × Loc) (ps : SwapPlan) :
+    SwapPlan.locs (p :: ps) = [p.1, p.2] ++ SwapPlan.locs ps := rfl
+
+/-- List subset is monotone under append — local building block for the induction below; not
+worth upstreaming on its own. -/
+theorem List.append_subset_append {α : Type} {l1 l2 l1' l2' : List α}
+    (h1 : l1 ⊆ l1') (h2 : l2 ⊆ l2') : l1 ++ l2 ⊆ l1' ++ l2' := by
+  grind only [= List.subset_def, = List.mem_append]
+
+def swapRoundPar (plan : SwapPlan) : ParM (List Unit) :=
+  ParM.parAll (plan.map (fun (i, j) => compareSwap i j))
+def swapRoundSeq (plan : SwapPlan) : ParM (List Unit) :=
+  ParM.seqAll (plan.map (fun (i, j) => compareSwap i j))
+
+theorem compareSwap_footprint (i j : Loc) (σ : State) :
+    (accesses (compareSwap i j) σ).reads ⊆ [i, j] ∧ (accesses (compareSwap i j) σ).writes ⊆ [i, j] := by
+  simp only [compareSwap, accesses]
+  rcases hσi : σ i with x | b | u <;> rcases hσj : σ j with y | b' | u' <;>
+    simp only [] <;>
+    (try split) <;>
+    simp only [accesses, Footprint.union, Footprint.empty] <;>
+    constructor <;> intro l hl <;> simp_all
+
+theorem compareSwap_wellformed (i j : Loc) (σ : State) : WellFormed (compareSwap i j) σ := by
+  simp only [compareSwap, WellFormed]
+  rcases hσi : σ i with x | b | u <;> rcases hσj : σ j with y | b' | u' <;>
+    simp only [] <;> (try split) <;> trivial
+
+theorem swapRoundPar_footprint (plan : SwapPlan) (σ : State) :
+    (accesses (swapRoundPar plan) σ).reads ⊆ plan.locs ∧
+    (accesses (swapRoundPar plan) σ).writes ⊆ plan.locs := by
+  induction plan generalizing σ with
+  | nil => simp [swapRoundPar, ParM.parAll, accesses, Footprint.empty, SwapPlan.locs]
+  | cons p ps ih =>
+      obtain ⟨i, j⟩ := p
+      simp only [swapRoundPar] at ih
+      simp only [swapRoundPar, List.map_cons, ParM.parAll, ParM.parPair, accesses_bind, accesses,
+        Footprint.union, SwapPlan.locs_cons]
+      obtain ⟨hr, hw⟩ := compareSwap_footprint i j σ
+      obtain ⟨hr', hw'⟩ := ih (runSeq (compareSwap i j) σ).2
+      constructor <;> (try simp only [List.append_nil, Footprint.empty]) <;>
+        first
+          | exact List.append_subset_append hr hr'
+          | exact List.append_subset_append hw hw'
+
+/-- Bernstein via subset-of-disjoint-sets: if `f`'s reads/writes ⊆ `A`, `g`'s reads/writes ⊆ `B`,
+and `A`, `B` are disjoint, `f` and `g` are independent. The general shape needed whenever writes
+are present — contrast `SumArray.indep_of_no_writes`, which needed no disjointness at all because
+there were no writes to protect. -/
+theorem indep_of_footprint_subset {f g : Footprint} {A B : List Loc}
+    (hfr : f.reads ⊆ A) (hfw : f.writes ⊆ A) (hgr : g.reads ⊆ B) (hgw : g.writes ⊆ B)
+    (hAB : Disjoint A B) : Indep f g := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro l hl1 hl2; exact hAB l (hfw hl1) (hgw hl2)
+  · intro l hl1 hl2; exact hAB l (hfw hl1) (hgr hl2)
+  · intro l hl1 hl2; exact hAB l (hfr hl2) (hgw hl1)
+
+/-- **General**, for any number of swaps, any indices — the only real condition is
+`plan.locs.Nodup`: no location is touched by more than one pair in the whole plan. Contrast
+`SumArray.wellFormed_sumRangePar`, which needed *no* side condition at all: here writes are real,
+so a genuine disjointness check is unavoidable, and this is exactly it. -/
+theorem wellFormed_swapRoundPar (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
+    WellFormed (swapRoundPar plan) σ := by
+  induction plan generalizing σ with
+  | nil => exact WellFormed_parAll_nil σ
+  | cons p ps ih =>
+      obtain ⟨i, j⟩ := p
+      rw [SwapPlan.locs_cons] at h
+      obtain ⟨_, hpsNodup, hdisj⟩ := List.nodup_append.mp h
+      simp only [swapRoundPar, List.map_cons] at ih ⊢
+      apply WellFormed_parAll_cons
+      · exact compareSwap_wellformed i j σ
+      · obtain ⟨hr, hw⟩ := compareSwap_footprint i j σ
+        obtain ⟨hr', hw'⟩ := swapRoundPar_footprint ps (runSeq (compareSwap i j) σ).2
+        refine indep_of_footprint_subset hr hw hr' hw' ?_
+        grind
+      · exact ih (runSeq (compareSwap i j) σ).2 hpsNodup
+
+/-- The metatheorem, for any independent set of swaps. -/
+theorem swapRound_par_seq_eq (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
+    ParSeqEq (swapRoundPar plan) (swapRoundSeq plan) σ := by
+  exact parAll_par_seq_eq _ σ (wellFormed_swapRoundPar plan σ h)
+
+/-! A genuinely uneven-in-*index* instance — three disjoint pairs, not two contiguous halves: -/
+
+def σ6 : State
+  | 0 => .int 5 | 1 => .int 3 | 2 => .int 8 | 3 => .int 1 | 4 => .int 9 | 5 => .int 2 | _ => .int 0
+
+def plan3 : SwapPlan := [(0, 1), (2, 3), (4, 5)]
+
+example : plan3.locs.Nodup := by decide
+
+example : WellFormed (swapRoundPar plan3) σ6 := wellFormed_swapRoundPar plan3 σ6 (by decide)
+
+example : (runSeq (swapRoundPar plan3) σ6).2 0 = .int 3 := rfl
+example : (runSeq (swapRoundPar plan3) σ6).2 1 = .int 5 := rfl
+example : (runSeq (swapRoundPar plan3) σ6).2 2 = .int 1 := rfl
+example : (runSeq (swapRoundPar plan3) σ6).2 3 = .int 8 := rfl
+example : (runSeq (swapRoundPar plan3) σ6).2 4 = .int 2 := rfl
+example : (runSeq (swapRoundPar plan3) σ6).2 5 = .int 9 := rfl
 
 end Paralever.Examples.Sort

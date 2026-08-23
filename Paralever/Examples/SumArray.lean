@@ -37,7 +37,7 @@ TODO in `Theory/Decomposition.lean` (`wellFormed_canonical`'s `par` case) — se
 `docs/decomposition.md`. Everything else in this file is sorry-free.
 -/
 
-namespace Paralever.Examples.Reduce
+namespace Paralever.Examples.SumArray
 
 open ParM
 
@@ -150,6 +150,29 @@ def sumRangePar (chunks : ChunkPlan) : ParM (List Int) := ParM.parAll (chunks.ma
 /-- The sequential counterpart: same chunks, same combine, run one after another. -/
 def sumRangeSeq (chunks : ChunkPlan) : ParM (List Int) := ParM.seqAll (chunks.map sumRange)
 
+/-- `Σ∥ f, chunks` / `Σ; f, chunks`: map `f` over every chunk (in parallel / in sequence) and add
+the partial results — the first real piece of the `Notation/` layer sketched in `PLAN.md`
+(`∥`, `A[i]`, `parallel for`), specialized to "sum." Pure `macro_rules`, so it can never affect
+any proof: it expands to exactly `sumRangePar`/`sumRangeSeq` plus one `foldl`, which
+`sum_notation_eq` below checks by `rfl`. -/
+syntax "Σ∥ " term ", " term : term
+macro_rules
+  | `(Σ∥ $f, $chunks) =>
+      `(ParM.bind (ParM.parAll (List.map $f $chunks)) (fun rs => ParM.pure (List.foldl (· + ·) 0 rs)))
+
+syntax "Σ; " term ", " term : term
+macro_rules
+  | `(Σ; $f, $chunks) =>
+      `(ParM.bind (ParM.seqAll (List.map $f $chunks)) (fun rs => ParM.pure (List.foldl (· + ·) 0 rs)))
+
+example (chunks : ChunkPlan) :
+    (Σ∥ sumRange, chunks : ParM Int)
+      = ParM.bind (sumRangePar chunks) (fun rs => ParM.pure (rs.foldl (· + ·) 0)) := rfl
+
+example (chunks : ChunkPlan) :
+    (Σ; sumRange, chunks : ParM Int)
+      = ParM.bind (sumRangeSeq chunks) (fun rs => ParM.pure (rs.foldl (· + ·) 0)) := rfl
+
 theorem sumRangePar_no_writes (chunks : ChunkPlan) (σ : State) :
     (accesses (sumRangePar chunks) σ).writes = [] := by
   induction chunks generalizing σ with
@@ -215,4 +238,4 @@ example : WellFormed (sumRangePar evenPlan100) (arrayState vals100) :=
 /-! ### §3 — arbitrary n, arbitrary (including uneven) chunking. Already proved in general above:
 `sumRange_par_seq_eq` is the theorem, for any `ChunkPlan` and any array. -/
 
-end Paralever.Examples.Reduce
+end Paralever.Examples.SumArray
