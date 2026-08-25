@@ -6,7 +6,9 @@ import Paralever.Core.Access
 import Paralever.Theory.Decomposition
 import Paralever.Theory.WellFormedCanonical
 import Paralever.Theory.Sequentialize
+import Paralever.Theory.Intervals
 import Paralever.Compile.TaskFacts
+import Paralever.Logic.BIInstance
 import Paralever.Examples.SumArray
 import Paralever.Examples.SumArrayTask
 import Paralever.Examples.Sort

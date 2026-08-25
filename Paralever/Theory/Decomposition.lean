@@ -1,6 +1,6 @@
 import Paralever.Core.Access
 
-/-! # `runSeq`/`WellFormed` through `bind` — general supporting facts
+/-! # `runSeq`/`WellFormed`/`accesses` through `bind` — general supporting facts
 
 Reused by `Theory/WellFormedCanonical.lean` (the hard theorem) and by `Theory/Sequentialize.lean`
 (the assembly). Kept separate because these are genuinely general — not specific to the
@@ -32,6 +32,18 @@ theorem WellFormed_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : 
   | write l v k ih => exact ih () f (σ.update l v)
   | par p q k ihp ihq ihk =>
       grind only [ParM.bind, WellFormed, runSeq]
+
+/-- `accesses` through `bind` — mirrors `runSeq_bind`. General and reused by every array-style
+example (`SumArray`, `MergeSort`) that needs a footprint bound for a `.bind`-composed program. -/
+@[simp, grind .]
+theorem accesses_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
+    accesses (ParM.bind p f) σ =
+    Footprint.union (accesses p σ) (accesses (f (runSeq p σ).1) (runSeq p σ).2) := by
+  induction p generalizing σ with
+  | pure a => rfl
+  | read l k ih => grind
+  | write l v k ih => grind
+  | par p q k ihp ihq ihk => grind
 
 /-- The canonical reference value does not distinguish `parPair` from `seqPair` — `runSeq` was
 already defined by running `par`'s branches sequentially. No `Indep` needed for this fact; the

@@ -41,17 +41,6 @@ namespace Paralever.Examples.SumArray
 
 open ParM
 
-/-! ### `accesses` through `bind` — general, mirrors `runSeq_bind` -/
-
-theorem accesses_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
-    accesses (ParM.bind p f) σ =
-    Footprint.union (accesses p σ) (accesses (f (runSeq p σ).1) (runSeq p σ).2) := by
-  induction p generalizing σ with
-  | pure a => rfl
-  | read l k ih => grind
-  | write l v k ih => grind
-  | par p q k ihp ihq ihk => grind
-
 /-! ### The pure algorithm, and its conversion into `ParM` -/
 
 /-- Ordinary recursive `Int`-returning function. No monad, no `ParM` — this is the algorithm,
