@@ -126,6 +126,22 @@ interleaving explosion never happens.
 O'Hearn calls the underlying principle the **Ownership Hypothesis**: *a program component only
 accesses cells it currently owns.*
 
+**How this connects to our code — by derivation, not by a separate proof.** Paralever never proves
+this rule's soundness on its own terms. It proves `par_seq_eq` (§5, §9) as the primitive fact, and
+the Hoare-triple layer (`Logic/Rules.lean`) is a thin derivation *on top of* that fact, not an
+independent verification standing next to it. Concretely, `Triple.par`'s proof body is one call to
+`wellFormed_canonical`: given `{P} C {Q}` and `{P'} C' {Q'}` valid against the real `Reaches`
+relation, and `WellFormed (parPair C C') σ` (Bernstein independence checked at *every* nesting
+level, not only the outermost `par` — §9's counterexample is exactly why the outermost check alone
+would be unsound), `wellFormed_canonical` says the only state `parPair C C' σ` can ever reach is the
+canonical `runSeq` value, which *is* "run `C` fully, then run `C'`" — so the two triples compose
+directly. One detail worth flagging: the frame side condition here is stated with `Local`/`Disjoint`
+predicates over locations, not the imported `∗` (`Logic/BIInstance.lean`'s `∗` is *exclusive*
+heap-split, strictly narrower than `Indep` — see §8 — so using it here would silently reintroduce
+the very restriction Bernstein exists to lift). The upshot: "did we prove CSL sound" is the wrong
+question to ask about this codebase — soundness here is a *corollary* of `par_seq_eq`, checked once,
+not a second theorem independently re-derived and then found to agree with the first.
+
 **Q3.** Why can't you just take `P₁ ∧ P₂` (ordinary conjunction) instead of `P₁ ∗ P₂`? Give a
 program where the rule with `∧` would be unsound.
 
@@ -182,8 +198,68 @@ it but only on paper for a Java-like language. PolCert states it only for affine
 
 **That missing corollary, stated generically and mechanized, is this project.**
 
-**→ In our code.** `Theory/Decomposition.lean` then `Theory/Sequentialize.lean`. This is where
-essentially all the difficulty is; everything else is bookkeeping.
+### 5b. The actual proof, piece by piece
+
+The abstract lemma is one paragraph; the mechanization is not, because "the trace factors" has to
+be rebuilt from a real step relation with no trace model to appeal to. Four pieces, each doing one
+job. (This subsection describes what is actually proved in `Theory/WellFormedCanonical.lean` — read
+it alongside `docs/decomposition.md`, which is the file-level rationale this summarizes.)
+
+**Piece 1 — locality.** If two states agree everywhere outside a set `F`, and a program's footprint
+avoids `F` entirely, running it from either state gives the same answer *and* the same footprint.
+Proved once (`accesses_runSeq_locality`) and specialized to the case that matters:
+`accesses_runSeq_isolated` — under `Indep`, `q`'s canonical run from `σ₁ := (runSeq p σ).snd` (the
+state *after* `p`'s reference execution) agrees exactly with `q`'s run from the original `σ`. This
+is the "asymmetry that vanishes under `Indep`" from `access.md` — now a proved fact, not an
+assertion.
+
+**Piece 2 — join-point decomposition.** Take a real, step-by-step execution of `.par p q k` from
+`σ`. At every point along it, exactly one of three things is true: it's still inside the `par` node
+(one or both branches mid-run), it has passed through the join into `k`'s continuation, or it has
+crashed to `wrong`. `par_dichotomy` proves this trichotomy holds at every step. It pins down *that*
+a join or a crash happens and rules out anything else — not yet *which* values the join lands on.
+
+**Piece 3 — the single-step canonical invariant.** This is where the real difficulty lives, and
+where the first attempt at this proof failed. The natural-looking approach — show that *every*
+reachable configuration, at arbitrary depth, stays inside the original top-level footprint — runs
+into a three-way mutual induction with no clean base case, because the "reached a join point" case
+needs the theorem's own uniqueness direction as an ingredient to even state.
+
+The unlock is a different question: *why does the theorem need `WellFormed` at all?* `step`'s racing
+check is re-evaluated **fresh at every single step**, not once at the top. So a real step that
+doesn't crash is automatically race-free *at that instant* — for free, at any nesting depth,
+`WellFormed` or not. Independence is needed only for a narrower fact: when the *right* branch of a
+`.par` node moves before the left one finishes, its real starting state is the raw joint state at
+that moment, not the canonical reference point `σ₁` the whole theorem is stated against — and only
+`Indep` guarantees that replaying the step against `σ₁` gives the identical result. `step_combined`
+proves exactly this one-step fact — a real step never changes what `runSeq` would have computed, and
+never lets a location outside the original footprint leak into the result — by induction on
+whichever program actually moved. The hard case (right branch moves first) replays that step against
+`σ₁` via `step_locality` (piece 1's operational twin), then needs the *footprint* half of its own
+conclusion, one level down through the induction hypothesis, to pin the replayed state down exactly
+rather than merely "agrees outside some set." That circularity inside a single step — needing the
+containment fact to prove the containment fact — is why `step_combined` is one combined statement
+(value invariance *and* footprint containment, together), not two lemmas proved back to back.
+
+**Piece 4 — chaining.** A real execution is a chain of steps, not one step. Iterating
+`step_combined` along the whole chain needs `WellFormed` to survive every intermediate step, so
+`step_combined` can be invoked again at each one — that survival fact is `WellFormed_preserved`
+(subject reduction: `WellFormed` is stable under one real step, whichever branch moved, at any
+nesting depth). Composing `step_combined` with `WellFormed_preserved` along a whole `Reaches` chain
+(`runSeq_invariant_chain`/`subset_chain`) gives both directions of `wellFormed_canonical` at once:
+*uniqueness* (any real, non-crashing execution's value matches the canonical `runSeq` value — the →
+direction), and the containment fact needed to justify the *existence* witness for the ← direction,
+which explicitly constructs the schedule "run `p` to completion, then run `q`, then step into `k`"
+and uses `reaches_par_left`/`reaches_par_right` to show that schedule is legal precisely because `p`
+and `q` are independent.
+
+Put together: **piece 2 says a join must happen; pieces 3 and 4 say which value it lands on, and
+that no real schedule can do better or worse than the canonical left-to-right one.** That is the
+entire content of Brookes' lemma, rebuilt from a step relation instead of a trace model.
+
+**→ In our code.** `Theory/Decomposition.lean` then `Theory/WellFormedCanonical.lean` then
+`Theory/Sequentialize.lean`. This is where essentially all the difficulty is; everything else is
+bookkeeping.
 
 **Q5.** The decomposition lemma assumes the footprints "stay separate". But whether they stay
 separate can depend on values read, which can depend on the interleaving. Isn't that circular?
@@ -221,6 +297,15 @@ Operational Semantics*, MFPS 2011) redoes it with:
 No traces, no domain theory. ~1500 lines of Coq (`vafeiadis/cslsound`). The restriction to no
 ownership transfer (no locks handing off resources) is called **DCSL** — Disjoint CSL — and is
 exactly our scope.
+
+**Where our proof diverges from his literal recipe.** We inherit the *style* — an ordinary
+small-step relation, no traces, no domain theory — but not the literal safety-by-step-budget
+induction. `wellFormed_canonical` (§5b) instead proves a *uniqueness* statement directly: the value
+any real execution reaches is provably the canonical `runSeq` value, established via join-point
+decomposition and a chained single-step invariant, with no artificial fuel parameter threaded
+through the proof at all. Both techniques prove the same *kind* of fact — operationally, without
+appeal to trace-closure conditions — but they are not the same induction. Worth knowing before you
+go read `cslsound` expecting a line-for-line match.
 
 **→ In our code.** `Core/Semantics.lean`'s `step`/`Reaches`/`Safe` follow this shape. The abort
 condition — compare the *next actions* of each thread — is his.
@@ -263,7 +348,13 @@ Separation logic recovers this with **fractional / read permissions** (`DFrac`):
 permission can be split and shared, a write permission cannot. Same idea, different packaging.
 
 **→ In our code.** `Core/Access.lean` (M2). Already visible in `Label.conflicts`: same location and
-*at least one write* — read/read never conflicts.
+*at least one write* — read/read never conflicts. `Examples/MatMul.lean` is this exact matmul
+mechanized: `Theory/Intervals.lean`'s `indep_of_read_write_confined` takes *separate* read/write
+confinement predicates per side and checks only write/write and write/read cross terms, never
+read/read — so the independence proof for `#parallel_for (n*n), cellCompute` is two `grind` calls on
+where `A`/`B`/`C` live in memory (`[0,n²)`, `[n²,2n²)`, `[2n²,3n²)`), with **zero** reasoning about
+which rows or columns actually overlap. That the proof doesn't need to know is the point: `Indep`
+was never checking read/read in the first place, so there was never anything to reason about there.
 
 **Q6.** Write a two-iteration loop that satisfies all three Bernstein conditions but where the
 iterations still cannot be swapped. (Hint: think about what "location" means for control flow, or
@@ -294,8 +385,18 @@ unchanged and the invariant survives. Symmetrically for `p`.
 This is precisely Brookes' `σ₁ ∗ σ₂` splitting. **The invariant is the proof.** Everything else is
 plumbing.
 
-**→ In our code.** This is `Theory/Decomposition.lean`. When you start it, write the invariant
-first and the induction second.
+**Named precisely** (§5b spells out the full mechanization): this invariant *is* `step_combined`'s
+conclusion, re-established one real step at a time by `WellFormed_preserved`, and chained across a
+whole execution by `runSeq_invariant_chain`. What the "why does the theorem need `WellFormed` at
+all" question in §5b adds to the picture above: independence isn't needed to keep *every* step
+honest — a real step that doesn't crash is automatically race-free at that instant, unconditionally.
+It's needed only at the one place a real schedule can legitimately disagree with the canonical
+left-to-right one: replaying a step against a *different* state than the reference execution
+assumed, which is exactly what happens when the right branch of a `par` node moves first.
+
+**→ In our code.** `Theory/Decomposition.lean` sets up the general `runSeq`/`WellFormed`-through-
+`bind` facts; the invariant itself, and the induction that maintains it, is
+`Theory/WellFormedCanonical.lean`'s `step_combined`/`WellFormed_preserved` pair (§5b).
 
 ---
 
@@ -351,9 +452,13 @@ combines partials as they finish?
   is why it's a bug factory. Blom et al. (STTT'21) have our architecture — sequential correctness
   plus dependence contracts ⇒ parallel correctness — but no proof assistant.
 
-**→ In our code.** `Pragma/` gives OpenMP-shaped syntax that elaborates to `parFor` **plus a proof
-obligation**. Same notation, but nothing is trusted. That gap — mechanized, with a real proof
-assistant — is the paper.
+**→ In our code.** `Pragma/ParallelFor.lean` gives OpenMP-shaped syntax (`#parallel_for n, body`,
+`#parallel[ p, q, ... ]`) that elaborates to `ParM.parAll` **plus a proof obligation** —
+`parAll_wellformed_of_indexed_rw`, the PolCert-shaped validator: supply a per-iteration footprint
+bound and one pairwise-disjointness fact, get `WellFormed`/`ParSeqEq` for the whole loop, any size,
+with no per-loop induction to write. Same notation as OpenMP, but nothing is trusted — and the loop
+this project's own anti-vacuity discipline requires (`Examples/DoubleInto.lean`'s `incFromPrev`,
+`A[i] := A[i-1] + 1`) is checked to genuinely fail the obligation, not just asserted to.
 
 ---
 
@@ -364,11 +469,13 @@ assistant — is the paper.
 | ownership / footprint | O'Hearn CONCUR'04 | `Core/Access.lean` |
 | race = same loc, one write | folklore; Vafeiadis MFPS'11 | `Label.conflicts` |
 | races ↦ absorbing error | Reynolds FSTTCS'04 | `Conf.wrong`, `Safe` |
-| small-step + fuel-indexed safety | Vafeiadis MFPS'11 | `step`, `Reaches` |
+| small-step, no traces (style only — see §7) | Vafeiadis MFPS'11 | `step`, `Reaches` |
 | independence = Bernstein | Bernstein 1966; DPJ | `Indep` |
-| decomposition lemma | Brookes CONCUR'04 §5–7 | `Theory/Decomposition.lean` |
+| decomposition lemma | Brookes CONCUR'04 §5–7 | `Theory/WellFormedCanonical.lean` |
 | **the missing corollary** | *nobody* | `Theory/Sequentialize.lean` |
-| checked pragmas | Blom STTT'21 (unmechanized) | `Pragma/` |
+| generic Bernstein-from-footprints (this project's own layer) | — | `Theory/Intervals.lean` |
+| checked pragmas | Blom STTT'21 (unmechanized) | `Pragma/ParallelFor.lean` |
+| free case: no shared state at all | — | `Pragma/ParMap.lean` |
 
 The theorem splits in two, mirroring the literature:
 
@@ -391,8 +498,10 @@ the same obligation.
 We use the `ParM`/`WellFormed` interleaving model, not the `Task`-based model, as the source of
 truth for correctness, because it is the only one of the two that proves anything about
 *interference*: it is our mechanization of Brookes' Parallel Decomposition Lemma (*A Semantics for
-Concurrent Separation Logic*, CONCUR'04 — §5), via Vafeiadis' operational reformulation (*CSL and
-Operational Semantics*, MFPS'11), and it holds for *every* schedule, not one measured run. The
+Concurrent Separation Logic*, CONCUR'04 — §5), in Vafeiadis' operational *style* (*CSL and
+Operational Semantics*, MFPS'11 — small-step, no traces) but via our own join-point-decomposition-
+plus-chaining proof technique rather than his literal step-budget induction (§5b, §7), and it holds
+for *every* schedule, not one measured run. The
 final lemma is `par_seq_eq`/`parAll_par_seq_eq` (`Theory/Sequentialize.lean`): `ParSeqEq (parPair p
 q) (seqPair p q) σ` whenever `WellFormed (parPair p q) σ` — and the condition actually discharged
 per program is `WellFormed` itself, i.e. Bernstein's independence (`w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅`,

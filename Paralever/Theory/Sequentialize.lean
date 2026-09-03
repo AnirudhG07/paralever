@@ -65,6 +65,7 @@ theorem wellFormed_of_seqAll {τ : Type} (ps : List (ParM τ)) (σ : State)
 
 /-- `WellFormed (parAll (p :: ps)) σ` unfolded once — `apply WellFormed_parAll_cons` to start a
 `WellFormed` proof for a `parAll` list one element at a time. -/
+@[simp, grind .]
 theorem WellFormed_parAll_cons {τ : Type} (p : ParM τ) (ps : List (ParM τ)) (σ : State)
     (h1 : WellFormed p σ)
     (h2 : Indep (accesses p σ) (accesses (ParM.parAll ps) (runSeq p σ).2))
@@ -73,11 +74,13 @@ theorem WellFormed_parAll_cons {τ : Type} (p : ParM τ) (ps : List (ParM τ)) (
   simp only [ParM.parAll, WellFormed_bind, ParM.parPair, WellFormed]
   exact ⟨⟨h2, h1, h3, trivial⟩, trivial⟩
 
+@[simp, grind .]
 theorem WellFormed_parAll_nil {τ : Type} (σ : State) :
     WellFormed (ParM.parAll ([] : List (ParM τ))) σ := trivial
 
 /-- The metatheorem for a list of branches — "break the work into a few pieces" in its literal
 form. Same statement shape as `par_seq_eq`, generalized from a pair to a list. -/
+@[simp, grind .]
 theorem parAll_par_seq_eq {τ : Type} (ps : List (ParM τ)) (σ : State)
     (h : WellFormed (ParM.parAll ps) σ) : ParSeqEq (ParM.parAll ps) (ParM.seqAll ps) σ := by
   intro r σ'
