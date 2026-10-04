@@ -1,0 +1,565 @@
+/* ============================================================
+   Lean slide theme  —  a reveal.js theme for Verso-slides
+   ------------------------------------------------------------
+   Clean, light, academic Lean look: teal + Lean-blue on white,
+   Source Sans 3 (light), left-aligned full-viewport slides.
+   Design language after Leo de Moura's talks.
+
+   USE WITH VERSO-SLIDES
+     Verso emits reveal.js. Point its theme/extraCss at this file:
+       slidesMain (config := { theme := .custom ⟨"lean.css", #[…assets]⟩ })
+     or layer it over a built-in theme:
+       { theme := "white", extraCss := #[⟨"lean.css"⟩] }
+     (loads AFTER the base theme, so these rules win.)
+
+   USE STANDALONE (hand-written reveal deck)
+     <link rel="stylesheet" href=".../reveal/dist/theme/white.css">
+     <link rel="stylesheet" href="lean.css">           <!-- last -->
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap");
+
+:root {
+  --lean-teal: #0891b2; /* primary accent */
+  --lean-blue: #0073a3; /* title band / section breaks (deep Lean blue) */
+  --lean-blue-2: #3b82f6; /* lighter blue for rules / links */
+  --ink: #1e293b; /* body text (slate-800) */
+  --muted: #64748b; /* secondary text (slate-500) */
+  --line: #e2e8f0; /* hairline borders (slate-200) */
+  --code-bg: #f8fafc; /* code surface (slate-50) */
+  --tint: #f0fdfa; /* teal-tinted callout bg */
+  --tint-line: #99f6e4; /* teal-tinted callout border */
+  --sans: "Source Sans 3", -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------- base ---------- */
+.reveal {
+  font-family: var(--sans);
+  font-weight: 300;
+  color: var(--ink);
+  font-size: 3.4vh;
+}
+.reveal .slides {
+  text-align: left;
+}
+.reveal .slides section {
+  text-align: left;
+  box-sizing: border-box;
+  /* Reveal scales `.slides` (1280×720) to the viewport. Sizing sections to
+     `100vw/100vh` makes them viewport-wide *before* that scale, so on any
+     viewport ≠ 1280 the section is multiplied past the slide and content spills
+     off the right edge. `100%` sizes them to Reveal's own (already-scaled) slide
+     box, so padding always leaves a real margin and nothing touches the edge. */
+  width: 100%;
+  height: 100%;
+}
+/* Padding goes on the LEAF slides only. A vertical group (`vertical := some
+   true`) wraps its sub-slides in an extra <section> that reveal.js tags
+   `.stack`; without this exclusion that wrapper ALSO gets the padding and it
+   stacks on top of the child's padding — pushing content right and down.
+   Less left padding (3vw) than right (5vw) so content sits closer to the left.
+   These are vars because the header slots measure against them (see --author). */
+:root {
+  --pad-t: 4vh;
+  --pad-r: 5vw;
+  --pad-b: 4vh;
+  --pad-l: 3vw;
+}
+.reveal .slides section:not(.stack) {
+  padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad-l);
+}
+.reveal a {
+  color: var(--lean-blue-2);
+  text-decoration: none;
+}
+.reveal a:hover {
+  text-decoration: underline;
+}
+.reveal strong {
+  font-weight: 600;
+}
+.reveal em {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---------- headings ---------- */
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4 {
+  font-family: var(--sans);
+  text-transform: none;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.reveal h1 {
+  font-weight: 500;
+  font-size: 1.4em;
+  margin: 0 0 0.5em;
+}
+.reveal h2 {
+  font-weight: 600;
+  font-size: 1.3em;
+  margin: 0 0 0.5em;
+}
+.reveal h3 {
+  font-weight: 600;
+  font-size: 1.05em;
+  color: var(--muted);
+  margin: 0 0 0.3em;
+}
+
+/* project header (Leo-style): the project name at the left, then a blue rule
+   filling the rest, sitting above each slide title. Verso renders the `#` title
+   as an <h2>, so we hang the header off it.
+   NOTE: the name is PER-DECK — set --project (and --name-w) in the deck's own
+   override css (e.g. slidesExample.css). These are only fallbacks. */
+:root {
+  --project: "Lean";
+  --name-w: 3.4em;
+  --rule-end: 4vw; /* right inset of the blue header rule → white space before the edge */
+}
+.reveal h2 {
+  position: relative;
+  padding-top: 1.8em;
+}
+.reveal h2::before {
+  /* project name */
+  content: var(--project);
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-weight: 700;
+  font-size: 1.05em;
+  color: var(--ink);
+  line-height: 1;
+}
+.reveal h2::after {
+  /* blue rule, starting after the name, ending short of the right edge */
+  content: "";
+  position: absolute;
+  top: 0.35em;
+  left: var(--name-w);
+  right: var(--rule-end);
+  height: 3px;
+  background: var(--lean-blue);
+  border-radius: 2px;
+}
+/* full-colour slides (section-break / title) get no header */
+.reveal .section-break h2,
+.reveal .title-slide h2 {
+  padding-top: 0;
+}
+.reveal .section-break h2::before,
+.reveal .section-break h2::after,
+.reveal .title-slide h2::before,
+.reveal .title-slide h2::after {
+  content: none;
+}
+
+/* optional header slot: your name / handle / a repo or paper ref, shown as PLAIN
+   text ABOVE the blue rule, right-aligned, on every content slide. It sits in the
+   slide's top padding so the rule keeps its full width and nothing overlaps.
+   Set --author in the deck's own .css:
+     --author: "A. Gupta · github.com/AnirudhG07";
+   Leave it unset to hide the slot entirely.
+   CSS content can only be static text, so this is NOT clickable — for a clickable
+   repo/paper/email link, use :::class "links" on a slide instead. */
+:root {
+  --author: "";
+}
+/* The exclusions live in THIS selector rather than a later `content: none` rule:
+   a separate `.reveal section[data-state="title"]::after` is specificity (0,2,2)
+   and would LOSE to this rule's (0,3,2), so the slot would leak onto the title
+   and section-break slides. Excluding inline can't lose. */
+.reveal .slides section:not(.stack):not([data-state="title"]):not(:has(.section-break)):not(:has(.title-slide))::after {
+  content: var(--author);
+  position: absolute;
+  top: 2.4vh; /* just above the rule — leaves a ~0.5vh gap under the text */
+  /* The rule is on h2::after, so its `right: --rule-end` is measured from inside
+     the section's padding. This slot is on the SECTION, so it must add that
+     padding back to end flush with the rule instead of overhanging it. */
+  right: calc(var(--pad-r) + var(--rule-end));
+  font-size: 0.72em;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---------- title / first slide ----------
+   Mark the slide with  %%% state := "title" %%%  then author:
+     # Big Header
+     :::class "subheader"  … :::   (subtitle)
+     :::class "byline"     … :::   (name · designation — *name* renders in blue)
+     :::class "event"      … :::   (when · where) */
+.reveal section[data-state="title"] {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vh 7vw;
+}
+.reveal section[data-state="title"]::before {
+  /* gradient accent bar */
+  content: "";
+  display: block;
+  width: 4.5em;
+  height: 5px;
+  background: linear-gradient(90deg, var(--lean-blue), var(--lean-teal));
+  border-radius: 3px;
+  margin-bottom: 1.3em;
+}
+.reveal section[data-state="title"] h2 {
+  /* the big header */
+  font-size: 3em;
+  font-weight: 300;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  padding-top: 0;
+  margin: 0 0 0.32em;
+}
+.reveal section[data-state="title"] h2 strong {
+  color: var(--lean-blue);
+  font-weight: 600;
+}
+.reveal section[data-state="title"] h2::before,
+.reveal section[data-state="title"] h2::after {
+  content: none;
+} /* no project header here */
+.reveal .subheader {
+  font-size: 1.45em;
+  font-weight: 300;
+  line-height: 1.35;
+  color: var(--muted);
+  max-width: 42ch;
+  margin: 0 0 2.2em;
+}
+/* authors — one per line (blank line between them in source); name in blue,
+   affiliation muted after the middot */
+.reveal .byline {
+  font-size: 1.15em;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0 0 0.3em;
+}
+.reveal .byline strong {
+  color: var(--lean-blue);
+  font-weight: 600;
+}
+/* venue / date / organizer — set off by a hairline divider above the FIRST
+   line only (the `.event` right after a byline/subheader gets the rule; the
+   following `.event + .event` lines don't) */
+.reveal .event {
+  font-size: 0.95em;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0.12em 0 0;
+}
+.reveal .byline + .event,
+.reveal .subheader + .event {
+  margin-top: 1.8em;
+  padding-top: 1em;
+  border-top: 1px solid var(--line);
+}
+.reveal .event strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* contact / social — GitHub, email, homepage, etc. Write links in the source
+   (`[GitHub](https://github.com/you)`, `[you@x.edu](mailto:you@x.edu)`); the
+   middots between them come from the source too (` · `). Links are blue and
+   underline on hover. */
+.reveal .links {
+  font-size: 1em;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0.5em 0 0;
+}
+.reveal .links a {
+  color: var(--lean-blue);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.reveal .links a:hover {
+  border-bottom-color: var(--lean-blue);
+}
+
+/* ---------- body ---------- */
+.reveal p {
+  font-size: 0.95em;
+  font-weight: 300;
+  line-height: 1.7;
+  margin: 0 0 0.6em;
+}
+.reveal ul,
+.reveal ol {
+  font-size: 0.95em;
+  font-weight: 300;
+  line-height: 1.75;
+  margin: 0;
+  padding-left: 1.2em;
+}
+.reveal li {
+  margin-bottom: 0.3em;
+}
+.reveal ul ul,
+.reveal ol ol {
+  font-size: 1em;
+}
+.reveal li::marker {
+  color: var(--lean-teal);
+}
+
+/* ---------- signature: logo + teal rule header ---------- */
+.reveal .slide-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-bottom: 0.6em;
+}
+.reveal .slide-header img {
+  height: 6vh;
+  flex-shrink: 0;
+}
+.reveal .slide-header .h {
+  font-weight: 600;
+  font-size: 1.15em;
+  white-space: nowrap;
+}
+.reveal .slide-header::after {
+  content: "";
+  flex: 1;
+  height: 1.5px;
+  background: var(--lean-teal);
+}
+
+/* ---------- title slide (blue band) ---------- */
+.reveal section.title-slide {
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+}
+.reveal .title-slide .top-area {
+  padding: 1.4em 1.6em 0.8em;
+}
+.reveal .title-slide .logo {
+  height: 15vh;
+}
+.reveal .title-slide .blue-band {
+  flex: 1;
+  background: var(--lean-blue);
+  color: #fff;
+  padding: 1.2em 1.6em 1em;
+  display: flex;
+  flex-direction: column;
+}
+.reveal .title-slide .blue-band h1 {
+  color: #fff;
+  font-weight: 300;
+  font-size: 2em;
+  margin: 0 0 0.6em;
+}
+.reveal .title-slide .meta {
+  font-size: 0.85em;
+  font-weight: 300;
+  line-height: 1.6;
+}
+.reveal .title-slide .meta strong {
+  font-weight: 600;
+}
+.reveal .title-slide .date {
+  font-size: 0.8em;
+  margin-top: auto;
+  opacity: 0.9;
+}
+
+/* ---------- section-break ----------
+   Full-section version (hand-written decks) OR an inner :::class "section-break"
+   block over a solid background set via  %%% backgroundColor := "#0073a3" %%% . */
+.reveal section.section-break {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: linear-gradient(
+    135deg,
+    var(--lean-blue) 0%,
+    var(--lean-teal) 100%
+  );
+}
+/* inner :::class "section-break" (not a whole section) → a blue banner panel */
+.reveal .section-break:not(section) {
+  background: linear-gradient(135deg, var(--lean-blue), var(--lean-teal));
+  color: #fff;
+  text-align: center;
+  border-radius: 12px;
+  padding: 1.1em 1.4em;
+  margin: 0.6em 0;
+}
+.reveal .section-break:not(section) * {
+  color: #fff;
+  border-bottom: none;
+}
+.reveal .section-break:not(section) p,
+.reveal .section-break:not(section) h2 {
+  font-size: 1.6em;
+  margin: 0;
+  font-weight: 400;
+}
+/* the blue title band's h1 keeps no rule */
+.reveal .title-slide h1 {
+  border-bottom: none;
+}
+
+/* ---------- code ---------- */
+.reveal code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: #f1f5f9;
+  padding: 0.1em 0.32em;
+  border-radius: 3px;
+}
+/* Inline ELABORATED/HIGHLIGHTED code (Verso's {lean}`…`, {python}`…`, etc.)
+   already carries its own token colours, so drop the grey chip. Plain
+   `backtick` code (no `hl` class) keeps its chip. Works for any syntax. */
+.reveal code.hl.inline {
+  /* `!important` beats Verso's slides-highlight.css `.reveal code.hl.lean.inline`, which otherwise
+     paints a grey `rgba(0,0,0,.25)` chip. We want the blue token text on the plain white page. */
+  background: transparent !important;
+  padding: 0;
+  font-size: 1em;
+}
+.reveal pre {
+  font-family: var(--mono);
+  font-size: 0.66em;
+  width: 100%;
+  margin: 0.5em 0;
+  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+.reveal pre code {
+  display: block;
+  padding: 0.9em 1.1em;
+  max-height: 68vh;
+  background: transparent;
+  border-radius: 8px;
+  line-height: 1.5;
+  overflow: auto;
+}
+/* Verso renders Lean with its own semantic token colors — we only style the frame. */
+
+/* ---------- callouts & emphasis ---------- */
+.reveal .accent {
+  color: var(--lean-teal);
+  font-weight: 600;
+}
+.reveal blockquote {
+  font-size: 0.8em;
+  border-left: 4px solid var(--lean-blue-2);
+  padding: 0.4em 0.9em;
+  margin: 0.6em 0;
+  background: #f1f5f9;
+  border-radius: 0 6px 6px 0;
+  box-shadow: none;
+}
+.reveal .key-box {
+  background: var(--tint);
+  border: 1px solid var(--tint-line);
+  border-radius: 8px;
+  padding: 0.6em 1em;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+.reveal .key-box strong {
+  color: var(--lean-teal);
+}
+
+/* ---------- layout helpers ---------- */
+.reveal .two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5em;
+  align-items: start;
+}
+.reveal .two-col.wide-left {
+  grid-template-columns: 3fr 2fr;
+}
+.reveal .two-col.wide-right {
+  grid-template-columns: 2fr 3fr;
+}
+.reveal .center {
+  text-align: center;
+}
+.reveal .muted {
+  color: var(--muted);
+}
+
+/* ---------- pipeline ( step → step → step ) ---------- */
+.reveal .pipeline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2em;
+  margin: 0.6em 0;
+  font-size: 0.75em;
+}
+.reveal .pipeline .step {
+  background: #e0f2fe;
+  border: 1px solid var(--lean-teal);
+  border-radius: 6px;
+  padding: 0.4em 0.7em;
+  font-weight: 500;
+  color: var(--ink);
+}
+.reveal .pipeline .arrow {
+  font-size: 1.2em;
+  color: var(--lean-teal);
+  padding: 0 0.15em;
+}
+
+/* ---------- spectrum bar ---------- */
+.reveal .spectrum {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0.8em 0;
+  font-size: 0.78em;
+}
+.reveal .spectrum .seg {
+  flex: 1;
+  padding: 0.7em 0.5em;
+  text-align: center;
+  color: #fff;
+  font-weight: 500;
+}
+
+/* ---------- reveal chrome ---------- */
+.reveal .progress {
+  color: var(--lean-teal);
+}
+.reveal .controls {
+  color: var(--lean-teal);
+}
+.reveal .slide-number {
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* build-time stamp (the {built} role) — a quiet footer on the title slide */
+.reveal .timeDay {
+  margin-top: 0.9em;
+  font-size: 1em;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  opacity: 0.75;
+}

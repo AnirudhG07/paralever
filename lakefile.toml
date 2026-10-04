@@ -12,7 +12,7 @@ root = "Main"
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.32.2"
+rev = "v4.34.0"
 
 # iris-lean: we use only the BI interface, the proof mode, and the heap algebra.
 # The package root is the `Iris` subdirectory of the repo.
@@ -21,4 +21,9 @@ rev = "v4.32.2"
 name = "iris"
 git = "https://github.com/leanprover-community/iris-lean"
 subDir = "Iris"
-rev = "v4.32.2"
+rev = "v4.34.0"
+
+[[require]]
+name = "verso-slides"
+scope = "leanprover"
+rev = "v4.34.0"

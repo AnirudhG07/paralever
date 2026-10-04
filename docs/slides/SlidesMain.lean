@@ -1,0 +1,60 @@
+import VersoSlides
+import Slides
+-- import each additional deck module here, e.g.  import Slides.paralever
+
+open VersoSlides
+
+/-- Find the deck's asset dir (`docs/ppt`) whether the exe is run from the repo
+root or from `docs/ppt` — it's the directory that contains `lean.css`. -/
+def findBase : IO System.FilePath := do
+  for d in [("docs/ppt" : System.FilePath), "."] do
+    if ← (d / "lean.css").pathExists then return d
+  throw <| IO.userError "lean.css not found — run `lake exe slides` from the repo root (or from docs/ppt)"
+
+/-- Load the CSS theme fresh at RUNTIME from `lean.css`, and bundle the deck's
+images as theme assets (written verbatim to `<outputDir>/assets/…`).
+
+We read the CSS here instead of `include_str`: `include_str` bakes it in at
+*compile* time and Lake won't re-read it when only `lean.css` changes, so edits
+would silently ship stale. Reading it in `main` means editing `lean.css` (or an
+image) needs only a re-run of `lake exe slides` — no rebuild. -/
+def loadTheme : IO CustomTheme := do
+  let base ← findBase
+  let css ← IO.FS.readFile (base / "lean.css")
+  let asset (name : String) : IO ThemeAsset := do
+    return { filename := "assets/" ++ name, contents := ← IO.FS.readBinFile (base / "assets" / name) }
+  let assets ← #["pasta.jpg", "python-clean.png", "lean-logo-large.png", "paraleverlogo.png"].mapM asset
+  -- stagger.js turns a `:::class "steps"` list into per-item reveal fragments
+  let stagger : ThemeAsset := { filename := "stagger.js", contents := ← IO.FS.readBinFile (base / "stagger.js") }
+  return {
+    stylesheet     := { filename := "lean.css", contents := ⟨css⟩ },
+    assets         := assets.push stagger,
+    -- light theme → light highlight.js theme (not the dark default)
+    highlightTheme := HighlightTheme.forRevealTheme "white"
+  }
+
+/-- Shared config; every deck writes to its own subfolder under `_slides/`.
+`build-site.sh` then deploys each `_slides/<name>/` to `/<name>/`. -/
+def cfg (theme : CustomTheme) (out : System.FilePath) : Config where
+  theme       := .custom theme
+  outputDir   := out
+  slideNumber := true
+  transition  := "slide"
+  width       := 1280
+  height      := 720
+  margin      := 0.0
+  center      := false
+
+/-- Build every deck. **Add one line per new deck**: give it a URL sub-folder and
+point it at that deck's `#doc` with `%doc <ModuleName>` (the bare Lean module
+name — e.g. `Slides`, not `Slides.lean`). -/
+def main : IO UInt32 := do
+  let base ← findBase
+  let theme ← loadTheme
+  -- per-deck overrides, layered on top of lean.css (read at runtime too)
+  let deckCss ← IO.FS.readFile (base / "paralever.css")
+  let config : Config := { cfg theme "_slides/paralever" with
+    extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
+    extraJs  := #["stagger.js"] }
+  discard <| slidesMain config (doc := %doc Slides)
+  return 0
