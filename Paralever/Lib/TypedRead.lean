@@ -1,125 +1,124 @@
 import Paralever.Lib.Compose
 
-/-! # Typed reads — eliminate Val case splits from proofs
+/-! # Typed access — `Storable α`, for any `α` encodable in `Val`
 
-Every `.read l k` in user code forces a 3-way `cases σ l` split in footprint and well-formedness
-proofs. `readInt`/`readBool` wrap the read so all branches are `.pure`, making `accesses`
-state-independent (`⟨[l], []⟩` by `rfl`) and `WellFormed` trivial. The Val dispatch still happens
-at `runSeq` time, but proof obligations never see it.
+The heap is `State := Loc → Val`, so a `.read` physically yields a `Val`; that is a property of the
+memory model, not a restriction we chose. `Storable α` is the honest boundary: *any* type that can
+be encoded into `Val` gets typed access, with every footprint lemma proved once, polymorphically.
 
-Rationale: `docs/access.md` (footprints are reference-interpreter folds). -/
+The payoff over a hand-written `readInt`/`readBool` pair is not just deduplication. Writing the
+decode *inside* `.pure` — `.read l (fun v => .pure (decode v))` rather than
+`.read l (fun v => match v with | .int n => .pure n | _ => .pure d)` — means every branch is
+syntactically the same `.pure` node, so `accesses` and `WellFormed` hold by `rfl` with **no `Val`
+case analysis at all**. The match moved inside the value, where footprints cannot see it.
+
+Rationale: `docs/access.md` (footprints are folds over the tree). -/
 
 namespace Paralever
 
--- ref: Vafeiadis §3 — typed accessors as derived forms over untyped state
+-- ref: docs/access.md; the encode/decode discipline is standard data refinement
 
-def readInt (l : Loc) (default : Int := 0) : ParM Int :=
-  .read l (fun v => match v with | .int n => .pure n | _ => .pure default)
+/-- Types encodable in the heap's value universe. `decode_encode` is what makes `readAs` after
+`writeAs` round-trip; nothing in the footprint theory needs it, but programs do. -/
+class Storable (α : Type) where
+  encode : α → Val
+  decode : Val → Option α
+  decode_encode : ∀ a : α, decode (encode a) = some a
 
-def readBool (l : Loc) (default : Bool := false) : ParM Bool :=
-  .read l (fun v => match v with | .bool b => .pure b | _ => .pure default)
+instance : Storable Int where
+  encode n := .int n
+  decode | .int n => some n | _ => none
+  decode_encode _ := rfl
 
-/-! ### Accesses: state-independent because every branch is `.pure` -/
+instance : Storable Bool where
+  encode b := .bool b
+  decode | .bool b => some b | _ => none
+  decode_encode _ := rfl
 
-@[simp, grind .]
-theorem readInt_accesses (l : Loc) (d : Int) (σ : State) :
-    accesses (readInt l d) σ = ⟨[l], []⟩ := by
-  unfold readInt accesses
-  cases σ l <;> simp [Footprint.union, Footprint.empty]
+instance : Storable Unit where
+  encode _ := .unit
+  decode | .unit => some () | _ => none
+  decode_encode _ := rfl
 
-@[simp, grind .]
-theorem readBool_accesses (l : Loc) (d : Bool) (σ : State) :
-    accesses (readBool l d) σ = ⟨[l], []⟩ := by
-  unfold readBool accesses
-  cases σ l <;> simp [Footprint.union, Footprint.empty]
+/-! ### Typed read and write -/
 
-/-! ### WellFormed: trivially true (no `par` inside) -/
+/-- Read `l` as an `α`, falling back to `dflt` if the cell holds something else. -/
+def readAs {α : Type} [Storable α] (l : Loc) (dflt : α) : ParM α :=
+  .read l (fun v => .pure ((Storable.decode v).getD dflt))
 
-@[simp, grind .]
-theorem readInt_wellformed (l : Loc) (d : Int) (σ : State) :
-    WellFormed (readInt l d) σ := by
-  unfold readInt WellFormed
-  cases σ l <;> trivial
+/-- Write `a : α` to `l`. -/
+def writeAs {α : Type} [Storable α] (l : Loc) (a : α) : ParM Unit :=
+  .write l (Storable.encode a) .pure
 
-@[simp, grind .]
-theorem readBool_wellformed (l : Loc) (d : Bool) (σ : State) :
-    WellFormed (readBool l d) σ := by
-  unfold readBool WellFormed
-  cases σ l <;> trivial
+/-! ### Footprints — all by `rfl`, no case analysis
 
-/-! ### runSeq: the only place Val dispatch matters -/
-
-@[simp, grind .]
-theorem readInt_runSeq (l : Loc) (d : Int) (σ : State) :
-    runSeq (readInt l d) σ = (match σ l with | .int n => n | _ => d, σ) := by
-  unfold readInt runSeq
-  cases σ l <;> rfl
+This is the whole point of pushing the decode inside `.pure`. -/
 
 @[simp, grind .]
-theorem readBool_runSeq (l : Loc) (d : Bool) (σ : State) :
-    runSeq (readBool l d) σ = (match σ l with | .bool b => b | _ => d, σ) := by
-  unfold readBool runSeq
-  cases σ l <;> rfl
-
-/-! ### FootprintWithin: just needs `P l` -/
+theorem readAs_accesses {α : Type} [Storable α] (l : Loc) (d : α) (σ : State) :
+    accesses (readAs l d) σ = ⟨[l], []⟩ := rfl
 
 @[simp, grind .]
-theorem readInt_footprintWithin (l : Loc) (d : Int) (σ : State) (P : Loc → Prop) (hl : P l) :
-    FootprintWithin (accesses (readInt l d) σ) P := by
-  rw [readInt_accesses]; exact ⟨Within.singleton hl, Within.empty P⟩
+theorem writeAs_accesses {α : Type} [Storable α] (l : Loc) (a : α) (σ : State) :
+    accesses (writeAs l a) σ = ⟨[], [l]⟩ := rfl
 
 @[simp, grind .]
-theorem readBool_footprintWithin (l : Loc) (d : Bool) (σ : State) (P : Loc → Prop) (hl : P l) :
-    FootprintWithin (accesses (readBool l d) σ) P := by
-  rw [readBool_accesses]; exact ⟨Within.singleton hl, Within.empty P⟩
+theorem readAs_wellformed {α : Type} [Storable α] (l : Loc) (d : α) (σ : State) :
+    WellFormed (readAs l d) σ := trivial
 
 @[simp, grind .]
-theorem readInt_readsWithin (l : Loc) (d : Int) (σ : State) (P : Loc → Prop) (hl : P l) :
-    ReadsWithin (accesses (readInt l d) σ) P := by
-  rw [readInt_accesses]; exact Within.singleton hl
+theorem writeAs_wellformed {α : Type} [Storable α] (l : Loc) (a : α) (σ : State) :
+    WellFormed (writeAs l a) σ := trivial
 
 @[simp, grind .]
-theorem readBool_readsWithin (l : Loc) (d : Bool) (σ : State) (P : Loc → Prop) (hl : P l) :
-    ReadsWithin (accesses (readBool l d) σ) P := by
-  rw [readBool_accesses]; exact Within.singleton hl
-
-/-! ### Bind composition: readInt/readBool followed by any continuation
-
-The user writes `bind (readInt l d) f` — these lemmas push the footprint bound through the bind
-in one step, so the user supplies only `P l` and a footprint bound for `f`. -/
+theorem readAs_runSeq {α : Type} [Storable α] (l : Loc) (d : α) (σ : State) :
+    runSeq (readAs l d) σ = ((Storable.decode (σ l)).getD d, σ) := rfl
 
 @[simp, grind .]
-theorem readInt_bind_footprintWithin (l : Loc) (d : Int) (f : Int → ParM β)
-    (σ : State) (P : Loc → Prop) (hl : P l)
-    (hf : ∀ n, FootprintWithin (accesses (f n) σ) P) :
-    FootprintWithin (accesses (ParM.bind (readInt l d) f) σ) P := by
-  apply footprintWithin_bind
-  · exact readInt_footprintWithin l d σ P hl
-  · rw [readInt_runSeq]; cases σ l <;> exact hf _
+theorem writeAs_runSeq {α : Type} [Storable α] (l : Loc) (a : α) (σ : State) :
+    runSeq (writeAs l a) σ = ((), σ.update l (Storable.encode a)) := rfl
 
-@[simp, grind .]
-theorem readBool_bind_footprintWithin (l : Loc) (d : Bool) (f : Bool → ParM β)
-    (σ : State) (P : Loc → Prop) (hl : P l)
-    (hf : ∀ b, FootprintWithin (accesses (f b) σ) P) :
-    FootprintWithin (accesses (ParM.bind (readBool l d) f) σ) P := by
-  apply footprintWithin_bind
-  · exact readBool_footprintWithin l d σ P hl
-  · rw [readBool_runSeq]; cases σ l <;> exact hf _
+/-! ### Confinement -/
 
-@[simp, grind .]
-theorem readInt_bind_wellformed (l : Loc) (d : Int) (f : Int → ParM β)
-    (σ : State)
-    (hf : ∀ n, WellFormed (f n) σ) :
-    WellFormed (ParM.bind (readInt l d) f) σ := by
-  unfold readInt ParM.bind WellFormed
-  cases σ l <;> simp [ParM.bind] <;> exact hf _
+@[grind .]
+theorem readAs_footprintWithin {α : Type} [Storable α] (l : Loc) (d : α) (σ : State)
+    (P : Loc → Prop) (hl : P l) : FootprintWithin (accesses (readAs l d) σ) P :=
+  ⟨Within.singleton hl, Within.empty P⟩
 
-@[simp, grind .]
-theorem readBool_bind_wellformed (l : Loc) (d : Bool) (f : Bool → ParM β)
-    (σ : State)
-    (hf : ∀ b, WellFormed (f b) σ) :
-    WellFormed (ParM.bind (readBool l d) f) σ := by
-  unfold readBool ParM.bind WellFormed
-  cases σ l <;> simp [ParM.bind] <;> exact hf _
+@[grind .]
+theorem writeAs_footprintWithin {α : Type} [Storable α] (l : Loc) (a : α) (σ : State)
+    (P : Loc → Prop) (hl : P l) : FootprintWithin (accesses (writeAs l a) σ) P :=
+  ⟨Within.empty P, Within.singleton hl⟩
+
+@[grind .]
+theorem readAs_readsWithin {α : Type} [Storable α] (l : Loc) (d : α) (σ : State)
+    (P : Loc → Prop) (hl : P l) : ReadsWithin (accesses (readAs l d) σ) P :=
+  Within.singleton hl
+
+@[grind .]
+theorem readAs_no_writes {α : Type} [Storable α] (l : Loc) (d : α) (σ : State) :
+    (accesses (readAs l d) σ).writes = [] := rfl
+
+/-! ### Bind composition — the state is unchanged by a read, so the continuation sees `σ` -/
+
+@[grind .]
+theorem readAs_bind_footprintWithin {α β : Type} [Storable α] (l : Loc) (d : α)
+    (f : α → ParM β) (σ : State) (P : Loc → Prop) (hl : P l)
+    (hf : ∀ a : α, FootprintWithin (accesses (f a) σ) P) :
+    FootprintWithin (accesses (ParM.bind (readAs l d) f) σ) P := by
+  refine footprintWithin_bind _ _ _ _ (readAs_footprintWithin l d σ P hl) ?_
+  rw [readAs_runSeq]; exact hf _
+
+@[grind .]
+theorem readAs_bind_wellformed {α β : Type} [Storable α] (l : Loc) (d : α)
+    (f : α → ParM β) (σ : State) (hf : ∀ a : α, WellFormed (f a) σ) :
+    WellFormed (ParM.bind (readAs l d) f) σ := by
+  rw [WellFormed_bind]
+  exact ⟨readAs_wellformed l d σ, by rw [readAs_runSeq]; exact hf _⟩
+
+/-! ### The former `readInt`/`readBool`, now instances rather than duplicated code -/
+
+abbrev readInt (l : Loc) (dflt : Int := 0) : ParM Int := readAs l dflt
+abbrev readBool (l : Loc) (dflt : Bool := false) : ParM Bool := readAs l dflt
 
 end Paralever

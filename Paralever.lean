@@ -23,6 +23,7 @@ import Paralever.Lib.OpaqueOp
 import Paralever.Lib.Reduce
 import Paralever.Lib.Pure
 import Paralever.Lib.Render
+import Paralever.Lib.Block
 
 -- Examples/ and Test/ are separate lean_lib entries (see lakefile.toml), not part of the
 -- Paralever library umbrella. Build them with `lake build Examples` / `lake build Test`.

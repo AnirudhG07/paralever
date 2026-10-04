@@ -97,7 +97,8 @@ Paralever/
   Core/      ParM.lean, Semantics (State, step, Reaches), Access (footprints, Indep)
   Theory/    Decomposition, WellFormedCanonical, Sequentialize (the theorem), Intervals
   Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
-  Lib/       Compose (bind lemmas), TypedRead, TouchesOnly, Notation, FootprintSimp,
+  Lib/       Compose (bind lemmas), TypedRead (Storable α), TouchesOnly, Notation, FootprintSimp,
+             Block (straight-line IR — footprints computed, not proved),
              OpaqueOp (declared footprints for bodies we never read),
              Reduce (Σ-shaped loops with a pure accumulator),
              Pure (pure↔ParM bridge + faithfulness theorem),
@@ -108,5 +109,5 @@ Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapD
              OpaqueAgents, PureToParM, TwoProcesses, *Task
 Test/        Sanity, AccessSanity
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
-             opaque-ops.md, reductions.md, pure-bridge.md, ...)
+             opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md, ...)
 ```

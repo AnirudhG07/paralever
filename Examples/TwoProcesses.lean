@@ -1,64 +1,88 @@
+import Paralever.Lib.Block
 import Paralever.Lib.Render
-import Paralever.Lib.TypedRead
-import Paralever.Lib.Notation
 import Paralever.Pragma.ArrRef
 
-/-! # Example: two genuinely independent processes, tree printed, equivalence proved
+/-! # Example: two independent processes, written as IR blocks
 
-Two processes with messy, interleaved read/write patterns over their own pairs of arrays:
+The same two processes as before, but written as `Block`s — lists of `load`/`store` instructions —
+instead of hand-nested `ParM.bind` chains. Nothing about the programs changed; what changed is that
 
-* `procP` works over `a` at `[0,4)` and `b` at `[4,8)`
-* `procQ` works over `c` at `[8,12)` and `d` at `[12,16)`
+* the binds are **generated** by `exec`, not written here, and
+* the footprint is **computed** by `footprintOf`, so every proof below is `rfl` or `decide`.
 
-Each reads several cells, writes several cells, and *reads back cells it has written* — so neither is
-a tidy map or reduction. They are independent only because their regions never meet, which is exactly
-the hypothesis `par_seq_eq_of_disjoint_arrefs` wants.
+Compare the previous version of this file in git history: `procP_within` was a twelve-line chain of
+`footprintWithin_bind` applications. It is now gone entirely — `exec_accesses` replaced it, once,
+for all blocks.
 
-Use `#eval` on the `renderStr` lines at the bottom to see the actual trees. -/
+`procP` works over `a` at `[0,4)` and `b` at `[4,8)`; `procQ` over `c` at `[8,12)` and `d` at
+`[12,16)`. Each reads back a cell it just wrote, so neither is a reorderable element-wise map; they
+are independent only because their regions never meet. -/
 
 namespace Paralever.Examples.TwoProcesses
 open Paralever
 
-/-! ### Layout
-
-`procP`'s whole world is `[0,8)`; `procQ`'s is `[8,16)`. Naming them as single `ArrRef`s is what
-makes the disjointness check one `omega` call. -/
+/-! ### Layout -/
 
 def a : ArrRef := Array[0, 4]      -- procP's first array
 def b : ArrRef := Array[4, 4]      -- procP's second
 def c : ArrRef := Array[8, 4]      -- procQ's first
 def d : ArrRef := Array[12, 4]     -- procQ's second
 
-/-- Everything `procP` may touch. -/
-def regionP : ArrRef := Array[0, 8]
-/-- Everything `procQ` may touch. -/
-def regionQ : ArrRef := Array[8, 8]
+/-! ### The two processes, as straight-line IR
 
-/-! ### The two processes
-
-Written with `readInt` (`Lib/TypedRead.lean`) so the proofs never case-split on `Val`. Note both
-processes read back a cell they just wrote — `procP` reads `b[0]` after writing it — so each is
-genuinely sequential internally, not a reorderable element-wise map. -/
+`R n` is register `n`; arithmetic is ordinary `+`/`-`/`*` on `AExp`. Registers are not memory, so
+none of them appears in a footprint. -/
 
 /-- `b[0] := a[0]+a[1]` ; `a[2] := 2·b[0]` ; `b[3] := a[0]-a[1]` -/
-def procP : ParM Unit :=
-  ParM.bind (readInt (a.loc 0)) (fun a0 =>
-  ParM.bind (readInt (a.loc 1)) (fun a1 =>
-  ParM.bind (ParM.wr (b.loc 0) (.int (a0 + a1))) (fun _ =>
-  ParM.bind (readInt (b.loc 0)) (fun b0 =>                   -- reads back what it wrote
-  ParM.bind (ParM.wr (a.loc 2) (.int (2 * b0))) (fun _ =>
-            ParM.wr (b.loc 3) (.int (a0 - a1)))))))
+def procP : Block :=
+  [ .load  0 (a.loc 0),                    -- r0 := a[0]
+    .load  1 (a.loc 1),                    -- r1 := a[1]
+    .store   (b.loc 0) (R 0 + R 1),        -- b[0] := r0 + r1
+    .load  2 (b.loc 0),                    -- r2 := b[0]   ← reads back what it wrote
+    .store   (a.loc 2) (2 * R 2),          -- a[2] := 2 * r2
+    .store   (b.loc 3) (R 0 - R 1) ]       -- b[3] := r0 - r1
 
 /-- `d[2] := c[1]+5` ; `c[3] := d[2]-c[0]` ; `d[0] := c[3]` -/
-def procQ : ParM Unit :=
-  ParM.bind (readInt (c.loc 1)) (fun c1 =>
-  ParM.bind (ParM.wr (d.loc 2) (.int (c1 + 5))) (fun _ =>
-  ParM.bind (readInt (d.loc 2)) (fun d2 =>                   -- reads back what it wrote
-  ParM.bind (readInt (c.loc 0)) (fun c0 =>
-  ParM.bind (ParM.wr (c.loc 3) (.int (d2 - c0))) (fun _ =>
-            ParM.wr (d.loc 0) (.int (d2 - c0)))))))
+def procQ : Block :=
+  [ .load  0 (c.loc 1),                    -- r0 := c[1]
+    .store   (d.loc 2) (R 0 + 5),          -- d[2] := r0 + 5
+    .load  1 (d.loc 2),                    -- r1 := d[2]   ← reads back what it wrote
+    .load  2 (c.loc 0),                    -- r2 := c[0]
+    .store   (c.loc 3) (R 1 - R 2),        -- c[3] := r1 - r2
+    .store   (d.loc 0) (R 1 - R 2) ]       -- d[0] := r1 - r2
 
-/-! ### A concrete state to walk them against -/
+/-! ### Footprints — now `rfl`, read straight off the instruction lists
+
+No state is mentioned, because `footprintOf` never looks at one. -/
+
+example : footprintOf procP = ⟨[0, 1, 4], [4, 2, 7]⟩ := rfl
+example : footprintOf procQ = ⟨[9, 14, 8], [14, 11, 12]⟩ := rfl
+
+/-- The Bernstein check is a decision procedure on the two lists. -/
+example : indepB (footprintOf procP) (footprintOf procQ) = true := rfl
+
+/-! ### The payoff — one `decide`, for every initial state and every register file
+
+`exec_accesses` (proved once in `Lib/Block.lean`) is what connects the syntactic footprint to the
+`accesses` the metatheorem is stated against. Nothing problem-specific is proved here at all. -/
+
+theorem procs_par_seq_eq (ρ₁ ρ₂ : Regs) (σ : State) :
+    ParM.parPair (exec procP ρ₁) (exec procQ ρ₂)
+      ∥≡ ParM.seqPair (exec procP ρ₁) (exec procQ ρ₂) from σ :=
+  block_par_seq_eq_of_indepB procP procQ ρ₁ ρ₂ σ (by decide)
+
+/-! ### Anti-vacuity: overlap the regions and the check fails
+
+`procQ'` writes `b[3]` — one of `procP`'s cells — so the `decide` above would not succeed for it,
+and the footprints genuinely conflict. -/
+
+def procQ' : Block := [ .load 0 (c.loc 1), .store (b.loc 3) (R 0) ]
+
+example : indepB (footprintOf procP) (footprintOf procQ') = false := rfl
+
+/-! ### The trees
+
+`exec` generated the binds; `render` walks the resulting `ParM` term. -/
 
 def σ0 : State
   | 0  => .int 10 | 1  => .int 3  | 2  => .int 0 | 3  => .int 0      -- a
@@ -66,86 +90,7 @@ def σ0 : State
   | 8  => .int 7  | 9  => .int 2  | 10 => .int 0 | 11 => .int 0      -- c
   | _  => .int 0                                                      -- d
 
-/-! ### Footprints — computed, by `rfl`
-
-`procP` reads `{0,1,4}` and writes `{4,2,7}`; note `4` appears in both (it is written then read).
-All inside `[0,8)`. Likewise `procQ` stays inside `[8,16)`. -/
-
-example : accesses procP σ0 = ⟨[0, 1, 4], [4, 2, 7]⟩ := rfl
-example : accesses procQ σ0 = ⟨[9, 14, 8], [14, 11, 12]⟩ := rfl
-
-/-- The Bernstein check passes — decided by computation on the concrete footprints. -/
-example : indepB (accesses procP σ0) (accesses procQ (runSeq procP σ0).2) = true := rfl
-
-/-! ### Footprint confinement, for *every* state
-
-The concrete `rfl`s above are a sanity check; the theorem below is what the proof actually needs,
-and it holds for all `σ` because `readInt`'s footprint is state-independent. -/
-
-/-- Membership in `procP`'s region, from a plain numeric bound. -/
-private theorem memP {l : Loc} (h : l < 8) : regionP.InRange l := by
-  show 0 ≤ l ∧ l < 0 + 8
-  grind
-
-/-- Membership in `procQ`'s region. -/
-private theorem memQ {l : Loc} (h1 : 8 ≤ l) (h2 : l < 16) : regionQ.InRange l := by
-  show 8 ≤ l ∧ l < 8 + 8
-  grind
-
-/-- A write node's footprint is confined as soon as its one location is. -/
-private theorem wrWithin {l : Loc} {P : Loc → Prop} (hl : P l) (v : Val) (σ : State) :
-    FootprintWithin (accesses (ParM.wr l v) σ) P :=
-  ⟨Within.empty _, Within.singleton hl⟩
-
-theorem procP_within (σ : State) : FootprintWithin (accesses procP σ) regionP.InRange := by
-  unfold procP
-  refine footprintWithin_bind _ _ _ _ (readInt_footprintWithin _ _ _ _ (memP (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _ (readInt_footprintWithin _ _ _ _ (memP (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _ (wrWithin (memP (by decide)) _ _) ?_
-  refine footprintWithin_bind _ _ _ _ (readInt_footprintWithin _ _ _ _ (memP (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _ (wrWithin (memP (by decide)) _ _) ?_
-  exact wrWithin (memP (by decide)) _ _
-
-theorem procQ_within (σ : State) : FootprintWithin (accesses procQ σ) regionQ.InRange := by
-  unfold procQ
-  refine footprintWithin_bind _ _ _ _
-    (readInt_footprintWithin _ _ _ _ (memQ (by decide) (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _ (wrWithin (memQ (by decide) (by decide)) _ _) ?_
-  refine footprintWithin_bind _ _ _ _
-    (readInt_footprintWithin _ _ _ _ (memQ (by decide) (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _
-    (readInt_footprintWithin _ _ _ _ (memQ (by decide) (by decide))) ?_
-  rw [readInt_runSeq]
-  refine footprintWithin_bind _ _ _ _ (wrWithin (memQ (by decide) (by decide)) _ _) ?_
-  exact wrWithin (memQ (by decide) (by decide)) _ _
-
-/-! ### WellFormed — trivial, there is no nested `par` -/
-
-theorem procP_wellformed (σ : State) : WellFormed procP σ := by
-  unfold procP; grind [readInt, WellFormed, ParM.bind, ParM.wr]
-
-theorem procQ_wellformed (σ : State) : WellFormed procQ σ := by
-  unfold procQ; grind [readInt, WellFormed, ParM.bind, ParM.wr]
-
-/-! ### The payoff -/
-
-/-- **`procP ∥ procQ` ≡ `procP ; procQ`, for every initial state.** The only genuinely
-problem-specific input is `by omega`: region `[0,8)` ends where region `[8,16)` begins. -/
-theorem procs_par_seq_eq (σ : State) :
-    ParM.parPair procP procQ ∥≡ ParM.seqPair procP procQ from σ :=
-  par_seq_eq_of_disjoint_arrefs regionP regionQ procP procQ σ
-    (procP_wellformed σ) (procQ_wellformed _)
-    (procP_within σ) (procQ_within _)
-    (Or.inl (by decide))
-
-/-! ### The trees
-
-`#eval` these to see what the terms actually look like. -/
+def ρ0 : Regs := fun _ => 0
 
 /--
 info: read  [0] → Paralever.Val.int 10
@@ -156,10 +101,7 @@ write [2] ← Paralever.Val.int 26
 write [7] ← Paralever.Val.int 7
 pure
 -/
-#guard_msgs in #eval IO.println (renderStr procP σ0)
-
-/-- info: reads [0, 1, 4]   writes [4, 2, 7] -/
-#guard_msgs in #eval IO.println (footprintStr procP σ0)
+#guard_msgs in #eval IO.println (renderStr (exec procP ρ0) σ0)
 
 /--
 info: par ⟨
@@ -182,6 +124,6 @@ info: par ⟨
 ⟩
 pure
 -/
-#guard_msgs in #eval IO.println (renderStr (ParM.parPair procP procQ) σ0)
+#guard_msgs in #eval IO.println (renderStr (ParM.parPair (exec procP ρ0) (exec procQ ρ0)) σ0)
 
 end Paralever.Examples.TwoProcesses
