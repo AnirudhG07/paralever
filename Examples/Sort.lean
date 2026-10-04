@@ -1,4 +1,5 @@
-import Paralever.Theory.Sequentialize
+import Paralever.Lib.Compose
+import Paralever.Lib.Notation
 
 /-! # Example: independent compare-swap rounds
 
@@ -23,17 +24,6 @@ wall-clock benchmark is in `SortTask.lean`.
 namespace Paralever.Examples.Sort
 
 open ParM
-
-/-- `accesses` through `bind` — same fact as `SumArray.accesses_bind`, needed again here since
-`compareSwap` (unlike `sumRange`) actually writes, so the footprint argument below needs it. -/
-theorem accesses_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State) :
-    accesses (ParM.bind p f) σ =
-    Footprint.union (accesses p σ) (accesses (f (runSeq p σ).1) (runSeq p σ).2) := by
-  induction p generalizing σ with
-  | pure a => rfl
-  | read l k ih => grind
-  | write l v k ih => grind
-  | par p q k ihp ihq ihk => grind
 
 /-- Compare-and-swap two locations into ascending order. Written in raw `ParM` constructors (not
 `do`-notation), same reason as `SumArray.sumRange`: keeps the inductive proofs below unfolding by
@@ -75,7 +65,7 @@ theorem wellFormed_sort : WellFormed (parPair sortLeftHalf sortRightHalf) σ0 :=
 /-- The metatheorem, instantiated: running both sub-sorts in parallel reaches exactly the outcomes
 running them in sequence does. -/
 theorem sort_par_seq_eq :
-    ParSeqEq (parPair sortLeftHalf sortRightHalf) (seqPair sortLeftHalf sortRightHalf) σ0 :=
+    parPair sortLeftHalf sortRightHalf ∥≡ seqPair sortLeftHalf sortRightHalf from σ0 :=
   par_seq_eq sortLeftHalf sortRightHalf σ0 wellFormed_sort
 
 example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 0 = .int 3 := rfl
@@ -172,7 +162,7 @@ theorem wellFormed_swapRoundPar (plan : SwapPlan) (σ : State) (h : plan.locs.No
 
 /-- The metatheorem, for any independent set of swaps. -/
 theorem swapRound_par_seq_eq (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
-    ParSeqEq (swapRoundPar plan) (swapRoundSeq plan) σ := by
+    swapRoundPar plan ∥≡ swapRoundSeq plan from σ := by
   exact parAll_par_seq_eq _ σ (wellFormed_swapRoundPar plan σ h)
 
 /-! A genuinely uneven-in-*index* instance — three disjoint pairs, not two contiguous halves: -/

@@ -1,5 +1,5 @@
-import Paralever.Theory.Sequentialize
-import Paralever.Theory.Intervals
+import Paralever.Lib.TouchesOnly
+import Paralever.Lib.Notation
 
 /-! # Example: real recursive parallel mergesort
 
@@ -123,22 +123,11 @@ predicate, show the two predicates are never true of the same location (one `ome
 for any depth of nesting. `TouchesOnly` is exactly that predicate: "in the data range being sorted,
 or its matching scratch range." -/
 
-/-- A location in the data channel `[lo,hi)` or the matching scratch channel `[N+lo,N+hi)` — the
-one predicate every footprint bound below targets. Two sort calls over disjoint `[lo,hi)` ranges
-(with `hi ≤ N`, so data and scratch never cross) are `TouchesOnly`-disjoint, which is the entire
-independence argument `mergeSortPar`'s `.par` node needs. -/
-def TouchesOnly (lo hi N l : Nat) : Prop := (lo ≤ l ∧ l < hi) ∨ (N + lo ≤ l ∧ l < N + hi)
-
-theorem TouchesOnly.mono {lo hi lo' hi' N l : Nat} (h1 : lo' ≤ lo) (h2 : hi ≤ hi')
-    (h : TouchesOnly lo hi N l) : TouchesOnly lo' hi' N l := by
-  rcases h with h | h
-  · left; omega
-  · right; omega
-
-/-- The only fact the `.par` node's independence obligation needs — one `omega` call. -/
-theorem TouchesOnly.disjoint {lo mid hi N : Nat} (hhN : hi ≤ N) {l : Nat}
-    (h1 : TouchesOnly lo mid N l) (h2 : TouchesOnly mid hi N l) : False := by
-  rcases h1 with h1 | h1 <;> rcases h2 with h2 | h2 <;> omega
+/-! `TouchesOnly lo hi N` — "in the data channel `[lo,hi)` or the matching scratch channel
+`[N+lo,N+hi)`" — is the one predicate every footprint bound below targets. It and its two lemmas
+(`.mono`, `.disjoint`) come from `Lib/TouchesOnly.lean`; two sort calls over disjoint `[lo,hi)`
+ranges (with `hi ≤ N`) are `TouchesOnly`-disjoint, which is the entire independence argument
+`mergeSortPar`'s `.par` node needs. -/
 
 /-- `mergeStep`'s full footprint (reads *and* writes): reads stay in the data range `[i,mid)∪[j,hi)`,
 writes stay in the scratch range `[auxBase+k, auxBase+k+fuel)` — both `TouchesOnly lo hi N` once
@@ -422,7 +411,7 @@ theorem mergeSortPar_spec (N : Nat) :
           rw [accesses_bind]
           have hmonoM : ∀ l, ((lo ≤ l ∧ l < lo+(hi-lo)/2) ∨ (lo+(hi-lo)/2 ≤ l ∧ l < hi)
               ∨ (N+lo ≤ l ∧ l < N+lo+(hi-lo))) → TouchesOnly lo hi N l := by
-            intro l hl; unfold TouchesOnly; omega
+            intro l hl; grind [TouchesOnly, InRange]
           have hmergeF : FootprintWithin
               (accesses (mergeStep (lo+(hi-lo)/2) hi N (hi-lo) lo (lo+(hi-lo)/2) lo)
                 (runSeq (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2))
@@ -432,7 +421,7 @@ theorem mergeSortPar_spec (N : Nat) :
               (mergeStep_within (lo+(hi-lo)/2) hi N (hi-lo) lo (lo+(hi-lo)/2) lo _)
           apply FootprintWithin.union hmergeF
           have hmonoC : ∀ l, ((N+lo ≤ l ∧ l < N+lo+(hi-lo)) ∨ (lo ≤ l ∧ l < lo+(hi-lo))) → TouchesOnly lo hi N l := by
-            intro l hl; unfold TouchesOnly; omega
+            intro l hl; grind [TouchesOnly, InRange]
           exact FootprintWithin.mono hmonoC (copyBack_within N (hi-lo) lo lo _)
         · rw [WellFormed_bind]
           refine ⟨hWpar, ?_⟩
@@ -460,9 +449,9 @@ same `WellFormed` fact, via the same two lines — `WellFormed_bind` to peel off
 that node, `par_seq_eq` to discharge it. -/
 theorem mergeSortPar_split_par_seq_eq (N lo hi : Nat) (hhiN : hi ≤ N) (hgt : ¬ hi - lo ≤ 1)
     (σ : State) :
-    ParSeqEq (ParM.parPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi))
-             (ParM.seqPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi))
-             σ := by
+    ParM.parPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi)
+      ∥≡ ParM.seqPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi)
+      from σ := by
   have hwf := mergeSortPar_wellformed N lo hi hhiN σ
   have heq : mergeSortPar N lo hi
       = ParM.bind (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2)) (mergeSortPar N (lo+(hi-lo)/2) hi))

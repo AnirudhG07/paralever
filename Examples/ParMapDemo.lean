@@ -23,7 +23,7 @@ example : (runSeq sortedBatchesPar (fun _ => .int 0)).1 = [[3, 5, 8], [1, 2, 9],
 /-- No side condition at all — `parMap_wellformed`/`parMap_par_seq_eq` are unconditional on the
 function and the chunking. -/
 theorem sortedBatchesPar_par_seq_eq (σ : State) :
-    ParSeqEq sortedBatchesPar (seqMap mergeSortPure batches) σ :=
+    sortedBatchesPar ∥≡ seqMap mergeSortPure batches from σ :=
   parMap_par_seq_eq mergeSortPure batches σ
 
 end Paralever.Examples.ParMapDemo

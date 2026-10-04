@@ -1,4 +1,5 @@
-import Paralever.Theory.Sequentialize
+import Paralever.Lib.Compose
+import Paralever.Lib.Notation
 
 /-! # Example: chunked reduce, uneven pieces included
 
@@ -112,18 +113,11 @@ theorem sumRange_wellformed (locs : List Loc) (σ : State) : WellFormed (sumRang
       | bool b => exact ih σ
       | unit => exact ih σ
 
-/-- Both sides write-free is what actually makes Bernstein vacuous — one side alone is *not*
-enough: the third condition (`g`'s writes vs `f`'s reads) needs `g` write-free too. A write-based
-variant of this example (e.g. writing partial sums into an output array) would not get this for
-free and would need real chunk-disjointness reasoning — see the module docstring. -/
-theorem indep_of_no_writes {f g : Footprint} (hf : f.writes = []) (hg : g.writes = []) :
-    Indep f g := by
-  refine ⟨?_, ?_, ?_⟩
-  · intro l hl _; rw [hf] at hl; simp at hl
-  · intro l hl _; rw [hf] at hl; simp at hl
-  · intro l hl _; rw [hg] at hl; simp at hl
+/-! ### Chunk plans — uneven splits, named `par`/`seq` versions
 
-/-! ### Chunk plans — uneven splits, named `par`/`seq` versions -/
+Independence is free because both sides are write-free — `indep_of_no_writes` from
+`Lib/Compose.lean` (one side alone is *not* enough: Bernstein's third condition needs `g`
+write-free too). A write-based variant would need real chunk-disjointness reasoning. -/
 
 /-- A parallelization plan: one entry per chunk, each an arbitrary, independently-sized list of
 locations. No uniform chunk size is assumed anywhere below — chunks may differ in length, be
@@ -185,13 +179,13 @@ theorem wellFormed_sumRangePar (chunks : ChunkPlan) (vals : List Int) :
       simp only [sumRangePar, List.map_cons]
       apply WellFormed_parAll_cons
       · exact sumRange_wellformed _ _
-      · exact indep_of_no_writes (sumRange_no_writes _ _) (sumRangePar_no_writes _ _)
+      · exact indep_of_no_writes _ _ (sumRange_no_writes _ _) (sumRangePar_no_writes _ _)
       · rw [sumRange_state_eq]; exact ih
 
 /-- The metatheorem, named end to end: summing `chunks` in parallel reaches exactly the outcomes
 summing them in sequence does, for any chunk plan and any array. -/
 theorem sumRange_par_seq_eq (chunks : ChunkPlan) (vals : List Int) :
-    ParSeqEq (sumRangePar chunks) (sumRangeSeq chunks) (arrayState vals) :=
+    sumRangePar chunks ∥≡ sumRangeSeq chunks from arrayState vals :=
   parAll_par_seq_eq (chunks.map sumRange) (arrayState vals) (wellFormed_sumRangePar chunks vals)
 
 /-! ### §1 — n = 8, even chunks. `decide` works fine at this size. -/

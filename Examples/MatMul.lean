@@ -1,4 +1,5 @@
 import Paralever.Pragma.ParallelFor
+import Paralever.Lib.Notation
 
 /-! # Example: parallel matrix multiply — the demo `PLAN.md` calls "probably the most compelling"
 
@@ -179,7 +180,7 @@ theorem matmul_wr (n p : Nat) : ∀ l, l = n * n + n * n + p → l < n * n + n *
 /-- **The payoff, for any `n`**: computing every cell of `C = A*B` in parallel reaches exactly the
 outcomes computing them one at a time does — despite every cell in a row sharing reads with every
 other cell in that row (and likewise for columns). -/
-theorem matmulPar_par_seq_eq (n : Nat) (σ : State) : ParSeqEq (matmulPar n) (matmulSeq n) σ :=
+theorem matmulPar_par_seq_eq (n : Nat) (σ : State) : matmulPar n ∥≡ matmulSeq n from σ :=
   parAll_par_seq_eq_of_indexed_rw (List.range (n * n)) (cellCompute n)
     (fun _ l => l < n * n + n * n) (fun p l => l = n * n + n * n + p)
     List.nodup_range

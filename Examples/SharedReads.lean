@@ -1,4 +1,4 @@
-import Paralever.Theory.Sequentialize
+import Paralever.Lib.Notation
 import Paralever.Pragma.ParallelFor
 
 /-! # Example: shared reads, disjoint writes — why Bernstein, not `∗`
@@ -57,7 +57,7 @@ theorem wellFormed_minmax : WellFormed minmaxPar σ0 := by
 
 /-- The payoff: computing min and max of the same data in parallel reaches exactly the outcomes
 computing them one after another does — despite both reading every input location. -/
-theorem minmaxPar_par_seq_eq : ParSeqEq minmaxPar (ParM.seqAll [findMin, findMax]) σ0 :=
+theorem minmaxPar_par_seq_eq : minmaxPar ∥≡ ParM.seqAll [findMin, findMax] from σ0 :=
   parAll_par_seq_eq _ σ0 wellFormed_minmax
 
 example : (runSeq minmaxPar σ0).2 10 = .int (-2) := rfl
