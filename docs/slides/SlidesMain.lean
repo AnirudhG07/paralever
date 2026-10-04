@@ -1,6 +1,5 @@
 import VersoSlides
 import Slides
--- import each additional deck module here, e.g.  import Slides.paralever
 
 open VersoSlides
 
