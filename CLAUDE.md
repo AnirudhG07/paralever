@@ -36,7 +36,7 @@ lake exe cache get                   # fetch Mathlib oleans before a first full 
 grep -rn "sorry" Paralever/          # the no-sorry gate
 ```
 
-Toolchain `leanprover/lean4:v4.32.2`. Disk on `/` is tight (~5 GB) — check before a full build.
+Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinned to `v4.34.0`.
 
 ## Mathlib import policy
 
@@ -99,12 +99,14 @@ Paralever/
   Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
   Lib/       Compose (bind lemmas), TypedRead, TouchesOnly, Notation, FootprintSimp,
              OpaqueOp (declared footprints for bodies we never read),
-             Reduce (Σ-shaped loops with a pure accumulator)
+             Reduce (Σ-shaped loops with a pure accumulator),
+             Pure (pure↔ParM bridge + faithfulness theorem),
+             Render (print a ParM tree — another interpreter, for debugging)
   Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
   Compile/   TaskFacts
 Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo,
-             OpaqueAgents, *Task
+             OpaqueAgents, PureToParM, TwoProcesses, *Task
 Test/        Sanity, AccessSanity
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
-             opaque-ops.md, reductions.md, ...)
+             opaque-ops.md, reductions.md, pure-bridge.md, ...)
 ```

@@ -28,7 +28,7 @@ def doubleSeq (n : Nat) := mapArraySeq (inp n) (out n) double
 /-- **The payoff, for any `n`**: one line. -/
 theorem doublePar_par_seq_eq (n : Nat) (σ : State) :
     doublePar n ∥≡ doubleSeq n from σ :=
-  mapArray_par_seq_eq (inp n) (out n) double rfl (Or.inl (by show 0 + n ≤ n; omega)) σ
+  mapArray_par_seq_eq (inp n) (out n) double (by rfl) (Or.inl (by grind only [inp, out])) σ
 
 /-! ### Anti-vacuity: the loop a pragma must reject -/
 
