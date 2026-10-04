@@ -98,12 +98,13 @@ Paralever/
   Theory/    Decomposition, WellFormedCanonical, Sequentialize (the theorem), Intervals
   Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
   Lib/       Compose (bind lemmas), TypedRead, TouchesOnly, Notation, FootprintSimp,
-             OpaqueOp (declared footprints for bodies we never read)
+             OpaqueOp (declared footprints for bodies we never read),
+             Reduce (Σ-shaped loops with a pure accumulator)
   Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
   Compile/   TaskFacts
 Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo,
              OpaqueAgents, *Task
 Test/        Sanity, AccessSanity
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
-             opaque-ops.md, ...)
+             opaque-ops.md, reductions.md, ...)
 ```

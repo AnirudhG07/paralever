@@ -20,6 +20,7 @@ import Paralever.Pragma.MapArray
 import Paralever.Lib.FootprintSimp
 import Paralever.Lib.Notation
 import Paralever.Lib.OpaqueOp
+import Paralever.Lib.Reduce
 
 -- Examples/ and Test/ are separate lean_lib entries (see lakefile.toml), not part of the
 -- Paralever library umbrella. Build them with `lake build Examples` / `lake build Test`.
