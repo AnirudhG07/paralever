@@ -1,5 +1,5 @@
 import Paralever.Pragma.ParMap
-import Paralever.Examples.MergeSort
+import Examples.MergeSort
 
 /-! # Example: parallelizing an existing pure function, unmodified
 

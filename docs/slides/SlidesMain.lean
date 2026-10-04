@@ -4,10 +4,8 @@ import Slides
 
 open VersoSlides
 
-/-- Find the deck's asset dir (`docs/ppt`) whether the exe is run from the repo
-root or from `docs/ppt` — it's the directory that contains `lean.css`. -/
 def findBase : IO System.FilePath := do
-  for d in [("docs/ppt" : System.FilePath), "."] do
+  for d in [("docs/slides" : System.FilePath), "."] do
     if ← (d / "lean.css").pathExists then return d
   throw <| IO.userError "lean.css not found — run `lake exe slides` from the repo root (or from docs/ppt)"
 
@@ -23,7 +21,7 @@ def loadTheme : IO CustomTheme := do
   let css ← IO.FS.readFile (base / "lean.css")
   let asset (name : String) : IO ThemeAsset := do
     return { filename := "assets/" ++ name, contents := ← IO.FS.readBinFile (base / "assets" / name) }
-  let assets ← #["pasta.jpg", "python-clean.png", "lean-logo-large.png", "paraleverlogo.png"].mapM asset
+  let assets ← #[].mapM asset
   -- stagger.js turns a `:::class "steps"` list into per-item reveal fragments
   let stagger : ThemeAsset := { filename := "stagger.js", contents := ← IO.FS.readBinFile (base / "stagger.js") }
   return {

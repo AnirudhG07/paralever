@@ -1,5 +1,5 @@
 import Paralever.Compile.TaskFacts
-import Paralever.Examples.MatMul
+import Examples.MatMul
 
 /-! # MatMul, the "second model": real `Task`, no `ParM`
 

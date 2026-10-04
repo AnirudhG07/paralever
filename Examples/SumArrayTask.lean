@@ -1,5 +1,5 @@
 import Paralever.Compile.TaskFacts
-import Paralever.Examples.SumArray
+import Examples.SumArray
 
 /-! # SumArray, the "second model": real `Task`, no `ParM`
 

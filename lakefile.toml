@@ -5,6 +5,14 @@ defaultTargets = ["paralever"]
 [[lean_lib]]
 name = "Paralever"
 
+[[lean_lib]]
+name = "Examples"
+globs = ["Examples.+"]
+
+[[lean_lib]]
+name = "Test"
+globs = ["Test.+"]
+
 [[lean_exe]]
 name = "paralever"
 root = "Main"
@@ -27,3 +35,9 @@ rev = "v4.34.0"
 name = "verso-slides"
 scope = "leanprover"
 rev = "v4.34.0"
+
+[[lean_exe]]
+name = "slides"
+srcDir = "docs/slides"
+root = "SlidesMain"
+supportInterpreter = true

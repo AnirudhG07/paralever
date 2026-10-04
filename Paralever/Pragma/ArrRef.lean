@@ -37,6 +37,7 @@ def ArrRef.loc (a : ArrRef) (i : Nat) : Loc := a.base + i
 `FootprintWithin`/`ReadsWithin`/`WritesWithin`. -/
 def ArrRef.InRange (a : ArrRef) (l : Loc) : Prop := a.base ≤ l ∧ l < a.base + a.len
 
+@[simp, grind .]
 theorem ArrRef.loc_mem (a : ArrRef) {i : Nat} (hi : i < a.len) : a.InRange (a.loc i) := by
   unfold ArrRef.loc ArrRef.InRange; grind
 
@@ -44,6 +45,7 @@ theorem ArrRef.loc_mem (a : ArrRef) {i : Nat} (hi : i < a.len) : a.InRange (a.lo
 right halves of one backing array. -/
 def ArrRef.slice (a : ArrRef) (lo hi : Nat) : ArrRef := ⟨a.base + lo, hi - lo⟩
 
+@[simp, grind .]
 theorem ArrRef.slice_inRange {a : ArrRef} {lo hi : Nat} (hle : hi ≤ a.len) {l : Loc}
     (h : (a.slice lo hi).InRange l) : a.InRange l := by
   unfold ArrRef.slice ArrRef.InRange at *
@@ -53,6 +55,7 @@ theorem ArrRef.slice_inRange {a : ArrRef} {lo hi : Nat} (hle : hi ≤ a.len) {l 
 one fact `indep_of_footprint_within`/`indep_of_read_write_confined` need, reduced to `omega` on
 the four constants `a.base`, `a.len`, `b.base`, `b.len` instead of a bespoke argument about
 whatever indices happen to be touched inside each. -/
+@[simp, grind .]
 theorem ArrRef.disjoint_of_range {a b : ArrRef}
     (h : a.base + a.len ≤ b.base ∨ b.base + b.len ≤ a.base) :
     ∀ l, a.InRange l → b.InRange l → False := by
@@ -66,26 +69,61 @@ def get (a : ArrRef) (i : Nat) : ParM Val := .read (a.loc i) .pure
 /-- Write `v` to index `i` of `a`. -/
 def set (a : ArrRef) (i : Nat) (v : Val) : ParM Unit := .write (a.loc i) v .pure
 
+@[simp, grind .]
 theorem get_accesses (a : ArrRef) (i : Nat) (σ : State) :
     accesses (get a i) σ = ⟨[a.loc i], []⟩ := rfl
 
+@[simp, grind .]
 theorem set_accesses (a : ArrRef) (i : Nat) (v : Val) (σ : State) :
     accesses (set a i v) σ = ⟨[], [a.loc i]⟩ := rfl
 
+@[simp, grind .]
 theorem get_wellformed (a : ArrRef) (i : Nat) (σ : State) : WellFormed (get a i) σ := trivial
 
+@[simp, grind .]
 theorem set_wellformed (a : ArrRef) (i : Nat) (v : Val) (σ : State) :
     WellFormed (set a i v) σ := trivial
 
-/-- `get`'s footprint is confined to `a.InRange`, given `i` is in bounds. -/
+@[simp, grind .]
 theorem get_footprintWithin (a : ArrRef) {i : Nat} (hi : i < a.len) (σ : State) :
     FootprintWithin (accesses (get a i) σ) a.InRange := by
   rw [get_accesses]; exact FootprintWithin.read _ _ (a.loc_mem hi)
 
-/-- `set`'s footprint is confined to `a.InRange`, given `i` is in bounds. -/
+@[simp, grind .]
 theorem set_footprintWithin (a : ArrRef) {i : Nat} (hi : i < a.len) (v : Val) (σ : State) :
     FootprintWithin (accesses (set a i v) σ) a.InRange := by
   rw [set_accesses]; exact FootprintWithin.write _ _ (a.loc_mem hi)
 
 end ArrM
+
+/-! ### Binary array independence — the "two programs on disjoint arrays" one-shot -/
+
+-- ref: Apt & Olderog §3.2 — parallel composition rule for disjoint variables
+
+/-- Two programs touching disjoint `ArrRef`s ⇒ `ParSeqEq`. The user supplies only WellFormed,
+FootprintWithin, and an `omega`-dischargeable range-disjointness proof. -/
+@[simp, grind .]
+theorem par_seq_eq_of_disjoint_arrefs {α β : Type} (a b : ArrRef) (p : ParM α) (q : ParM β) (σ : State)
+    (hp_wf : WellFormed p σ) (hq_wf : WellFormed q (runSeq p σ).2)
+    (hp : FootprintWithin (accesses p σ) a.InRange)
+    (hq : FootprintWithin (accesses q (runSeq p σ).2) b.InRange)
+    (hdisj : a.base + a.len ≤ b.base ∨ b.base + b.len ≤ a.base) :
+    ParSeqEq (ParM.parPair p q) (ParM.seqPair p q) σ :=
+  par_seq_eq p q σ (WellFormed_par_intro
+    (indep_of_footprint_within hp hq (ArrRef.disjoint_of_range hdisj)) hp_wf hq_wf)
+
+/-- Shared-reads variant: programs read from any arrays, but write to disjoint ones. -/
+@[simp, grind .]
+theorem par_seq_eq_of_disjoint_writes {α β : Type} (wa wb : ArrRef) (p : ParM α) (q : ParM β) (σ : State)
+    (hp_wf : WellFormed p σ) (hq_wf : WellFormed q (runSeq p σ).2)
+    (hp_w : WritesWithin (accesses p σ) wa.InRange)
+    (hq_w : WritesWithin (accesses q (runSeq p σ).2) wb.InRange)
+    (hp_wr : Disjoint (accesses p σ).writes (accesses q (runSeq p σ).2).reads)
+    (hq_wr : Disjoint (accesses q (runSeq p σ).2).writes (accesses p σ).reads)
+    (hdisj : wa.base + wa.len ≤ wb.base ∨ wb.base + wb.len ≤ wa.base) :
+    ParSeqEq (ParM.parPair p q) (ParM.seqPair p q) σ :=
+  par_seq_eq p q σ (WellFormed_par_intro
+    ⟨fun l h1 h2 => ArrRef.disjoint_of_range hdisj l (hp_w l h1) (hq_w l h2), hp_wr, hq_wr⟩
+    hp_wf hq_wf)
+
 end Paralever

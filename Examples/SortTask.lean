@@ -1,4 +1,4 @@
-import Paralever.Examples.Sort
+import Examples.Sort
 
 /-! # Sort, the "second model": real `Task`, no `ParM`
 

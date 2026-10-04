@@ -46,12 +46,6 @@
 .reveal .finale { display: flex; justify-content: center; align-items: center; margin: 3vh 0 0; }
 .reveal .finale img { height: 36vh; width: auto; max-width: 92%; object-fit: contain; border-radius: 12px; }
 
-/* ---- "So, what is paralever?" — 2×2 pipeline ---------------------
-        ┌ Python ┐  →transpile  ┌  Lean def  ┐
-        │  ↓parse │             │   ↓prove   │
-        └  AST    ┘             └  Theorem ✓ ┘
-   Scoped to state="whatis" so it never touches the deck's other
-   :::hstack / code slides. Fonts are the tuning knobs. */
 .reveal section[data-state="whatis"] .r-hstack {
   align-items: center; justify-content: center; gap: 0.55em;
 }
@@ -67,7 +61,7 @@
   height: auto !important; max-height: none !important;   /* kill reveal r-stretch */
   width: auto; overflow: visible;
 }
-/* per-box font sizes — Python largest (readable), the rest dense */
+/* per-box font sizes —  largest (readable), the rest dense */
 .reveal section[data-state="whatis"] .py   { font-size: 0.6em; }
 .reveal section[data-state="whatis"] .defbox { font-size: 0.54em; }
 .reveal section[data-state="whatis"] .thm  { font-size: 0.5em; }
@@ -97,11 +91,7 @@
   color: var(--lean-teal); font-weight: 600; margin: 0; padding: 0 0.15em;
 }
 
-/* ---- ## Examples — one Python fn forks into two Lean defs -----------
-        ┌── Python (top, centre) ──┐
-      ↙ provable            computable ↘
-   ┌ Lean (provable) ┐   ┌ Lean (computable) ┐
-   Scoped to state="examples". */
+
 .reveal section[data-state="examples"] h3 { text-align: center; margin: 0 0 0.15em; }
 .reveal section[data-state="examples"] > p { text-align: center; font-size: 0.8em; margin: 0 0 0.15em; color: var(--muted); }
 .reveal section[data-state="examples"] .r-vstack { gap: 0.15em; }
@@ -134,9 +124,7 @@
 }
 .reveal section[data-state="examples"] .gbox code { font-size: inherit; }
 
-/* ---- "Proving we cooked correctly" — Non-Monadic ↙ | ↘ Monadic -------
-   Same fork as ## Examples: a code snippet per branch, then terse
-   Proves / Tactics / When lines. Scoped to state="proving". */
+
 .reveal section[data-state="proving"] > p { text-align: center; font-size: 0.85em; margin: 0 0 0.25em; }
 .reveal section[data-state="proving"] .r-vstack { gap: 0.2em; align-items: stretch; }
 .reveal section[data-state="proving"] .r-hstack {
@@ -165,11 +153,6 @@
 .reveal section[data-state="proving"] .spec strong { color: var(--lean-teal); font-weight: 700; }
 .reveal section[data-state="proving"] .punch { text-align: center; font-size: 0.95em; margin-top: 0.4em; }
 
-/* ---- shared "Python → Lean" example rows ------------------------------
-   Left Python, → , right Lean. Used on the How-much-Python subslides
-   (control flow / data structures / exceptions) and the proving slides
-   (taste? / mvcgen). One grouped block keeps them consistent. */
-/* generic arrow fallback (also styles e.g. the Libraries slide arrow) */
 .reveal .arrow-right { color: var(--lean-teal); font-weight: 700; white-space: nowrap; align-self: center; }
 .reveal .arrow-down  { color: var(--lean-teal); font-weight: 700; text-align: center; }
 
@@ -231,10 +214,6 @@
   text-align: center; font-size: 0.8em; margin-top: 0.35em;
 }
 
-/* ---- Design & architecture vertical section (state="design") ---------
-   Normal content slides: the same paralever header as the main slides
-   (hung off the sub-slide's h3), a big title, the Problem / We do / Why
-   discussion in the body at normal size, then the code below it. */
 .reveal section[data-state="design"] h3 {
   position: relative; padding-top: 1.8em; text-align: left;
   font-size: 1.3em; font-weight: 600; color: var(--ink); margin: 0 0 0.45em;
@@ -259,13 +238,6 @@
 }
 .reveal section[data-state="design"] .dcode code { font-size: inherit; }
 
-/* ---- big comparison tables — fit them to the slide --------------------
-   reveal forces `.reveal td { font-size:20pt !important }` and the table
-   has no width cap, so it grows past the slide's right edge and the right
-   border disappears off-screen. Pin the table to the slide width (so the
-   right border is always visible) but keep `table-layout: auto` so columns
-   size dynamically to their content; cells wrap instead of overflowing.
-   Applies to "Two Functions for each code" + "How much Python is …". */
 .reveal section[data-state="twofns"] table,
 .reveal section[data-state="implemented"] table {
   width: 100%; max-width: 100%; table-layout: auto;
@@ -308,12 +280,6 @@
   align-self: center; color: var(--lean-teal); font-weight: 700; white-space: nowrap; font-size: 0.9em;
 }
 
-/* ---- code boxes hug their content -------------------------------------
-   Every code card (the elaborated Lean `code.hl.lean.block` and the plain
-   `pre` blocks) sizes to the WIDEST line + padding, not the full slide
-   width. Past the slide width it caps and scrolls horizontally — still with
-   the surrounding padding. Placed last so it wins over the per-slide box
-   rules (which set `width: auto` = full width) at equal specificity. */
 .reveal code.hl.lean.block {
   width: fit-content;
   max-width: 100%;
@@ -324,9 +290,6 @@
   max-height: none !important;
 }
 
-/* ---- Showcases vertical section (state="showcase") --------------------
-   First sub-slide: a metrics table + GitHub link. Detail sub-slides:
-   Python (left) → Lean (right), each in a scrollable card. */
 .reveal section[data-state="showcase"] table {
   width: 100%; max-width: 100%; table-layout: auto; border-collapse: collapse; margin: 0.3em auto;
 }

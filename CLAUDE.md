@@ -94,12 +94,13 @@ programs, and `wrong` on random racy ones.
 
 ```
 Paralever/
-  Core/      ParM.lean (done), State, Semantics (run), Access (footprints, Indep)
-  Theory/    Decomposition, Sequentialize (the theorem), Determinism
-  Logic/     Tier-2 DCSL-lite for data-dependent footprints
-  Notation/  ∥, A[i], regions, region_disjoint
-  Pragma/    #parallel for, collapse, reduction, private
-  Compile/   ToTask.lean
-  Examples/  SumArray, Sort, MatMul, LoopPar
-docs/        design rationale (program-model.md, ...)
+  Core/      ParM.lean, Semantics (State, step, Reaches), Access (footprints, Indep)
+  Theory/    Decomposition, WellFormedCanonical, Sequentialize (the theorem), Intervals
+  Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
+  Lib/       Compose (bind lemmas), TypedRead, TouchesOnly, Notation, FootprintSimp
+  Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
+  Compile/   TaskFacts
+Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo, *Task
+Test/        Sanity, AccessSanity
+docs/        design rationale (program-model.md, semantics.md, access.md, theory.md, ...)
 ```
