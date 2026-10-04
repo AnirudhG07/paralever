@@ -36,6 +36,12 @@ name = "verso-slides"
 scope = "leanprover"
 rev = "v4.34.0"
 
+# The deck itself, as a library so `import Slides` resolves from SlidesMain.
+# Without this, Lake builds SlidesMain but never builds Slides, and the import fails.
+[[lean_lib]]
+name = "Slides"
+srcDir = "docs/slides"
+
 [[lean_exe]]
 name = "slides"
 srcDir = "docs/slides"

@@ -11,306 +11,214 @@
 :root { --project: "paralever"; --name-w: 5.4em; }
 
 /* ---- title slide: anchor the block higher and tighten it ----
-   lean.css centres the title vertically; with a subtitle + four authors +
-   event that reads low and loose, so here we top-anchor it and close the gaps. */
+   lean.css centres the title vertically; with a subtitle + byline +
+   event + links that reads low and loose, so top-anchor and close gaps. */
 .reveal section[data-state="title"] {
   justify-content: flex-start;
   padding: 8.5vh 7vw 5vh;
 }
 .reveal section[data-state="title"]::before { margin-bottom: 1em; }
 .reveal section[data-state="title"] h2 { margin-bottom: 0.3em; }
-.reveal .subheader { font-size: 1.4em; margin-bottom: 1.6em; }
+.reveal .subheader { font-size: 1.3em; margin-bottom: 1.5em; }
 .reveal .byline { font-size: 1.05em; line-height: 1.4; margin-bottom: 0.16em; }
 .reveal .byline + .event,
-.reveal .subheader + .event { margin-top: 1.4em; padding-top: 0.85em; }
+.reveal .subheader + .event { margin-top: 1.2em; padding-top: 0.8em; }
 .reveal .event { font-size: 0.9em; }
+.reveal .links { margin-top: 0.9em; font-size: 0.8em; }
 
 /* ---- body: bump bullet-point text a touch ---- */
 .reveal ul, .reveal ol { font-size: 0.92em; }
 
-/* ---- title / recap equation (Pasta + Python + Lean = paralever) ---- */
-.reveal .eq {
-  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
-  gap: 0.55em; margin: 0.6em 0 0.2em;
-}
-.reveal .eq .term { display: flex; flex-direction: column; align-items: center; gap: 0.35em; }
-.reveal .eq img { height: 12.5vh; width: auto; object-fit: contain; }
-.reveal .eq img.pasta { border-radius: 14px; box-shadow: 0 8px 22px rgba(15,23,42,0.22); }
-.reveal .eq .cap { font-size: 0.42em; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
-.reveal .eq .op { font-size: 1.9em; font-weight: 200; color: var(--lean-teal); }
-.reveal .eq .result {
-  font-size: 1.5em; font-weight: 800; color: var(--lean-blue); letter-spacing: -0.01em;
-}
-/* the paralever logo as the equation result (and on the closing slide) */
-.reveal .eqlogo { height: 13vh; width: auto; object-fit: contain; border-radius: 10px; }
-.reveal .finale { display: flex; justify-content: center; align-items: center; margin: 3vh 0 0; }
-.reveal .finale img { height: 36vh; width: auto; max-width: 92%; object-fit: contain; border-radius: 12px; }
+/* ---- staggered bullets (stagger.js turns each > li into a fragment) ----
+   NOTE: the class is "steps" (plural). ":::class \"step\"" does nothing. */
+.reveal .steps { font-size: 0.95em; }
+.reveal .steps li { margin-bottom: 0.35em; }
 
-.reveal section[data-state="whatis"] .r-hstack {
-  align-items: center; justify-content: center; gap: 0.55em;
-}
-.reveal section[data-state="whatis"] .r-vstack { align-items: stretch; gap: 0.3em; }
-/* right column (Lean + theorem) narrower than the left */
-.reveal section[data-state="whatis"] .r-hstack > .r-vstack:last-of-type { max-width: 42%; }
+/* ---- punch line: the one sentence a slide is actually about ---- */
+.reveal .punch { font-size: 1.2em; font-weight: 700; color: var(--lean-blue); margin: 0.35em 0; }
+.reveal .punch.center { text-align: center; }
 
-/* code cards */
-.reveal section[data-state="whatis"] .gbox {
-  margin: 0; padding: 0.35em 0.6em; border-radius: 8px;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  box-shadow: 0 2px 8px rgba(15,23,42,0.06);
-  height: auto !important; max-height: none !important;   /* kill reveal r-stretch */
-  width: auto; overflow: visible;
-}
-/* per-box font sizes —  largest (readable), the rest dense */
-.reveal section[data-state="whatis"] .py   { font-size: 0.6em; }
-.reveal section[data-state="whatis"] .defbox { font-size: 0.54em; }
-.reveal section[data-state="whatis"] .thm  { font-size: 0.5em; }
-.reveal section[data-state="whatis"] .py code,
-.reveal section[data-state="whatis"] .defbox code,
-.reveal section[data-state="whatis"] .thm code { font-size: inherit; }
-
-/* AST box (raw HTML) */
-.reveal section[data-state="whatis"] pre.ast {
-  margin: 0; padding: 0.35em 0.6em; border-radius: 8px; width: auto;
-  border: 1px dashed rgba(15,23,42,0.18); background: rgba(248,250,252,0.7);
-  font-size: 0.4em; line-height: 1.35; text-align: left; white-space: pre;
-  color: #64748b;
-}
-.reveal section[data-state="whatis"] pre.ast .d { color: var(--lean-blue); font-weight: 700; }
-.reveal section[data-state="whatis"] pre.ast .k { color: #d97706; font-weight: 700; }
-.reveal section[data-state="whatis"] pre.ast .s { color: #16a34a; }
-.reveal section[data-state="whatis"] pre.ast .n { color: #9333ea; }
-
-/* arrows + labels */
-.reveal section[data-state="whatis"] .arrow-down {
-  text-align: center; font-size: 0.95em; line-height: 1.1;
-  color: var(--lean-teal); font-weight: 600; margin: 0.05em 0;
-}
-.reveal section[data-state="whatis"] .arrow-right {
-  align-self: center; font-size: 0.95em; line-height: 1.15; white-space: nowrap;
-  color: var(--lean-teal); font-weight: 600; margin: 0; padding: 0 0.15em;
-}
-
-
-.reveal section[data-state="examples"] h3 { text-align: center; margin: 0 0 0.15em; }
-.reveal section[data-state="examples"] > p { text-align: center; font-size: 0.8em; margin: 0 0 0.15em; color: var(--muted); }
-.reveal section[data-state="examples"] .r-vstack { gap: 0.15em; }
-/* Python source: centred, not full width */
-.reveal section[data-state="examples"] .pytop {
-  max-width: 60%; margin: 0 auto; font-size: 0.5em;
-  border: 1px solid rgba(15,23,42,0.12); border-radius: 8px;
-  background: rgba(248,250,252,0.9); padding: 0.3em 0.6em;
-  height: auto !important; max-height: none !important;
-}
-/* branch row */
-.reveal section[data-state="examples"] .r-hstack {
-  align-items: flex-start; justify-content: center; gap: 3vw; width: 100%;
-}
-.reveal section[data-state="examples"] .r-hstack > .r-vstack { max-width: 46%; }
-/* diagonal arrows emanate from the centre toward each box */
-.reveal section[data-state="examples"] .arrow-dl,
-.reveal section[data-state="examples"] .arrow-dr {
-  font-size: 1.05em; font-weight: 700; color: var(--lean-teal);
-  line-height: 1; margin: 0.05em 0.3em;
-}
-.reveal section[data-state="examples"] .arrow-dl { align-self: flex-end; }
-.reveal section[data-state="examples"] .arrow-dr { align-self: flex-start; }
-/* the two Lean defs — dense, natural height (kill reveal r-stretch) */
-.reveal section[data-state="examples"] .gbox {
-  margin: 0; padding: 0.3em 0.55em; border-radius: 8px; width: auto; overflow: visible;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  height: auto !important; max-height: none !important;
-  font-size: 0.4em;
-}
-.reveal section[data-state="examples"] .gbox code { font-size: inherit; }
-
-
-.reveal section[data-state="proving"] > p { text-align: center; font-size: 0.85em; margin: 0 0 0.25em; }
-.reveal section[data-state="proving"] .r-vstack { gap: 0.2em; align-items: stretch; }
-.reveal section[data-state="proving"] .r-hstack {
-  align-items: flex-start; justify-content: center; gap: 4vw; width: 100%;
-}
-.reveal section[data-state="proving"] .r-hstack > .r-vstack { max-width: 44%; }
-/* arrow headers */
-.reveal section[data-state="proving"] .arrow-dl,
-.reveal section[data-state="proving"] .arrow-dr {
-  font-size: 1.0em; font-weight: 800; color: var(--lean-blue); line-height: 1.1; margin: 0.1em 0.3em;
-}
-.reveal section[data-state="proving"] .arrow-dl { align-self: flex-end; }
-.reveal section[data-state="proving"] .arrow-dr { align-self: flex-start; }
-/* code cards */
-.reveal section[data-state="proving"] .gbox {
-  margin: 0; padding: 0.3em 0.55em; border-radius: 8px; width: auto; overflow: visible;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  height: auto !important; max-height: none !important; font-size: 0.54em;
-}
-.reveal section[data-state="proving"] .gbox code { font-size: inherit; }
-/* Proves / Tactics / When list */
-.reveal section[data-state="proving"] .spec {
-  list-style: none; margin: 0.3em 0 0; padding: 0; font-size: 0.6em; line-height: 1.55;
-}
-.reveal section[data-state="proving"] .spec li { margin: 0.08em 0; }
-.reveal section[data-state="proving"] .spec strong { color: var(--lean-teal); font-weight: 700; }
-.reveal section[data-state="proving"] .punch { text-align: center; font-size: 0.95em; margin-top: 0.4em; }
-
-.reveal .arrow-right { color: var(--lean-teal); font-weight: 700; white-space: nowrap; align-self: center; }
-.reveal .arrow-down  { color: var(--lean-teal); font-weight: 700; text-align: center; }
-
-.reveal section[data-state="cflow"] > p,
-.reveal section[data-state="datastruct"] > p,
-.reveal section[data-state="exc"] > p,
-.reveal section[data-state="provemv"] > p,
-.reveal section[data-state="provetaste"] > p {
-  text-align: center; font-size: 0.82em; margin: 0 0 0.25em; color: var(--muted);
-}
-.reveal section[data-state="cflow"] .r-hstack,
-.reveal section[data-state="datastruct"] .r-hstack,
-.reveal section[data-state="exc"] .r-hstack,
-.reveal section[data-state="provemv"] .r-hstack,
-.reveal section[data-state="provetaste"] .r-hstack {
-  align-items: center; justify-content: center; gap: 2vw; width: 100%;
-}
-.reveal section[data-state="exc"] .r-vstack { gap: 0.2em; align-items: stretch; }
-/* code cards */
-.reveal section[data-state="cflow"] .excode,
-.reveal section[data-state="datastruct"] .excode,
-.reveal section[data-state="exc"] .excode,
-.reveal section[data-state="provemv"] .excode,
-.reveal section[data-state="provetaste"] .excode {
-  margin: 0.15em auto; padding: 0.3em 0.6em; border-radius: 8px; width: auto; overflow: visible;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  height: auto !important; max-height: none !important; font-size: 0.58em;
-}
-.reveal section[data-state="cflow"] .excode code,
-.reveal section[data-state="datastruct"] .excode code,
-.reveal section[data-state="exc"] .excode code,
-.reveal section[data-state="provemv"] .excode code,
-.reveal section[data-state="provetaste"] .excode code { font-size: inherit; }
-.reveal section[data-state="exc"] .excode { font-size: 0.46em; }
-/* exception: Python centred on top, ↙ / ↘ down to the two Lean twins side by side */
-.reveal section[data-state="exc"] .pymid {
-  align-self: center; max-width: 60%; margin: 0 auto 0.1em; font-size: 0.44em;
-  padding: 0.3em 0.6em; border-radius: 8px; border: 1px solid rgba(15,23,42,0.12);
-  background: rgba(248,250,252,0.9); height: auto !important; max-height: none !important;
-}
-.reveal section[data-state="exc"] .pymid code { font-size: inherit; }
-.reveal section[data-state="exc"] .r-hstack {
-  align-items: flex-start; justify-content: center; gap: 3vw;
-}
-.reveal section[data-state="exc"] .r-hstack > .r-vstack { max-width: 47%; }
-.reveal section[data-state="exc"] .arrow-dl,
-.reveal section[data-state="exc"] .arrow-dr {
-  font-size: 1.0em; font-weight: 700; color: var(--lean-teal); line-height: 1; margin: 0.05em 0.3em;
-}
-.reveal section[data-state="exc"] .arrow-dl { align-self: flex-end; }
-.reveal section[data-state="exc"] .arrow-dr { align-self: flex-start; }
-/* datastruct now has two example rows — keep them fitting */
-.reveal section[data-state="datastruct"] .excode { font-size: 0.5em; }
-.reveal section[data-state="cflow"] .punch,
-.reveal section[data-state="datastruct"] .punch,
-.reveal section[data-state="exc"] .punch,
-.reveal section[data-state="provemv"] .punch,
-.reveal section[data-state="provetaste"] .punch {
-  text-align: center; font-size: 0.8em; margin-top: 0.35em;
-}
-
-.reveal section[data-state="design"] h3 {
-  position: relative; padding-top: 1.8em; text-align: left;
-  font-size: 1.3em; font-weight: 600; color: var(--ink); margin: 0 0 0.45em;
-}
-.reveal section[data-state="design"] h3::before {
-  content: var(--project); position: absolute; top: 0; left: 0;
-  font-weight: 700; font-size: 1.05em; color: var(--ink); line-height: 1;
-}
-.reveal section[data-state="design"] h3::after {
-  content: ""; position: absolute; top: 0.35em; left: var(--name-w); right: var(--rule-end);
-  height: 3px; background: var(--lean-blue); border-radius: 2px;
-}
-.reveal section[data-state="design"] .dhook {
-  color: var(--muted); font-style: italic; margin: 0 0 0.5em;
-}
-/* code below the discussion — a normal, readable block */
-.reveal section[data-state="design"] .dcode {
-  margin: 0.5em 0 0; padding: 0.5em 0.85em; border-radius: 8px;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  height: auto !important; max-height: none !important;
-  width: fit-content; max-width: 100%; font-size: 0.62em;
-}
-.reveal section[data-state="design"] .dcode code { font-size: inherit; }
-
-.reveal section[data-state="twofns"] table,
-.reveal section[data-state="implemented"] table {
-  width: 100%; max-width: 100%; table-layout: auto;
-  border-collapse: collapse; margin: 0.3em auto;
-}
-.reveal section[data-state="twofns"] table th,
-.reveal section[data-state="twofns"] table td,
-.reveal section[data-state="implemented"] table th,
-.reveal section[data-state="implemented"] table td {
-  font-size: 0.72em !important; padding: 0.3em 0.6em; vertical-align: top;
-  overflow-wrap: anywhere;
-}
-
-/* ---- stat tiles (Why Lean?) ---- */
-.reveal .stats { display: flex; gap: 1.8em; flex-wrap: wrap; margin: 0.6em 0; }
-.reveal .stat { font-size: 2em; font-weight: 800; color: var(--lean-teal); line-height: 1.1; }
+/* ---- big-number stats ---- */
+.reveal .stats { display: flex; justify-content: center; gap: 3vw; margin: 0.5em 0; }
+.reveal .stat { font-size: 1.9em; font-weight: 800; color: var(--lean-blue); text-align: center; }
 .reveal .stat small { display: block; font-size: 0.34em; font-weight: 500; color: var(--muted); letter-spacing: 0.01em; }
 
-/* ---- punch line ---- */
-.reveal .punch { font-size: 1.25em; font-weight: 700; color: var(--lean-blue); margin: 0.35em 0; }
-
-/* ---- contracts slide: question + bullets, then Before → After -------- */
-.reveal section[data-state="contracts"] .punch { text-align: center; font-size: 0.95em; margin: 0 0 0.35em; }
-.reveal section[data-state="contracts"] .steps { font-size: 0.88em; margin: 0 0 0.6em; }
-.reveal section[data-state="contracts"] .r-hstack {
-  align-items: flex-start; justify-content: center; gap: 3vw; width: 100%;
+/* ===================================================================
+   Code cards — promoted to global (were scoped to the old template's
+   per-slide states). A .gbox is a bordered card around a code block.
+   =================================================================== */
+.reveal .gbox {
+  margin: 0.25em 0; padding: 0.4em 0.7em; border-radius: 8px; width: fit-content;
+  max-width: 100%; border: 1px solid rgba(15,23,42,0.12);
+  background: rgba(248,250,252,0.9);
+  height: auto !important; max-height: none !important;
 }
-.reveal section[data-state="contracts"] .r-hstack > .r-vstack { max-width: 47%; }
-.reveal section[data-state="contracts"] .r-vstack { gap: 0.2em; align-items: stretch; }
-.reveal section[data-state="contracts"] .caplabel {
-  font-size: 0.75em; font-weight: 700; color: var(--lean-blue); margin: 0 0 0.15em;
-}
-.reveal section[data-state="contracts"] .excode {
-  margin: 0; padding: 0.35em 0.6em; border-radius: 8px; width: fit-content; max-width: 100%;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  height: auto !important; max-height: none !important; font-size: 0.5em;
-}
-.reveal section[data-state="contracts"] .excode code { font-size: inherit; }
-.reveal section[data-state="contracts"] .arrow-right {
-  align-self: center; color: var(--lean-teal); font-weight: 700; white-space: nowrap; font-size: 0.9em;
+.reveal .gbox code { font-size: inherit; }
+/* definition / theorem cards: distinguished by border weight and ground,
+   not by an accent bar down one edge */
+.reveal .defbox { border: 1px solid rgba(15,23,42,0.22); background: #fff; }
+.reveal .thm    { border: 1px solid rgba(15,23,42,0.28); background: #fff; box-shadow: 0 1px 0 rgba(15,23,42,0.06); }
+.reveal .thm code { font-size: inherit; }
+.reveal .caplabel {
+  font-size: 0.72em; font-weight: 700; color: var(--lean-blue); margin: 0 0 0.15em;
 }
 
+/* ---- arrows between stacked/side-by-side boxes ---- */
+.reveal .arrow-right,
+.reveal .arrow-down,
+.reveal .arrow-dl,
+.reveal .arrow-dr {
+  color: var(--lean-teal); font-weight: 700; white-space: nowrap;
+}
+.reveal .arrow-right { align-self: center; font-size: 0.95em; }
+.reveal .arrow-down  { align-self: center; font-size: 0.95em; margin: 0.1em 0; }
+
+/* ===================================================================
+   CRITICAL — do not remove.
+   ```lean blocks are emitted with reveal's `r-stretch`, which
+   mis-computes a tiny height and collapses the block to a single
+   scrolling line. This neutralises it.
+   =================================================================== */
 .reveal code.hl.lean.block {
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
-  /* Neutralise reveal's `r-stretch` (from ```lean -stretch), which mis-computes a
-     tiny height and collapses the block to a single scrolling line. */
   height: auto !important;
   max-height: none !important;
 }
 
-.reveal section[data-state="showcase"] table {
-  width: 100%; max-width: 100%; table-layout: auto; border-collapse: collapse; margin: 0.3em auto;
+/* ===================================================================
+   paralever-specific components
+   =================================================================== */
+
+/* ---- .cite : paper attribution under a borrowed theorem ----
+   e.g. "Brookes, A Semantics for CSL, CONCUR'04 §5-7" */
+.reveal .cite {
+  font-size: 0.62em; color: var(--muted); font-style: italic;
+  margin-top: 0.45em; letter-spacing: 0.01em;
 }
-.reveal section[data-state="showcase"] table th,
-.reveal section[data-state="showcase"] table td {
-  font-size: 0.58em !important; padding: 0.24em 0.55em; vertical-align: top; overflow-wrap: anywhere;
+.reveal .cite strong { font-style: normal; color: var(--ink); font-weight: 700; }
+
+/* ---- .map : ASCII mental maps / flowcharts in a <pre> ----
+   Tight leading and a hairline box so box-drawing characters line up. */
+.reveal pre.map,
+.reveal .map pre {
+  font-family: var(--mono);
+  font-size: 0.42em;
+  line-height: 1.25;
+  text-align: left;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.3em auto;
+  padding: 0.6em 0.9em;
+  border: 1px solid var(--tint-line);
+  border-radius: 8px;
+  background: var(--tint);
+  overflow-x: auto;
+  white-space: pre;
+  height: auto !important; max-height: none !important;
 }
-.reveal section[data-state="showcase"] h3 { text-align: center; margin: 0 0 0.25em; }
-.reveal section[data-state="showcase"] .r-hstack {
-  align-items: flex-start; justify-content: center; gap: 2vw; width: 100%;
+.reveal .map.tall pre, .reveal pre.map.tall { font-size: 0.36em; }
+.reveal .map.wide pre, .reveal pre.map.wide { font-size: 0.38em; }
+
+/* ===================================================================
+   Diagram primitives — for ```html flowcharts / mental maps.
+   `.dgm` is a flex container; `.nd` is a node box; `.arr` is an arrow.
+   Compose: <div class="dgm col"> … </div> for a vertical flow.
+   =================================================================== */
+.reveal .dgm {
+  display: flex; gap: 0.45em; align-items: center; justify-content: center;
+  margin: 0.45em auto; flex-wrap: wrap; max-width: 100%;
 }
-.reveal section[data-state="showcase"] .showpy,
-.reveal section[data-state="showcase"] .showlean {
-  margin: 0; padding: 0.4em 0.65em; border-radius: 8px;
-  border: 1px solid rgba(15,23,42,0.12); background: rgba(248,250,252,0.9);
-  font-size: 0.46em; max-width: 48%; max-height: 74vh; overflow: auto;
-  height: auto !important;
+.reveal .dgm.col  { flex-direction: column; }
+.reveal .dgm.top  { align-items: flex-start; }
+.reveal .dgm.tight { gap: 0.25em; }
+
+.reveal .nd {
+  border: 1px solid var(--tint-line); background: var(--tint);
+  border-radius: 8px; padding: 0.34em 0.7em;
+  font-size: 0.6em; line-height: 1.35; text-align: center;
 }
-.reveal section[data-state="showcase"] .showpy code,
-.reveal section[data-state="showcase"] .showlean code { font-size: inherit; }
-.reveal section[data-state="showcase"] .arrow-right {
-  align-self: center; color: var(--lean-teal); font-weight: 700; font-size: 1em;
+.reveal .nd.mono {
+  font-family: var(--mono); text-align: left; white-space: pre;
+  font-size: 0.5em; padding: 0.45em 0.7em;
 }
-.reveal section[data-state="showcase"] .punch { text-align: center; font-size: 0.82em; margin-top: 0.4em; }
+.reveal .nd.wide  { min-width: 20em; }
+.reveal .nd.blue  { border-color: var(--lean-blue); }
+.reveal .nd.key   { border: 2px solid var(--lean-blue); font-weight: 700; color: var(--lean-blue); }
+.reveal .nd.good  { border-color: #16a34a; background: rgba(22,163,74,0.09); }
+.reveal .nd.bad   { border-color: #dc2626; background: rgba(220,38,38,0.09); }
+.reveal .nd.plain { border: none; background: none; padding: 0.1em 0.3em; }
+.reveal .nd em    { color: var(--muted); font-style: normal; font-size: 0.86em; display: block; }
+.reveal .nd code  { font-size: 0.95em; }
+
+.reveal .arr { color: var(--lean-teal); font-weight: 700; font-size: 0.75em; line-height: 1; }
+.reveal .arr.lbl2 { display: flex; flex-direction: column; align-items: center; gap: 0.1em; }
+.reveal .arr small { font-size: 0.62em; color: var(--muted); font-weight: 500; }
+
+/* verdict chips — ACCEPTS / REJECTS / RACE / FINE */
+.reveal .vd {
+  display: inline-block; border-radius: 999px; padding: 0.06em 0.6em;
+  font-size: 0.92em; font-weight: 700; letter-spacing: 0.02em;
+}
+.reveal .vd.ok { background: rgba(22,163,74,0.14);  color: #15803d; }
+.reveal .vd.no { background: rgba(220,38,38,0.14);  color: #b91c1c; }
+
+/* a branch fan: one parent, several children */
+.reveal .fan { display: flex; gap: 0.5em; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+.reveal .fan > .nd { flex: 0 1 auto; max-width: 14em; }
+
+/* diagram-local tables (the trace table, the rfl results) */
+.reveal table.dgmt { width: auto; margin: 0.4em auto; }
+.reveal table.dgmt th, .reveal table.dgmt td {
+  font-size: 0.52em !important; padding: 0.2em 0.7em; border: none;
+  font-family: var(--mono); text-align: left;
+}
+.reveal table.dgmt th { font-family: var(--sans); color: var(--lean-blue); font-weight: 700; }
+.reveal table.dgmt tbody tr + tr td { border-top: 1px solid var(--tint-line); }
+
+/* ---- .gap : the "nobody has this" row of the lineage table ---- */
+.reveal .gap,
+.reveal tr.gap td {
+  background: rgba(37,99,235,0.1);
+  font-weight: 700;
+  color: var(--lean-blue);
+}
+
+/* ---- .ladder : the combinator ladder (cheapest route at the top) ---- */
+.reveal .ladder { display: flex; flex-direction: column; gap: 0.25em; margin: 0.4em 0; }
+.reveal .tier {
+  display: flex; align-items: baseline; gap: 0.6em;
+  padding: 0.28em 0.7em; border-radius: 6px;
+  border: 1px solid var(--tint-line); background: var(--tint);
+  font-size: 0.78em;
+}
+.reveal .tier strong { color: var(--lean-blue); min-width: 9em; }
+.reveal .tier em { color: var(--muted); font-style: normal; font-size: 0.9em; }
+
+/* ---- .win : before → after line counts ---- */
+.reveal .win { color: var(--lean-teal); font-weight: 800; }
+.reveal .lose { color: var(--muted); text-decoration: line-through; }
+
+/* ---- tables: keep them readable at slide size (was scoped to one state) ---- */
+.reveal table {
+  width: 100%; max-width: 100%; table-layout: auto;
+  border-collapse: collapse; margin: 0.3em auto;
+}
+.reveal table th,
+.reveal table td {
+  font-size: 0.56em !important; padding: 0.24em 0.55em;
+  vertical-align: top; overflow-wrap: anywhere;
+}
+.reveal table.tight th,
+.reveal table.tight td { font-size: 0.5em !important; }
+
+/* ---- two-column tuning (lean.css provides the .two-col grid) ---- */
+.reveal .two-col { gap: 2vw; align-items: start; }
+
+/* ---- hstack/vstack defaults for side-by-side code ---- */
+.reveal .r-hstack { align-items: flex-start; justify-content: center; gap: 2vw; width: 100%; }
+.reveal .r-vstack { gap: 0.25em; align-items: stretch; }
+
+/* ---- closing slide ---- */
+.reveal .finale { font-size: 1.3em; font-weight: 700; color: var(--lean-blue); text-align: center; }

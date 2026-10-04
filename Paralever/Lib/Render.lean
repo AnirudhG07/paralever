@@ -13,7 +13,7 @@ ref: `docs/program-model.md` — the "one program, many meanings" interpreter ta
 
 namespace Paralever
 
-private def indent (d : Nat) : String := String.mk (List.replicate (2 * d) ' ')
+private def indent (d : Nat) : String := String.ofList (List.replicate (2 * d) ' ')
 
 /-- Walk `p` from `σ`, emitting one line per effect node. `d` is the nesting depth, which increases
 inside `par` branches. Values shown are the ones the canonical (`runSeq`) execution sees. -/

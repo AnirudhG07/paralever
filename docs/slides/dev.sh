@@ -2,9 +2,9 @@
 # ---------------------------------------------------------------------------
 # Live-edit the paralever slides.
 #
-#   bash docs/ppt/dev.sh
+#   bash docs/slides/dev.sh
 #
-# Watches docs/ppt/*.lean and *.css; on every save it re-runs `lake exe slides`,
+# Watches docs/slides/*.lean and *.css; on every save it re-runs `lake exe slides`,
 # and a browser-sync server auto-reloads the page in your browser.
 #
 # Notes
@@ -17,11 +17,11 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-# repo root = two levels up from this script (docs/ppt/dev.sh)
+# repo root = two levels up from this script (docs/slides/dev.sh)
 cd "$(dirname "$(readlink -f "$0")")/../.."
 
 OUT="_slides/paralever"
-SRC="docs/ppt"
+SRC="docs/slides"
 PORT="${PORT:-3000}"
 
 command -v inotifywait >/dev/null || { echo "need inotifywait (apt install inotify-tools)"; exit 1; }
