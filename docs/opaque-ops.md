@@ -5,7 +5,7 @@ Rationale for `Paralever/Lib/OpaqueOp.lean`. Code references this file as `docs/
 ## The problem
 
 Every example so far builds its program out of `.read`/`.write` and then proves a footprint bound by
-an induction mirroring the program's own recursion (`MatMul.dotStep_readswithin` is the template).
+an induction mirroring the program's own recursion.
 That works, but it presumes two things:
 
 1. the computation **is** a `ParM` term we can induct over, and

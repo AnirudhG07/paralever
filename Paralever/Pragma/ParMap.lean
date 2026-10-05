@@ -1,4 +1,5 @@
 import Paralever.Theory.Sequentialize
+import Paralever.Lib.Cost
 
 /-! # `parMap` — parallelize an existing pure function, zero footprint-marking
 
@@ -14,23 +15,25 @@ because every branch of the parallel tree is a bare `.pure`. -/
 namespace Paralever.Pragma.ParMap
 open Paralever
 
-/-- `Indep` never needs to know anything about `g` when the other side touches nothing —
-`Disjoint [] _` is vacuous for all three of `Indep`'s conditions. -/
+/-- Anything is independent of a computation that touches nothing: all three of `Indep`'s conditions
+are `Disjoint []`-shaped, hence vacuous. The only fact `parMap_wellformed` needs. -/
 @[simp, grind .]
 theorem indep_empty_left (g : Footprint) : Indep Footprint.empty g := by
   simp [Indep, Footprint.empty]
 
-/-- Apply `f` to each chunk, in parallel. `f` is a plain `List α → β`, evaluated directly — no
-`ParM` rewrite of the caller's function required. -/
+/-- Apply `f` to each chunk, in parallel. `f` stays a plain `List α → β` and is evaluated directly
+inside a `ParM.pure`, so nothing about the caller's function has to be rewritten into `ParM` — and
+nothing about it reaches the heap, which is why every theorem below is unconditional. -/
 def parMap {α β : Type} (f : List α → β) (chunks : List (List α)) : ParM (List β) :=
   ParM.parAll (chunks.map (fun c => ParM.pure (f c)))
 
-/-- The sequential counterpart, same shape as every other example's `_Seq` pairing. -/
+/-- The sequential counterpart: the same chunks, one after another. Same `_Par`/`_Seq` pairing as
+every other example. -/
 def seqMap {α β : Type} (f : List α → β) (chunks : List (List α)) : ParM (List β) :=
   ParM.seqAll (chunks.map (fun c => ParM.pure (f c)))
 
-/-- **Unconditional.** No hypothesis on `f`, `chunks`, or `σ` — every branch is a `.pure`, so there
-is nothing to check. -/
+/-- **`parMap` is well-formed, always.** No hypothesis on `f`, `chunks`, or `σ`: every branch is a
+`.pure`, so every footprint in sight is empty and the Bernstein check at each `par` node is vacuous. -/
 theorem parMap_wellformed {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
     WellFormed (parMap f chunks) σ := by
   unfold parMap
@@ -40,11 +43,59 @@ theorem parMap_wellformed {α β : Type} (f : List α → β) (chunks : List (Li
       grind only [= List.map_cons, WellFormed_parAll_cons, = WellFormed.eq_1, = accesses.eq_1,
         indep_empty_left]
 
-/-- **The payoff.** Running `f` over every chunk in parallel reaches exactly the outcome running
-it in sequence does — for *any* pure `f` and *any* chunking, no proof obligation left for the
-caller. -/
+/-- **Chunked parallel application of a pure function needs no side condition.** Running `f` over
+every chunk in parallel reaches exactly the outcomes running it in sequence does, for *any* `f` and
+*any* chunking, with nothing left for the caller to discharge.
+
+The price is visible in `work_parMap_zero`/`time_parMap_zero`: with no heap access there is no memory
+traffic to overlap, so this route buys correctness for free and shows no speedup in a cost model that
+counts memory rounds. Real speedup comes from the examples that do touch the heap. -/
 theorem parMap_par_seq_eq {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
     ParSeqEq (parMap f chunks) (seqMap f chunks) σ :=
   parAll_par_seq_eq _ σ (parMap_wellformed f chunks σ)
+
+/-! ### Pure counterpart and cost
+
+Every branch is a `ParM.pure`, so there is no memory traffic at all: `work = 0`, hence `time = 0` for
+both versions. A speedup from pure parallel work is invisible to this cost model, which counts
+memory rounds — see `docs/cost.md`. -/
+
+/-- `seqMap` computes `chunks.map f` and leaves the heap exactly as it found it. -/
+@[simp, grind .]
+theorem seqMap_eq_map {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
+    runSeq (seqMap f chunks) σ = (chunks.map f, σ) := by
+  induction chunks generalizing σ with
+  | nil => rfl
+  | cons c cs ih =>
+      simp only [seqMap] at ih
+      simp only [seqMap, List.map_cons, ParM.seqAll, ParM.seqPair, runSeq, runSeq_bind, ih]
+
+/-- `parMap`'s canonical run computes the same `chunks.map f`, heap untouched — the pure counterpart
+of `parMap_par_seq_eq`, by computation rather than through the metatheorem. -/
+@[simp, grind .]
+theorem parMap_eq_map {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
+    runSeq (parMap f chunks) σ = (chunks.map f, σ) := by
+  induction chunks generalizing σ with
+  | nil => rfl
+  | cons c cs ih =>
+      simp only [parMap] at ih
+      simp only [parMap, List.map_cons, ParM.parAll, ParM.parPair, runSeq, runSeq_bind, ih]
+
+/-- Zero memory operations, for any chunking — `work` counts reads and writes, and there are none.
+-- ref: `docs/cost.md` -/
+theorem work_parMap_zero {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
+    work (parMap f chunks) σ = 0 := by
+  induction chunks generalizing σ with
+  | nil => rfl
+  | cons c cs ih =>
+      simp only [parMap] at ih
+      simp only [parMap, List.map_cons, ParM.parAll, work_bind, work_parPair, work, runSeq, ih]
+
+/-- Zero parallel rounds, hence no measurable speedup: this cost model counts memory rounds, and
+`parMap` performs no memory operations at all. Honest rather than flattering — the result is the point
+of the section header above. -/
+theorem time_parMap_zero {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
+    time (parMap f chunks) σ = 0 :=
+  time_zero_of_work_zero _ σ (parMap_wellformed f chunks σ) (work_parMap_zero f chunks σ)
 
 end Paralever.Pragma.ParMap

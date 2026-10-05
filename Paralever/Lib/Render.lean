@@ -13,10 +13,13 @@ ref: `docs/program-model.md` — the "one program, many meanings" interpreter ta
 
 namespace Paralever
 
+/-- Two spaces per level of nesting. -/
 private def indent (d : Nat) : String := String.ofList (List.replicate (2 * d) ' ')
 
-/-- Walk `p` from `σ`, emitting one line per effect node. `d` is the nesting depth, which increases
-inside `par` branches. Values shown are the ones the canonical (`runSeq`) execution sees. -/
+/-- The lines of `p`'s tree as seen from `σ`, one per effect node, indented by depth `d`. Reads and
+writes show the values the canonical (`runSeq`) execution produces — a continuation is a function, so
+there is no way to print past a `read` without a state to supply its result. Inside a `par`, the right
+branch is rendered from the heap the left branch leaves, exactly as `accesses` measures it. -/
 def render {τ : Type} : ParM τ → State → Nat → List String
   | .pure _,      _, d => [indent d ++ "pure"]
   | .read l k,    σ, d =>
@@ -32,11 +35,11 @@ def render {τ : Type} : ParM τ → State → Nat → List String
       ((indent (d + 1) ++ "right ∥") :: render q σ₁ (d + 2)) ++
       ((indent d ++ "⟩") :: render (k (a, b)) σ₂ d)
 
-/-- `render` as one newline-joined string — the `#eval`-friendly form. -/
+/-- `render` from depth `0`, joined with newlines — the `#eval`-friendly form. -/
 def renderStr {τ : Type} (p : ParM τ) (σ : State) : String :=
   "\n".intercalate (render p σ 0)
 
-/-- The footprint as a readable line, for printing next to a tree. -/
+/-- `p`'s footprint from `σ` as one line of text, for printing beside a rendered tree. -/
 def footprintStr {τ : Type} (p : ParM τ) (σ : State) : String :=
   let f := accesses p σ
   "reads " ++ toString f.reads ++ "   writes " ++ toString f.writes

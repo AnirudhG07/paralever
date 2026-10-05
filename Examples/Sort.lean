@@ -1,32 +1,41 @@
-import Paralever.Lib.Compose
+import Paralever.Lib.Cost
 import Paralever.Lib.Notation
 
-/-! # Example: independent compare-swap rounds
+/-! # Independent compare-swap rounds
 
-`compareSwap i j` reads and writes both `i` and `j`, so — unlike `SumArray.lean`'s `sumRange`,
-which never writes — independence here is not free: two swaps `(i,j)` and `(i',j')` are Bernstein-
-independent iff `{i,j}` and `{i',j'}` are disjoint, and that has to be checked, not assumed. This
-file is the contrasting case `SumArray.lean`'s docstring points at.
-
-**§1**: the original two-half warm-up (`sortLeftHalf`/`sortRightHalf`), independence by `decide`.
-
-**§2 (variation)**: `SwapPlan := List (Loc × Loc)` generalizes to *any number* of independent
-swaps, not just two fixed halves — the odd-even-transposition-sort building block. Independence
-is discharged by one hypothesis, `plan.locs.Nodup` (no location used by more than one pair in the
-whole plan), via the general Bernstein-from-subsets lemma `indep_of_footprint_subset`.
-
-`swapRound_par_seq_eq`/`sort_par_seq_eq` carry the one open dependency tracked as a TODO in
-`Theory/Decomposition.lean` (`wellFormed_canonical`'s `par` case) — see `docs/decomposition.md`.
-Everything else in this file is sorry-free. A real `Task`-based compiled variant with an actual
-wall-clock benchmark is in `SortTask.lean`.
--/
+`compareSwap i j` both reads *and* writes `i` and `j`, so independence is a real obligation here —
+unlike a read-only chunked sum. A whole round of swaps is described by a `SwapPlan`, and the single
+side condition is `plan.locs.Nodup`: no location is touched by two pairs. Rationale:
+`docs/access.md`, `docs/cost.md`. A `Task`-based compiled variant is in `SortTask.lean`. -/
 
 namespace Paralever.Examples.Sort
 
 open ParM
 
-/-- Compare-and-swap two locations into ascending order. Written in raw `ParM` constructors (not
-`do`-notation), same reason as `SumArray.sumRange`: keeps the inductive proofs below unfolding by
+/-- A parallelization plan: one index pair per swap, any number of pairs, any indices — the
+odd-even-transposition-sort building block. -/
+abbrev SwapPlan := List (Loc × Loc)
+
+/-- All locations touched by the whole plan. -/
+def SwapPlan.locs (plan : SwapPlan) : List Loc := plan.flatMap (fun (i, j) => [i, j])
+
+theorem SwapPlan.locs_cons (p : Loc × Loc) (ps : SwapPlan) :
+    SwapPlan.locs (p :: ps) = [p.1, p.2] ++ SwapPlan.locs ps := rfl
+
+/-! ### pure -/
+
+/-- One compare-swap as an ordinary state transformer. -/
+def swapPure (i j : Loc) (σ : State) : State :=
+  match σ i, σ j with
+  | .int x, .int y => if y < x then (σ.update i (.int y)).update j (.int x) else σ
+  | _, _ => σ
+
+def swapRoundPure (plan : SwapPlan) (σ : State) : State :=
+  plan.foldl (fun σ p => swapPure p.1 p.2 σ) σ
+
+/-! ### seq -/
+
+/-- Written in raw `ParM` constructors rather than `do`-notation so the inductions below unfold by
 `simp`/`rfl` without fighting the `Monad` instance. -/
 def compareSwap (i j : Loc) : ParM Unit :=
   .read i (fun a => .read j (fun b =>
@@ -36,68 +45,43 @@ def compareSwap (i j : Loc) : ParM Unit :=
         else .pure ()
     | _, _ => .pure ()))
 
-/-! ### §1 — the original two-half warm-up -/
+def swapRoundSeq (plan : SwapPlan) : ParM (List Unit) :=
+  ParM.seqAll (plan.map (fun (i, j) => compareSwap i j))
 
-/-- "Sorting" a 2-element range is exactly one compare-swap. -/
-def sortLeftHalf : ParM Unit := compareSwap 0 1
-def sortRightHalf : ParM Unit := compareSwap 2 3
+/-! ### par -/
 
-/-- Array `[5, 3, 8, 1]` at locations 0–3. -/
-def σ0 : State
-  | 0 => .int 5 | 1 => .int 3 | 2 => .int 8 | 3 => .int 1 | _ => .int 0
+def swapRoundPar (plan : SwapPlan) : ParM (List Unit) :=
+  ParM.parAll (plan.map (fun (i, j) => compareSwap i j))
 
-example : accesses sortLeftHalf σ0 = ⟨[0, 1], [0, 1]⟩ := rfl
-example : accesses sortRightHalf σ0 = ⟨[2, 3], [2, 3]⟩ := rfl
+/-! ### pure = seq -/
 
-/-- The two halves' footprints are disjoint in both directions — Bernstein holds trivially since
-they don't even share reads. -/
-example : indepB (accesses sortLeftHalf σ0) (accesses sortRightHalf σ0) = true := rfl
+theorem compareSwap_runSeq (i j : Loc) (σ : State) :
+    (runSeq (compareSwap i j) σ).2 = swapPure i j σ := by
+  simp only [compareSwap, swapPure, runSeq]
+  rcases hi : σ i with x | b | u <;> rcases hj : σ j with y | b' | u' <;>
+    simp only [runSeq] <;> (try split) <;> rfl
 
-/-- Neither half contains a nested `par`, so each is trivially well-formed on its own — `apply
-WellFormed_par_intro` turns the goal into exactly the three things worth checking: independence,
-then each side's own well-formedness. -/
-theorem wellFormed_sort : WellFormed (parPair sortLeftHalf sortRightHalf) σ0 := by
-  apply WellFormed_par_intro
-  · exact (indepB_iff _ _).mp (by decide)
-  · trivial
-  · trivial
+theorem pure_eq_seq (plan : SwapPlan) (σ : State) :
+    (runSeq (swapRoundSeq plan) σ).2 = swapRoundPure plan σ := by
+  induction plan generalizing σ with
+  | nil => rfl
+  | cons p ps ih =>
+      obtain ⟨i, j⟩ := p
+      simp only [swapRoundSeq] at ih
+      simp only [swapRoundSeq, swapRoundPure, List.map_cons, List.foldl_cons, ParM.seqAll,
+        ParM.seqPair, runSeq_bind, runSeq, compareSwap_runSeq]
+      exact ih (swapPure i j σ)
 
-/-- The metatheorem, instantiated: running both sub-sorts in parallel reaches exactly the outcomes
-running them in sequence does. -/
-theorem sort_par_seq_eq :
-    parPair sortLeftHalf sortRightHalf ∥≡ seqPair sortLeftHalf sortRightHalf from σ0 :=
-  par_seq_eq sortLeftHalf sortRightHalf σ0 wellFormed_sort
+/-! ### seq = par -/
 
-example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 0 = .int 3 := rfl
-example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 1 = .int 5 := rfl
-example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 2 = .int 1 := rfl
-example : (runSeq (parPair sortLeftHalf sortRightHalf) σ0).2 3 = .int 8 := rfl
-
-/-! ### §2 (variation) — any number of independent swaps -/
-
-/-- A parallelization plan for compare-swap: one pair per swap, any number of pairs, any indices
-— the odd-even-transposition-sort building block, generalizing §1's fixed two halves. -/
-abbrev SwapPlan := List (Loc × Loc)
-
-/-- All locations touched by the whole plan. -/
-def SwapPlan.locs (plan : SwapPlan) : List Loc := plan.flatMap (fun (i, j) => [i, j])
-
-theorem SwapPlan.locs_cons (p : Loc × Loc) (ps : SwapPlan) :
-    SwapPlan.locs (p :: ps) = [p.1, p.2] ++ SwapPlan.locs ps := rfl
-
-/-- List subset is monotone under append — local building block for the induction below; not
-worth upstreaming on its own. -/
+/-- List subset is monotone under append — local building block for the inductions below. -/
 theorem List.append_subset_append {α : Type} {l1 l2 l1' l2' : List α}
     (h1 : l1 ⊆ l1') (h2 : l2 ⊆ l2') : l1 ++ l2 ⊆ l1' ++ l2' := by
   grind only [= List.subset_def, = List.mem_append]
 
-def swapRoundPar (plan : SwapPlan) : ParM (List Unit) :=
-  ParM.parAll (plan.map (fun (i, j) => compareSwap i j))
-def swapRoundSeq (plan : SwapPlan) : ParM (List Unit) :=
-  ParM.seqAll (plan.map (fun (i, j) => compareSwap i j))
-
 theorem compareSwap_footprint (i j : Loc) (σ : State) :
-    (accesses (compareSwap i j) σ).reads ⊆ [i, j] ∧ (accesses (compareSwap i j) σ).writes ⊆ [i, j] := by
+    (accesses (compareSwap i j) σ).reads ⊆ [i, j] ∧
+    (accesses (compareSwap i j) σ).writes ⊆ [i, j] := by
   simp only [compareSwap, accesses]
   rcases hσi : σ i with x | b | u <;> rcases hσj : σ j with y | b' | u' <;>
     simp only [] <;>
@@ -127,22 +111,6 @@ theorem swapRoundPar_footprint (plan : SwapPlan) (σ : State) :
           | exact List.append_subset_append hr hr'
           | exact List.append_subset_append hw hw'
 
-/-- Bernstein via subset-of-disjoint-sets: if `f`'s reads/writes ⊆ `A`, `g`'s reads/writes ⊆ `B`,
-and `A`, `B` are disjoint, `f` and `g` are independent. The general shape needed whenever writes
-are present — contrast `SumArray.indep_of_no_writes`, which needed no disjointness at all because
-there were no writes to protect. -/
-theorem indep_of_footprint_subset {f g : Footprint} {A B : List Loc}
-    (hfr : f.reads ⊆ A) (hfw : f.writes ⊆ A) (hgr : g.reads ⊆ B) (hgw : g.writes ⊆ B)
-    (hAB : Disjoint A B) : Indep f g := by
-  refine ⟨?_, ?_, ?_⟩
-  · intro l hl1 hl2; exact hAB l (hfw hl1) (hgw hl2)
-  · intro l hl1 hl2; exact hAB l (hfw hl1) (hgr hl2)
-  · intro l hl1 hl2; exact hAB l (hfr hl2) (hgw hl1)
-
-/-- **General**, for any number of swaps, any indices — the only real condition is
-`plan.locs.Nodup`: no location is touched by more than one pair in the whole plan. Contrast
-`SumArray.wellFormed_sumRangePar`, which needed *no* side condition at all: here writes are real,
-so a genuine disjointness check is unavoidable, and this is exactly it. -/
 theorem wellFormed_swapRoundPar (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
     WellFormed (swapRoundPar plan) σ := by
   induction plan generalizing σ with
@@ -160,12 +128,44 @@ theorem wellFormed_swapRoundPar (plan : SwapPlan) (σ : State) (h : plan.locs.No
         grind
       · exact ih (runSeq (compareSwap i j) σ).2 hpsNodup
 
-/-- The metatheorem, for any independent set of swaps. -/
-theorem swapRound_par_seq_eq (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
-    swapRoundPar plan ∥≡ swapRoundSeq plan from σ := by
-  exact parAll_par_seq_eq _ σ (wellFormed_swapRoundPar plan σ h)
+theorem seq_eq_par (plan : SwapPlan) (σ : State) (h : plan.locs.Nodup) :
+    swapRoundPar plan ∥≡ swapRoundSeq plan from σ :=
+  parAll_par_seq_eq _ σ (wellFormed_swapRoundPar plan σ h)
 
-/-! A genuinely uneven-in-*index* instance — three disjoint pairs, not two contiguous halves: -/
+/-! ### time par < time seq -/
+
+theorem time_compareSwap_pos (i j : Loc) (σ : State) : 0 < time (compareSwap i j) σ :=
+  time_pos (compareSwap i j) σ rfl
+
+theorem time_swapRoundPar_pos (a : Loc × Loc) (plan : SwapPlan) (σ : State)
+    (h : (SwapPlan.locs (a :: plan)).Nodup) : 0 < time (swapRoundPar (a :: plan)) σ := by
+  obtain ⟨i, j⟩ := a
+  have hwf := wellFormed_swapRoundPar ((i, j) :: plan) σ h
+  simp only [swapRoundPar, List.map_cons] at hwf ⊢
+  exact time_parAll_pos _ _ σ hwf (time_compareSwap_pos i j σ)
+
+/-- Two or more disjoint swaps: strictly fewer rounds in parallel. Both branches of the top `par`
+must do real work, which is why the plan needs at least two pairs. -/
+theorem time_lt (a b : Loc × Loc) (rest : SwapPlan) (σ : State)
+    (h : (SwapPlan.locs (a :: b :: rest)).Nodup) :
+    time (swapRoundPar (a :: b :: rest)) σ < time (swapRoundSeq (a :: b :: rest)) σ := by
+  obtain ⟨i, j⟩ := a
+  obtain ⟨i', j'⟩ := b
+  have hwf := wellFormed_swapRoundPar ((i, j) :: (i', j') :: rest) σ h
+  rw [SwapPlan.locs_cons] at h
+  have htail := time_swapRoundPar_pos (i', j') rest σ (List.nodup_append.mp h).2.1
+  simp only [swapRoundPar, swapRoundSeq, List.map_cons] at hwf htail ⊢
+  exact time_parAll_lt_seqAll _ _ σ hwf (time_compareSwap_pos i j σ) htail
+
+/-- Same work either way — only the rounds shrink. -/
+theorem work_eq (plan : SwapPlan) (σ : State) :
+    work (swapRoundPar plan) σ = work (swapRoundSeq plan) σ :=
+  work_parAll_eq_seqAll _ σ
+
+/-! ### A concrete instance
+
+Three disjoint pairs at uneven indices, over the array `[5, 3, 8, 1, 9, 2]` at locations 0–5. The
+same fixture `SortTask.lean` benchmarks. -/
 
 def σ6 : State
   | 0 => .int 5 | 1 => .int 3 | 2 => .int 8 | 3 => .int 1 | 4 => .int 9 | 5 => .int 2 | _ => .int 0
@@ -174,13 +174,16 @@ def plan3 : SwapPlan := [(0, 1), (2, 3), (4, 5)]
 
 example : plan3.locs.Nodup := by decide
 
-example : WellFormed (swapRoundPar plan3) σ6 := wellFormed_swapRoundPar plan3 σ6 (by decide)
-
 example : (runSeq (swapRoundPar plan3) σ6).2 0 = .int 3 := rfl
-example : (runSeq (swapRoundPar plan3) σ6).2 1 = .int 5 := rfl
-example : (runSeq (swapRoundPar plan3) σ6).2 2 = .int 1 := rfl
 example : (runSeq (swapRoundPar plan3) σ6).2 3 = .int 8 := rfl
-example : (runSeq (swapRoundPar plan3) σ6).2 4 = .int 2 := rfl
-example : (runSeq (swapRoundPar plan3) σ6).2 5 = .int 9 := rfl
+
+/-! ### Anti-vacuity: a plan that reuses a location
+
+`[(0,1), (1,2)]` shares location `1`, so `plan.locs.Nodup` fails and none of the theorems above
+apply — exactly the overlapping-swap case a round must not contain. -/
+
+example : ¬ (SwapPlan.locs [(0, 1), (1, 2)]).Nodup := by decide
+
+example : indepB (accesses (compareSwap 0 1) σ6) (accesses (compareSwap 1 2) σ6) = false := rfl
 
 end Paralever.Examples.Sort

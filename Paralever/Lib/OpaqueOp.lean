@@ -1,4 +1,5 @@
 import Paralever.Lib.Notation
+import Paralever.Lib.Cost
 
 /-! # Opaque operations — declared footprint, derived not assumed
 
@@ -15,23 +16,32 @@ namespace Paralever
 
 /-! ### Building blocks -/
 
-/-- Read every location in order, collecting the values. -/
+/-- Read every location of the list, left to right, and return the values in that order. Pure
+reading: nothing is written. -/
 def readAll : List Loc → ParM (List Val)
   | []      => .pure []
-  | l :: ls => .read l (fun v => ParM.bind (readAll ls) (fun vs => .pure (v :: vs)))
+  | l :: ls => .read l (fun v => doₚ
+      let vs ← readAll ls
+      .pure (v :: vs))
 
-/-- Write each `(location, value)` pair in order. -/
+/-- Store each value at its paired location, left to right. The monadic counterpart of `applyAll`. -/
 def writeAll : List (Loc × Val) → ParM Unit
   | []           => .pure ()
   | (l, v) :: ps => .write l v (fun _ => writeAll ps)
 
-/-- An operation over a *declared* footprint: reads exactly `R`, writes within `W`, with net effect
-given by the pure function `f`. `f` is never inspected — it may be arbitrarily complex. -/
+/-- An operation over a *declared* footprint: it reads exactly `R`, writes within `W`, and its net
+effect on those cells is the pure function `f`.
+
+Only the interface is modelled, never the computation: `f` is universally quantified and never
+inspected, so it may be a solver, a library call, or 400 lines nobody wants to induct over. -/
 def opaqueOp (R W : List Loc) (f : List Val → List Val) : ParM Unit :=
-  ParM.bind (readAll R) (fun vs => writeAll (W.zip (f vs)))
+  doₚ
+    let vs ← readAll R
+    writeAll (W.zip (f vs))
 
 /-! ### Footprints of the building blocks — state-independent, hence usable at any `σ` -/
 
+/-- `readAll R` reads exactly `R`, in order, and writes nothing. -/
 @[simp, grind .]
 theorem readAll_accesses (R : List Loc) (σ : State) :
     accesses (readAll R) σ = ⟨R, []⟩ := by
@@ -39,8 +49,9 @@ theorem readAll_accesses (R : List Loc) (σ : State) :
   | nil => rfl
   | cons l ls ih =>
       simp only [readAll, accesses, accesses_bind, Footprint.union]
-      rw [ih]; simp [accesses, Footprint.empty]
+      rw [ih]; simp [Footprint.empty]
 
+/-- `writeAll ps` writes exactly the locations named in `ps` and reads nothing. -/
 @[simp, grind .]
 theorem writeAll_accesses (ps : List (Loc × Val)) (σ : State) :
     accesses (writeAll ps) σ = ⟨[], ps.map Prod.fst⟩ := by
@@ -51,6 +62,7 @@ theorem writeAll_accesses (ps : List (Loc × Val)) (σ : State) :
       simp only [writeAll, accesses, Footprint.union]
       rw [ih]; simp
 
+/-- `readAll` has no `par` node, so it is well-formed at every state. -/
 @[simp, grind .]
 theorem readAll_wellformed (R : List Loc) (σ : State) : WellFormed (readAll R) σ := by
   induction R generalizing σ with
@@ -59,6 +71,7 @@ theorem readAll_wellformed (R : List Loc) (σ : State) : WellFormed (readAll R) 
       simp only [readAll, WellFormed]
       rw [WellFormed_bind]; exact ⟨ih σ, trivial⟩
 
+/-- `writeAll` has no `par` node, so it is well-formed at every state. -/
 @[simp, grind .]
 theorem writeAll_wellformed (ps : List (Loc × Val)) (σ : State) :
     WellFormed (writeAll ps) σ := by
@@ -83,8 +96,48 @@ theorem zip_fst_subset (W : List Loc) (vals : List Val) :
           · exact h ▸ List.mem_cons_self
           · exact List.mem_cons_of_mem w (ih vs l h)
 
+/-! ### Link ②: the declared interface computes a pure state transformer
+
+The body is still never read — it appears on both sides, universally quantified. -/
+
+/-- The state transformer an opaque op denotes: look up `R` in `σ`, apply the body, land the results
+on the declared outputs. No monad. -/
+def opaquePure (R W : List Loc) (f : List Val → List Val) (σ : State) : State :=
+  applyAll σ (W.zip (f (R.map σ)))
+
+/-- `readAll R` returns `R` looked up pointwise in `σ` and leaves the heap unchanged. -/
+@[simp, grind .]
+theorem readAll_runSeq (R : List Loc) (σ : State) :
+    runSeq (readAll R) σ = (R.map σ, σ) := by
+  induction R generalizing σ with
+  | nil => rfl
+  | cons l ls ih => simp only [readAll, runSeq, runSeq_bind]; rw [ih]; simp
+
+/-- Running `writeAll ps` is applying the batch `ps` to the heap. -/
+@[simp, grind .]
+theorem writeAll_runSeq : ∀ (ps : List (Loc × Val)) (σ : State),
+    (runSeq (writeAll ps) σ).2 = applyAll σ ps := by
+  intro ps
+  induction ps with
+  | nil => intro σ; rfl
+  | cons p ps ih => obtain ⟨l, v⟩ := p; intro σ; exact ih (σ.update l v)
+
+/-- The op's effect on the heap is exactly `opaquePure`. The body occurs on both sides and is still
+never read, so this holds for every `f`. -/
+theorem opaqueOp_runSeq (R W : List Loc) (f : List Val → List Val) (σ : State) :
+    (runSeq (opaqueOp R W f) σ).2 = opaquePure R W f σ := by
+  show (runSeq (ParM.bind (readAll R) (fun vs => writeAll (W.zip (f vs)))) σ).2 = _
+  simp only [runSeq_bind, readAll_runSeq, writeAll_runSeq]
+  rfl
+
+/-- A non-empty read set means the op's root is a `.read`, so it costs at least one round. -/
+theorem opaqueOp_time_pos (l : Loc) (ls W : List Loc) (f : List Val → List Val) (σ : State) :
+    0 < time (opaqueOp (l :: ls) W f) σ := time_read_pos l _ σ
+
 /-! ### The declared footprint is the real one -/
 
+/-- An opaque op is a read phase followed by a write phase and contains no `par` node, so it is
+well-formed at every state. -/
 @[simp, grind .]
 theorem opaqueOp_wellformed (R W : List Loc) (f : List Val → List Val) (σ : State) :
     WellFormed (opaqueOp R W f) σ := by
@@ -92,8 +145,9 @@ theorem opaqueOp_wellformed (R W : List Loc) (f : List Val → List Val) (σ : S
   rw [WellFormed_bind]
   exact ⟨readAll_wellformed R σ, writeAll_wellformed _ _⟩
 
-/-- Reads are exactly `R`; writes lie within `W`. Proved, not assumed — this is the whole point
-of the construction. -/
+/-- **The declared footprint is the real one**: reads are exactly `R`, writes lie within `W`. Proved
+for every `f`, so it is a theorem rather than an annotation — and a user who declares `W` too large
+gets a weaker theorem, never a wrong one. -- ref: `docs/opaque-ops.md` -/
 @[grind .]
 theorem opaqueOp_accesses (R W : List Loc) (f : List Val → List Val) (σ : State) :
     (accesses (opaqueOp R W f) σ).reads = R ∧
@@ -105,10 +159,12 @@ theorem opaqueOp_accesses (R W : List Loc) (f : List Val → List Val) (σ : Sta
   simp only [List.nil_append] at hl
   exact zip_fst_subset W _ l hl
 
+/-- The read half of `opaqueOp_accesses`, for rewriting. -/
 @[grind .]
 theorem opaqueOp_reads (R W : List Loc) (f : List Val → List Val) (σ : State) :
     (accesses (opaqueOp R W f) σ).reads = R := (opaqueOp_accesses R W f σ).1
 
+/-- The write half of `opaqueOp_accesses`, for rewriting. -/
 @[grind .]
 theorem opaqueOp_writes_subset (R W : List Loc) (f : List Val → List Val) (σ : State) :
     ∀ l ∈ (accesses (opaqueOp R W f) σ).writes, l ∈ W := (opaqueOp_accesses R W f σ).2

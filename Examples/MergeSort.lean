@@ -1,45 +1,25 @@
 import Paralever.Lib.TouchesOnly
 import Paralever.Lib.Notation
+import Paralever.Lib.Cost
 
-/-! # Example: real recursive parallel mergesort
+/-! # Recursive parallel mergesort
 
-The flagship example `PLAN.md`/`M7-M9` calls for: genuine divide-and-conquer, nested `.par` (each
-recursive call itself contains further `.par` nodes, not just one flat level like `SumArray`'s
-chunking or `Sort`'s compare-swap rounds), and — unlike those two — recursion whose depth depends
-on the *size* of the input, not a fixed list handed in up front.
+Genuine divide-and-conquer: every recursive call contains further `.par` nodes, and the recursion
+depth follows the input size. Mergesort's split point `lo + (hi-lo)/2` is pure arithmetic, so each
+level's two sub-footprints are statically disjoint index ranges — `omega` territory, no
+data-dependent ownership transfer (contrast quicksort, whose partition index is data dependent).
 
-**Why this doesn't need Tier-2 (data-dependent footprints, `Logic/`).** Quicksort's partition
-*index* is data-dependent (it depends on comparisons against the pivot's value), which is exactly
-why a real quicksort needs ownership-transfer reasoning. Mergesort's split point is not data
-dependent at all — `mid := lo + (hi - lo) / 2` is pure arithmetic, fixed before any array access
-happens. So at every level of the recursion the two recursive calls' footprints are *statically
-known, disjoint, contiguous index ranges* — `omega` territory, exactly `SumArray.lean`'s own
-"§3: arbitrary chunking" argument, just applied at every recursion depth instead of once. That
-argument predicted this is where a real divide-and-conquer example would land; this file confirms
-it.
-
-**Layout.** One array of size `N`, plus a same-size scratch array right after it: locations
-`[0, N)` are the data, `[N, 2N)` are scratch. `mergeSortPar N lo hi` sorts data `[lo, hi)` in
-place, using scratch `[lo, hi)` (shifted by `N`) to merge into, then copying the merged range back.
-Since every recursive call keeps `hi ≤ N`, the data and scratch channels never overlap regardless
-of the specific `lo`/`hi`/`mid` — no cross-channel disjointness check is ever needed, only
-data-range-vs-data-range and scratch-range-vs-scratch-range, both by `omega`.
-
-`mergeStep`/`copyBack` are fuel-bounded (`docs/program-model.md`'s allowance for structural-or-
-fuel-bounded recursion), fuel supplied as the range length so it's always exactly enough.
--/
+Layout: `[0,N)` is the data, `[N,2N)` a same-size scratch channel. `mergeStep`/`copyBack` are
+fuel-bounded, fuel supplied as the range length. Rationale: `docs/program-model.md`,
+`docs/cost.md`. -/
 
 namespace Paralever.Examples.MergeSort
 
 open ParM
 
-/-! ### Pure spec
+/-! ### pure
 
-Documentation only: what `mergeStep`/`mergeSortPar` below are supposed to compute, in the shape
-`SumArray.lean`'s "pure first, then convert" discipline calls for. **Not connected to the `ParM`
-code by a correctness proof** — that would be an ordinary sequential-sorting-algorithm correctness
-result, orthogonal to this project's actual claim (`docs/program-model.md`, `PLAN.md`: independent
-⇒ `par` ≡ `seq`). Nothing below depends on this section. -/
+The algorithm on plain lists, no monad. -/
 
 def mergePure : List Int → List Int → List Int
   | [], ys => ys
@@ -61,7 +41,9 @@ decreasing_by
   all_goals simp only [List.length_take, List.length_drop, List.length_cons]
   all_goals omega
 
-/-! ### The `ParM` merge step and copy-back — sequential, fuel-bounded -/
+/-! ### The merge and copy-back loops
+
+Shared verbatim by both versions below; neither contains a `.par` node. -/
 
 /-- Merge sorted `[i, mid)` and `[j, hi)` (both in the data channel) into the scratch channel
 starting at `auxBase + k`, advancing `k` alongside whichever of `i`/`j` moves. `fuel` is consumed
@@ -95,7 +77,7 @@ def copyBack (auxBase : Nat) : Nat → Nat → Nat → ParM Unit
   | fuel + 1, i, j =>
       .read (auxBase + i) (fun v => .write j v (fun _ => copyBack auxBase fuel (i + 1) (j + 1)))
 
-/-! ### The recursive parallel sort -/
+/-! ### par -/
 
 @[simp, grind .]
 def mergeSortPar (N : Nat) : Nat → Nat → ParM Unit
@@ -104,6 +86,20 @@ def mergeSortPar (N : Nat) : Nat → Nat → ParM Unit
       else
         let mid := lo + (hi - lo) / 2
         ParM.bind (ParM.parPair (mergeSortPar N lo mid) (mergeSortPar N mid hi)) (fun _ =>
+          ParM.bind (mergeStep mid hi N (hi - lo) lo mid lo) (fun _ =>
+            copyBack N (hi - lo) lo lo))
+termination_by lo hi => hi - lo
+decreasing_by all_goals omega
+
+/-! ### seq -/
+
+/-- The sequential counterpart: identical recursion, `seqPair` in place of `parPair`. -/
+def mergeSortSeq (N : Nat) : Nat → Nat → ParM Unit
+  | lo, hi =>
+      if _h : hi - lo ≤ 1 then .pure ()
+      else
+        let mid := lo + (hi - lo) / 2
+        ParM.bind (ParM.seqPair (mergeSortSeq N lo mid) (mergeSortSeq N mid hi)) (fun _ =>
           ParM.bind (mergeStep mid hi N (hi - lo) lo mid lo) (fun _ =>
             copyBack N (hi - lo) lo lo))
 termination_by lo hi => hi - lo
@@ -442,23 +438,198 @@ theorem mergeSortPar_wellformed (N lo hi : Nat) (hhiN : hi ≤ N) (σ : State) :
     WellFormed (mergeSortPar N lo hi) σ :=
   (mergeSortPar_spec N (hi - lo) lo hi (by omega) hhiN σ).2
 
-/-- The concrete payoff at the top split: sorting `[lo,mid)` and `[mid,hi)` in parallel reaches
-exactly the outcomes sorting them one after another does. Every other `.par` node in the recursion
-(both halves' own internal splits, all the way down) gets the identical corollary for free from the
-same `WellFormed` fact, via the same two lines — `WellFormed_bind` to peel off the obligation for
-that node, `par_seq_eq` to discharge it. -/
-theorem mergeSortPar_split_par_seq_eq (N lo hi : Nat) (hhiN : hi ≤ N) (hgt : ¬ hi - lo ≤ 1)
-    (σ : State) :
-    ParM.parPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi)
-      ∥≡ ParM.seqPair (mergeSortPar N lo (lo + (hi - lo) / 2)) (mergeSortPar N (lo + (hi - lo) / 2) hi)
-      from σ := by
-  have hwf := mergeSortPar_wellformed N lo hi hhiN σ
-  have heq : mergeSortPar N lo hi
-      = ParM.bind (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2)) (mergeSortPar N (lo+(hi-lo)/2) hi))
-          (fun _ => ParM.bind (mergeStep (lo+(hi-lo)/2) hi N (hi - lo) lo (lo+(hi-lo)/2) lo) (fun _ =>
-            copyBack N (hi - lo) lo lo)) := by
-    rw [mergeSortPar.eq_1]; rw [dif_neg hgt]
-  rw [heq, WellFormed_bind] at hwf
-  exact par_seq_eq _ _ σ hwf.1
+/-! ### pure = seq
+
+The general array-to-list refinement (`mergeSortPar` sorts iff `mergeSortPure` does) is an ordinary
+sequential-sorting correctness proof, orthogonal to this project's claim and not attempted here —
+link ③ of `docs/pure-bridge.md`. What is checked is the instance: -/
+
+def σ4 : State
+  | 0 => .int 5 | 1 => .int 3 | 2 => .int 8 | 3 => .int 1
+  | _ => .int 0
+
+/-- info: true -/
+#guard_msgs in
+#eval ((List.range 4).map (runSeq (mergeSortPar 4 0 4) σ4).2)
+  == (mergeSortPure [5, 3, 8, 1]).map Val.int
+
+/-! ### seq = par -/
+
+/-- Both versions compute the same canonical run, at every depth. -/
+theorem runSeq_eq (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → ∀ σ : State,
+    runSeq (mergeSortPar N lo hi) σ = runSeq (mergeSortSeq N lo hi) σ := by
+  intro n
+  induction n with
+  | zero =>
+      intro lo hi hn σ
+      have h1 : hi - lo ≤ 1 := by omega
+      rw [mergeSortPar.eq_1, dif_pos h1, mergeSortSeq.eq_1, dif_pos h1]
+  | succ n ih =>
+      intro lo hi hn σ
+      by_cases h1 : hi - lo ≤ 1
+      · rw [mergeSortPar.eq_1, dif_pos h1, mergeSortSeq.eq_1, dif_pos h1]
+      · rw [mergeSortPar.eq_1, dif_neg h1, mergeSortSeq.eq_1, dif_neg h1]
+        have hl : lo + (hi - lo) / 2 - lo ≤ n := by omega
+        have hr : hi - (lo + (hi - lo) / 2) ≤ n := by omega
+        simp only [runSeq_bind, ParM.parPair, ParM.seqPair, runSeq,
+          ih lo (lo + (hi - lo) / 2) hl σ]
+        rw [ih (lo + (hi - lo) / 2) hi hr (runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ).2]
+
+/-- `mergeSortSeq` has no `par` node anywhere, so it is well-formed unconditionally. -/
+theorem seq_wellformed (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → ∀ σ : State,
+    WellFormed (mergeSortSeq N lo hi) σ := by
+  intro n
+  induction n with
+  | zero =>
+      intro lo hi hn σ
+      have h1 : hi - lo ≤ 1 := by omega
+      rw [mergeSortSeq.eq_1, dif_pos h1]; trivial
+  | succ n ih =>
+      intro lo hi hn σ
+      by_cases h1 : hi - lo ≤ 1
+      · rw [mergeSortSeq.eq_1, dif_pos h1]; trivial
+      · rw [mergeSortSeq.eq_1, dif_neg h1]
+        have hl : lo + (hi - lo) / 2 - lo ≤ n := by omega
+        have hr : hi - (lo + (hi - lo) / 2) ≤ n := by omega
+        rw [WellFormed_bind, ParM.seqPair, WellFormed_bind]
+        refine ⟨⟨ih lo _ hl σ, ?_⟩, ?_⟩
+        · rw [WellFormed_bind]; exact ⟨ih _ hi hr _, trivial⟩
+        · rw [WellFormed_bind]
+          exact ⟨mergeStep_wellformed _ _ _ _ _ _ _ _, copyBack_wellformed _ _ _ _ _⟩
+
+/-- **seq = par**, for the whole recursion, not just the top split. -/
+theorem seq_eq_par (N lo hi : Nat) (hhiN : hi ≤ N) (σ : State) :
+    mergeSortPar N lo hi ∥≡ mergeSortSeq N lo hi from σ := by
+  intro r σ'
+  rw [wellFormed_canonical _ σ r σ' (mergeSortPar_wellformed N lo hi hhiN σ),
+    wellFormed_canonical _ σ r σ' (seq_wellformed N (hi - lo) lo hi (by omega) σ),
+    runSeq_eq N (hi - lo) lo hi (by omega) σ]
+
+/-! ### time par < time seq -/
+
+theorem copyBack_time_pos (auxBase fuel i j : Nat) (hf : 0 < fuel) (σ : State) :
+    0 < time (copyBack auxBase fuel i j) σ := by
+  obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by omega⟩
+  exact time_pos _ σ rfl
+
+/-- A range of two or more always ends with a copy-back, so it costs at least one round. -/
+theorem seq_time_pos (N lo hi : Nat) (h2 : 2 ≤ hi - lo) (σ : State) :
+    0 < time (mergeSortSeq N lo hi) σ := by
+  have h1 : ¬ hi - lo ≤ 1 := by omega
+  rw [mergeSortSeq.eq_1, dif_neg h1]
+  have hwf := seq_wellformed N (hi - lo) lo hi (by omega) σ
+  rw [mergeSortSeq.eq_1, dif_neg h1] at hwf
+  rw [time_bind_add _ _ σ hwf]
+  have hwf2 := ((WellFormed_bind _ _ σ).mp hwf).2
+  rw [time_bind_add _ _ _ hwf2]
+  have := copyBack_time_pos N (hi - lo) lo lo (by omega)
+    (runSeq (mergeStep (lo + (hi - lo) / 2) hi N (hi - lo) lo (lo + (hi - lo) / 2) lo)
+      (runSeq (ParM.seqPair (mergeSortSeq N lo (lo + (hi - lo) / 2))
+        (mergeSortSeq N (lo + (hi - lo) / 2) hi)) σ).2).2
+  omega
+
+/-- **`time par ≤ time seq`** at every depth: `max` at each fork instead of `+`. -/
+theorem time_le (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → hi ≤ N → ∀ σ : State,
+    time (mergeSortPar N lo hi) σ ≤ time (mergeSortSeq N lo hi) σ := by
+  intro n
+  induction n with
+  | zero =>
+      intro lo hi hn _ σ
+      have h1 : hi - lo ≤ 1 := by omega
+      rw [mergeSortPar.eq_1, dif_pos h1, mergeSortSeq.eq_1, dif_pos h1]; omega
+  | succ n ih =>
+      intro lo hi hn hN σ
+      by_cases h1 : hi - lo ≤ 1
+      · rw [mergeSortPar.eq_1, dif_pos h1, mergeSortSeq.eq_1, dif_pos h1]; omega
+      · have hl : lo + (hi - lo) / 2 - lo ≤ n := by omega
+        have hr : hi - (lo + (hi - lo) / 2) ≤ n := by omega
+        have hmid : lo + (hi - lo) / 2 ≤ N := by omega
+        rw [mergeSortPar.eq_1, dif_neg h1, mergeSortSeq.eq_1, dif_neg h1]
+        have hwfP := mergeSortPar_wellformed N lo hi hN σ
+        have hwfS := seq_wellformed N (hi - lo) lo hi (by omega) σ
+        rw [mergeSortPar.eq_1, dif_neg h1] at hwfP
+        rw [mergeSortSeq.eq_1, dif_neg h1] at hwfS
+        have hpair : runSeq (ParM.parPair (mergeSortPar N lo (lo + (hi - lo) / 2))
+              (mergeSortPar N (lo + (hi - lo) / 2) hi)) σ
+            = runSeq (ParM.seqPair (mergeSortSeq N lo (lo + (hi - lo) / 2))
+              (mergeSortSeq N (lo + (hi - lo) / 2) hi)) σ := by
+          simp only [ParM.parPair, ParM.seqPair, runSeq, runSeq_bind,
+            runSeq_eq N n lo (lo + (hi - lo) / 2) hl σ]
+          rw [runSeq_eq N n (lo + (hi - lo) / 2) hi hr _]
+        have hePl : runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ
+            = runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ :=
+          runSeq_eq N n lo _ hl σ
+        have hwfPP := ((WellFormed_bind _ _ σ).mp hwfP).1
+        rw [time_bind_add _ _ σ hwfP, time_bind_add _ _ σ hwfS, hpair,
+          time_parPair_eq_max _ _ σ hwfPP,
+          time_seqPair_eq_add _ _ σ ((WellFormed_bind _ _ σ).mp hwfS).1]
+        -- the right half does not see the left half's writes, so its rounds are the same either way
+        have hC : time (mergeSortPar N (lo + (hi - lo) / 2) hi)
+              (runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).2
+            = time (mergeSortPar N (lo + (hi - lo) / 2) hi) σ :=
+          time_locality _ _ σ (accesses (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).writes
+            hwfPP.2.2.1 ⟨hwfPP.1.2.1, hwfPP.1.1⟩ (runSeq_frame _ σ)
+        rw [hePl] at hC
+        have h2l := ih lo (lo + (hi - lo) / 2) hl hmid σ
+        have h2r := ih (lo + (hi - lo) / 2) hi hr hN
+          (runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ).2
+        omega
+
+/-- **`time par < time seq`** once both halves have real work, i.e. from four elements up. -/
+theorem time_lt (N lo hi : Nat) (hhiN : hi ≤ N) (h4 : 4 ≤ hi - lo) (σ : State) :
+    time (mergeSortPar N lo hi) σ < time (mergeSortSeq N lo hi) σ := by
+  have h1 : ¬ hi - lo ≤ 1 := by omega
+  have hl : lo + (hi - lo) / 2 - lo ≤ hi - lo := by omega
+  have hr : hi - (lo + (hi - lo) / 2) ≤ hi - lo := by omega
+  have hmid : lo + (hi - lo) / 2 ≤ N := by omega
+  rw [mergeSortPar.eq_1, dif_neg h1, mergeSortSeq.eq_1, dif_neg h1]
+  have hwfP := mergeSortPar_wellformed N lo hi hhiN σ
+  have hwfS := seq_wellformed N (hi - lo) lo hi (by omega) σ
+  rw [mergeSortPar.eq_1, dif_neg h1] at hwfP
+  rw [mergeSortSeq.eq_1, dif_neg h1] at hwfS
+  have hpair : runSeq (ParM.parPair (mergeSortPar N lo (lo + (hi - lo) / 2))
+        (mergeSortPar N (lo + (hi - lo) / 2) hi)) σ
+      = runSeq (ParM.seqPair (mergeSortSeq N lo (lo + (hi - lo) / 2))
+        (mergeSortSeq N (lo + (hi - lo) / 2) hi)) σ := by
+    simp only [ParM.parPair, ParM.seqPair, runSeq, runSeq_bind,
+      runSeq_eq N (hi - lo) lo (lo + (hi - lo) / 2) hl σ]
+    rw [runSeq_eq N (hi - lo) (lo + (hi - lo) / 2) hi hr _]
+  have hePl : runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ
+      = runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ :=
+    runSeq_eq N (hi - lo) lo _ hl σ
+  have hwfPP := ((WellFormed_bind _ _ σ).mp hwfP).1
+  rw [time_bind_add _ _ σ hwfP, time_bind_add _ _ σ hwfS, hpair,
+    time_parPair_eq_max _ _ σ hwfPP,
+    time_seqPair_eq_add _ _ σ ((WellFormed_bind _ _ σ).mp hwfS).1]
+  -- the right half does not see the left half's writes, so its rounds are the same either way
+  have hC : time (mergeSortPar N (lo + (hi - lo) / 2) hi)
+        (runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).2
+      = time (mergeSortPar N (lo + (hi - lo) / 2) hi) σ :=
+    time_locality _ _ σ (accesses (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).writes
+      hwfPP.2.2.1 ⟨hwfPP.1.2.1, hwfPP.1.1⟩ (runSeq_frame _ σ)
+  rw [hePl] at hC
+  have h2l := time_le N (hi - lo) lo (lo + (hi - lo) / 2) hl hmid σ
+  have h2r := time_le N (hi - lo) (lo + (hi - lo) / 2) hi hr hhiN
+    (runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ).2
+  have hposl := seq_time_pos N lo (lo + (hi - lo) / 2) (by omega) σ
+  have hposr := seq_time_pos N (lo + (hi - lo) / 2) hi (by omega)
+    (runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ).2
+  omega
+
+/-- Same operations either way, with no hypothesis. -/
+theorem work_eq (lo hi : Nat) (σ : State) :
+    work (ParM.parPair (mergeSortPar hi lo (lo + (hi - lo) / 2))
+        (mergeSortPar hi (lo + (hi - lo) / 2) hi)) σ
+      = work (ParM.seqPair (mergeSortPar hi lo (lo + (hi - lo) / 2))
+        (mergeSortPar hi (lo + (hi - lo) / 2) hi)) σ := work_par_eq_seq _ _ σ
+
+-- At the top split of a four-element range: eighteen operations either way, nine rounds
+-- against eighteen.
+/-- info: (18, 18, 9, 18) -/
+#guard_msgs in
+#eval (work (ParM.parPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4,
+       work (ParM.seqPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4,
+       time (ParM.parPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4,
+       time (ParM.seqPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4)
 
 end Paralever.Examples.MergeSort

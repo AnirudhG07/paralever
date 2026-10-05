@@ -1,58 +1,32 @@
-import Paralever.Lib.Reduce
+import Paralever.Lib.Pure
 
-/-! # Example: parallel matrix multiply — the demo `PLAN.md` calls "probably the most compelling"
+/-! # `C[i,j] := Σ_k A[i,k]*B[k,j]`, one task per cell
 
-Every cell `C[i,j] = Σ_k A[i,k]*B[k,j]` is computed by its own independent task. **This is the one
-example that genuinely cannot be proved independent without Bernstein**: cell `(i,j)` writes only its
-own output `C[i,j]`, but reads an entire row of `A` and an entire column of `B` — and different cells'
-rows/columns overlap constantly (every cell in row `i` reads the *same* row of `A`). A naive `∗`-style
-exclusive-heap-split treatment would reject this outright.
-
-The proof needs none of that overlap reasoning. `Lib/Reduce.lean` discharges the fuel induction
-generically; all this file supplies is the layout (`A` at `[0,n²)`, `B` at `[n²,2n²)`, `C` at
-`[2n²,3n²)`), a one-step body, and the two arithmetic facts that `C`'s cells are distinct and lie
-outside `A`/`B`. Reads are confined to one *shared* predicate, so row/column overlap is never
-mentioned — see `docs/reductions.md`. -/
+Cell `(i,j)` writes only `C[i,j]` but reads a whole row of `A` and a whole column of `B`, so
+different cells' read sets overlap heavily — this is the example that needs Bernstein rather than
+`∗`-disjointness. Rationale: `docs/reductions.md`, `docs/pure-bridge.md`, `docs/cost.md`. -/
 
 namespace Paralever.Examples.MatMul
 open Paralever
 
-/-! ### Layout and the one-step body — the only manual parts
+/-! ### Layout: `A` at `[0,n²)`, `B` at `[n²,2n²)`, `C` at `[2n²,3n²)` -/
 
-The accumulator is a plain `Int`, never a heap cell. That is what makes the whole inner loop
-read-only, hence a cell's write set a single location. -/
-
-/-- One step of `Σ_k A[i,k]*B[k,j]` for cell `p = i*n+j`: read `A[i,k]`, read `B[k,j]`, accumulate. -/
-def dotBody (n p k : Nat) (acc : Int) : ParM Int :=
-  .read (p / n * n + k) (fun va => .read (n * n + (k * n + p % n)) (fun vb =>
-    match va, vb with
-    | .int a, .int b => .pure (acc + a * b)
-    | _, _ => .pure acc))
-
-/-- `A` and `B` together occupy `[0, 2n²)`; `C` starts at `2n²`. -/
-def InputRegion (n : Nat) (l : Loc) : Prop := l < n * n + n * n
+/-- Cell `p = i*n+j`, step `k`: read `A[i,k]` and `B[k,j]`. -/
+def dotLocs (n : Nat) (p k : Nat) : List Loc := [p / n * n + k, n * n + (k * n + p % n)]
 
 def cellLoc (n p : Nat) : Loc := n * n + n * n + p
 
-def matmulPar (n : Nat) : ParM (List Unit) :=
-  reduceArrayPar (n * n) n (dotBody n) 0 Val.int (cellLoc n)
+/-- The read region: `A` and `B` together. Deliberately loose — Bernstein needs only that a read is
+on the input side, never which row or column. -/
+def InputRegion (n : Nat) (l : Loc) : Prop := l < n * n + n * n
 
-def matmulSeq (n : Nat) : ParM (List Unit) :=
-  reduceArraySeq (n * n) n (dotBody n) 0 Val.int (cellLoc n)
-
-/-! ### The three facts about `dotBody`, each one line -/
-
-theorem dotBody_wellformed (n p k : Nat) (acc : Int) (σ : State) :
-    WellFormed (dotBody n p k acc) σ := by
-  simp only [dotBody, WellFormed]
-  cases σ (p / n * n + k) <;> cases σ (n * n + (k * n + p % n)) <;> trivial
-
-/-- Both reads land below `2n²` — `A`'s row and `B`'s column, bounded *loosely*, since Bernstein
-never needs to know which row or column, only that it is on the input side. -/
-theorem dotBody_readsWithin (n p k : Nat) (hp : p < n * n) (hk : k < n) (acc : Int) (σ : State) :
-    ReadsWithin (accesses (dotBody n p k acc) σ) (InputRegion n) := by
-  have hn : 0 < n := by rcases Nat.eq_zero_or_pos n with h | h; · subst h; simp at hp
-                        · exact h
+private theorem hlocs (n : Nat) :
+    ∀ p, p < n * n → ∀ k, k < n → ∀ l ∈ dotLocs n p k, InputRegion n l := by
+  intro p hp k hk l hl
+  have hn : 0 < n := by
+    rcases Nat.eq_zero_or_pos n with h | h
+    · subst h; simp at hp
+    · exact h
   have hA : p / n * n + k < n * n + n * n := by
     have h1 : p / n < n := Nat.div_lt_of_lt_mul (by omega)
     have h2 : p / n * n + k < (p / n + 1) * n := by rw [Nat.succ_mul]; omega
@@ -63,36 +37,71 @@ theorem dotBody_readsWithin (n p k : Nat) (hp : p < n * n) (hk : k < n) (acc : I
     have h2 : k * n + p % n < (k + 1) * n := by rw [Nat.succ_mul]; omega
     have h3 : (k + 1) * n ≤ n * n := Nat.mul_le_mul_right n hk
     omega
-  simp only [dotBody, accesses]
-  refine ReadsWithin.union (ReadsWithin.read _ _ hA) ?_
-  refine ReadsWithin.union (ReadsWithin.read _ _ hB) ?_
-  cases σ (p / n * n + k) <;> cases σ (n * n + (k * n + p % n)) <;>
-    simp only [accesses] <;> exact ReadsWithin.empty _
+  simp only [dotLocs, List.mem_cons, List.not_mem_nil, or_false] at hl
+  rcases hl with h | h
+  · exact h ▸ hA
+  · exact h ▸ hB
 
-/-- `dotBody` never writes — the accumulator is a pure `Int`. -/
-theorem dotBody_no_writes (n p k : Nat) (acc : Int) (σ : State) :
-    (accesses (dotBody n p k acc) σ).writes = [] := by
-  simp only [dotBody, accesses]
-  cases σ (p / n * n + k) <;> cases σ (n * n + (k * n + p % n)) <;>
-    simp [Footprint.union, Footprint.empty]
+private theorem hdstinj (n : Nat) :
+    ∀ p q, p < n * n → q < n * n → p ≠ q → cellLoc n p ≠ cellLoc n q := by
+  intro p q hp hq hpq; grind [cellLoc]
 
-/-! ### The payoff — five hypotheses, four of them one line -/
+private theorem hdstout (n : Nat) : ∀ p, p < n * n → ¬ InputRegion n (cellLoc n p) := by
+  intro p hp; grind [cellLoc, InputRegion]
 
-/-- **The payoff, for any `n`**: every cell of `C = A*B` computed in parallel reaches exactly the
-outcomes computing them one at a time does — despite every cell in a row sharing reads with every
-other cell in that row. -/
-theorem matmulPar_par_seq_eq (n : Nat) (σ : State) : matmulPar n ∥≡ matmulSeq n from σ := by
-  unfold matmulPar matmulSeq
-  apply reduceArray_par_seq_eq (n * n) n (dotBody n) 0 Val.int (cellLoc n) (InputRegion n)
-  · intro p k acc σ'; exact dotBody_wellformed n p k acc σ'
-  · intro p hp k hk acc σ'; exact dotBody_readsWithin n p k hp hk acc σ'
-  · intro p k acc σ'; exact dotBody_no_writes n p k acc σ'
-  · intro p q hp hq hpq; grind [cellLoc]
-  · intro p hp; grind [cellLoc, InputRegion]
+/-! ### pure -/
 
-/-! ### Concrete check: `A * I = A`, `n = 2`
+/-- Multiply the two values a step reads into the accumulator. The accumulator is a plain `Int`,
+never a heap cell — that is what makes a cell's write set the single location `C[i,j]`. -/
+def dotCombine : List Val → Int → Int
+  | [.int a, .int b], acc => acc + a * b
+  | _,                acc => acc
 
-`A = [[1,2],[3,4]]` at locations 0-3, `B = I` at locations 4-7, so `C` should equal `A` at 8-11. -/
+/-- `C[p]` as a function of the heap. -/
+def matmulPure (n : Nat) (σ : State) (p : Nat) : Int := foldPure σ (dotLocs n p) dotCombine n 0 0
+
+/-! ### seq -/
+
+def matmulSeq (n : Nat) : ParM (List Unit) :=
+  reduceArrayPureS (n * n) n (dotLocs n) dotCombine 0 Val.int (cellLoc n)
+
+/-! ### par -/
+
+def matmulPar (n : Nat) : ParM (List Unit) :=
+  reduceArrayPureP (n * n) n (dotLocs n) dotCombine 0 Val.int (cellLoc n)
+
+/-! ### pure = seq
+
+`reduceFold (readsCombine ...) n 0 0` is the inner loop `matmulSeq` runs for cell `p`. -/
+
+theorem pure_eq_seq (n p : Nat) (σ : State) :
+    (runSeq (reduceFold (readsCombine (dotLocs n p) dotCombine) n 0 (0 : Int)) σ).1
+      = matmulPure n σ p :=
+  reduceFold_eq_foldPure (dotLocs n p) dotCombine σ n 0 0
+
+/-! ### seq = par -/
+
+theorem seq_eq_par (n : Nat) (σ : State) : matmulPar n ∥≡ matmulSeq n from σ :=
+  reduceArrayPure_par_seq_eq (n * n) n (dotLocs n) dotCombine 0 Val.int (cellLoc n) (InputRegion n)
+    (hlocs n) (hdstinj n) (hdstout n) σ
+
+/-! ### time par < time seq -/
+
+theorem time_lt (n : Nat) (h2 : 2 ≤ n) (σ : State) :
+    time (matmulPar n) σ < time (matmulSeq n) σ := by
+  unfold matmulPar matmulSeq reduceArrayPureP reduceArrayPureS
+  exact reduceArray_time_lt (n * n) n (fun p => readsCombine (dotLocs n p) dotCombine) 0 Val.int
+    (cellLoc n) (InputRegion n)
+    (fun p k acc σ' => readsCombine_wellformed _ _ k acc σ')
+    (fun p hp k hk acc σ' =>
+      readsCombine_readsWithin _ _ k acc σ' (InputRegion n) (hlocs n p hp k hk))
+    (fun p k acc σ' => readsCombine_no_writes _ _ k acc σ')
+    (hdstinj n) (hdstout n)
+    (Nat.le_trans h2 (Nat.le_mul_of_pos_left n (by omega))) σ
+
+/-! ### Concrete check: `A * I = A` for `n = 2`
+
+`A = [[1,2],[3,4]]` at 0-3, `B = I` at 4-7, so `C` at 8-11 should equal `A`. -/
 
 def σ2 : State
   | 0 => .int 1 | 1 => .int 2 | 2 => .int 3 | 3 => .int 4

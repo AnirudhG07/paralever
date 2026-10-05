@@ -196,8 +196,6 @@
 .reveal .tier strong { color: var(--lean-blue); min-width: 9em; }
 .reveal .tier em { color: var(--muted); font-style: normal; font-size: 0.9em; }
 
-/* ---- .win : before → after line counts ---- */
-.reveal .win { color: var(--lean-teal); font-weight: 800; }
 .reveal .lose { color: var(--muted); text-decoration: line-through; }
 
 /* ---- tables: keep them readable at slide size (was scoped to one state) ---- */
@@ -222,3 +220,70 @@
 
 /* ---- closing slide ---- */
 .reveal .finale { font-size: 1.3em; font-weight: 700; color: var(--lean-blue); text-align: center; }
+
+/* ---- .refs : the references slide — small, dense, unobtrusive ---- */
+.reveal .refs { font-size: 0.52em; line-height: 1.45; }
+.reveal .refs ul { margin: 0; }
+.reveal .refs li { margin: 0.12em 0; }
+
+/* ---- .treewrap : code on the left, its tree on the right ---- */
+.reveal .treewrap { display: flex; align-items: center; justify-content: center;
+                    gap: 1.6em; margin: 0.3em auto; max-width: 100%; }
+.reveal .treewrap pre { margin: 0; font-size: 0.78em; line-height: 1.5;
+                        border: 1px solid var(--tint-line); border-radius: 6px;
+                        padding: 0.7em 0.9em; background: rgba(15,23,42,0.025); }
+.reveal .treewrap svg { width: 46%; height: auto; }
+.reveal .treewrap svg text { font-family: var(--mono); fill: var(--ink); }
+
+/* ---- .colhalf : one column of a two-col slide; keeps its own content flowing ---- */
+.reveal .colhalf { min-width: 0; }
+.reveal .colhalf > *:first-child { margin-top: 0; }
+.reveal .two-col ul { margin-left: 0.6em; }
+
+/* ---- .pipewrap : the pure -> seq -> par proof pipeline ---- */
+.reveal .pipewrap { display: flex; justify-content: center; margin: 0.2em auto; }
+.reveal .pipewrap svg { width: 88%; height: auto; }
+.reveal .pipewrap svg text { font-family: var(--sans); fill: var(--ink); }
+
+/* ---- .bigclaim : the one statement the talk exists to make ---- */
+.reveal .bigclaim {
+  font-size: 1.16em; line-height: 1.42; text-align: center;
+  margin: 0.3em auto 0.55em; padding: 0.7em 1.1em; max-width: 92%;
+  border: 2px solid var(--lean-blue); border-radius: 10px;
+  background: rgba(37,99,235,0.045);
+}
+.reveal .bigclaim code { font-size: 0.95em; }
+.reveal .bigclaim-sub {
+  display: block; margin-top: 0.45em; font-size: 0.62em;
+  color: var(--muted); font-weight: 600;
+}
+
+
+/* ---- .lineage : prior results, open typography — no cards, no fills ---- */
+.reveal .lineage { margin: 0.45em auto; text-align: left; max-width: 94%; }
+.reveal .lineage .le { padding: 0.30em 0 0.34em; }
+.reveal .lineage .le + .le { border-top: 1px solid rgba(15,23,42,0.08); }
+.reveal .lineage .who {
+  font-family: var(--sans); font-weight: 700; font-size: 0.74em;
+  color: var(--lean-blue); letter-spacing: 0.005em;
+}
+.reveal .lineage .who span {
+  font-weight: 400; color: var(--muted); font-size: 0.82em;
+}
+.reveal .lineage .who span::before { content: " \00b7  "; }
+.reveal .lineage .thm {
+  font-size: 0.68em; line-height: 1.44; margin: 0.10em 0 0 1.15em;
+}
+.reveal .lineage .thm code { font-size: 0.95em; }
+.reveal .lineage .miss {
+  font-size: 0.60em; line-height: 1.35; margin: 0.10em 0 0 1.15em;
+  color: var(--muted); font-style: italic;
+}
+.reveal .lineage .miss::before {
+  content: "\2192  "; font-style: normal; color: #b91c1c; font-weight: 700;
+}
+/* our own row: distinguished by weight and colour, not by a container */
+.reveal .lineage .le.ours .who { color: var(--lean-teal); }
+.reveal .lineage .le.ours .thm { font-weight: 600; }
+.reveal .lineage .le.ours .miss { color: var(--lean-teal); font-style: normal; font-weight: 600; }
+.reveal .lineage .le.ours .miss::before { content: "\2713  "; color: var(--lean-teal); }

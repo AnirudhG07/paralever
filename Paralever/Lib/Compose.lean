@@ -10,6 +10,10 @@ Rationale: `docs/access.md`. -/
 
 namespace Paralever
 
+/-- Everything `p >>= f` touches lies in `P` when everything `p` touches does and everything the
+continuation touches does. The continuation is measured from `(runSeq p σ).2`, the heap `p` leaves
+behind, so a bound on a composed program follows one `bind` at a time instead of by one induction
+over the whole tree. -/
 @[simp, grind .]
 theorem footprintWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     (σ : State) (P : Loc → Prop)
@@ -18,6 +22,8 @@ theorem footprintWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     FootprintWithin (accesses (ParM.bind p f) σ) P := by
   rw [accesses_bind]; exact FootprintWithin.union hp hf
 
+/-- The reads-only version of `footprintWithin_bind`, for when reads and writes need different
+predicates (shared reads). -/
 @[simp, grind .]
 theorem readsWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     (σ : State) (P : Loc → Prop)
@@ -26,6 +32,7 @@ theorem readsWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     ReadsWithin (accesses (ParM.bind p f) σ) P := by
   rw [accesses_bind]; exact ReadsWithin.union hp hf
 
+/-- The writes-only version of `footprintWithin_bind`, for the frame side of an obligation. -/
 @[simp, grind .]
 theorem writesWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     (σ : State) (P : Loc → Prop)
@@ -34,7 +41,7 @@ theorem writesWithin_bind {α β : Type} (p : ParM α) (f : α → ParM β)
     WritesWithin (accesses (ParM.bind p f) σ) P := by
   rw [accesses_bind]; exact WritesWithin.union hp hf
 
-/-- Read-only programs: if both `p` and `f _` have empty writes, so does the composition. -/
+/-- A composition of read-only programs is read-only: empty writes on both sides compose. -/
 @[simp, grind .]
 theorem no_writes_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : State)
     (hp : (accesses p σ).writes = [])
@@ -42,8 +49,8 @@ theorem no_writes_bind {α β : Type} (p : ParM α) (f : α → ParM β) (σ : S
     (accesses (ParM.bind p f) σ).writes = [] := by
   rw [accesses_bind]; simp [Footprint.union, hp, hf]
 
-/-- Bernstein independence is trivially satisfied when both sides have no writes. Generalized
-from `Examples/SumArray.lean`'s local `indep_of_no_writes`. -/
+/-- Two read-only footprints are Bernstein-independent. All three clauses quantify over a write, so
+they hold vacuously — this is why shared reads never need an argument. -/
 @[simp, grind .]
 theorem indep_of_no_writes (f g : Footprint) (hf : f.writes = []) (hg : g.writes = []) :
     Indep f g := by

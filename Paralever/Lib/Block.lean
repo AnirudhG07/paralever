@@ -1,5 +1,6 @@
 import Paralever.Lib.TypedRead
 import Paralever.Lib.Notation
+import Paralever.Lib.Cost
 
 /-! # `Block` — a straight-line IR, so footprints are *computed* rather than proved
 
@@ -32,9 +33,12 @@ namespace Paralever
 
 -- ref: docs/block-ir.md; register/memory split follows LLVM mem2reg
 
+/-- A register name. Registers are not addressable, so a `Reg` is never a `Loc`. -/
 abbrev Reg := Nat
 
-/-- Pure arithmetic over registers. Deliberately has no memory operand. -/
+/-- Arithmetic over registers and literals. Deliberately has **no** memory operand: every heap value
+must come through an explicit `load` first, which is what keeps `footprintOf` syntactic and keeps
+registers out of every footprint. -- ref: `docs/block-ir.md` -/
 inductive AExp where
   | lit : Int → AExp
   | reg : Reg → AExp
@@ -49,17 +53,20 @@ inductive Instr where
   | store : Loc → AExp → Instr
   deriving Repr, DecidableEq
 
-/-- A straight-line basic block. -/
+/-- A straight-line basic block: instructions in execution order, no branches and no loops. Ordinary
+`List` data, so `footprintOf` can fold over it. -/
 abbrev Block := List Instr
 
 /-- The register file. Registers hold `Int`, are not memory, and never appear in a footprint. -/
 abbrev Regs := Reg → Int
 
+/-- `ρ` with register `r` holding `v`. -/
 def Regs.set (ρ : Regs) (r : Reg) (v : Int) : Regs := fun r' => if r' = r then v else ρ r'
 
 /-- `R n` reads as a register operand inside an `AExp`. -/
 abbrev R (n : Reg) : AExp := AExp.reg n
 
+/-- The `Int` an expression denotes under the register file `ρ`. Total, and touches no memory. -/
 @[simp, grind .]
 def AExp.eval (ρ : Regs) : AExp → Int
   | .lit n   => n
@@ -68,20 +75,29 @@ def AExp.eval (ρ : Regs) : AExp → Int
   | .sub a b => a.eval ρ - b.eval ρ
   | .mul a b => a.eval ρ * b.eval ρ
 
+/-- `+` on `AExp`, so expressions are written as ordinary arithmetic. -/
 instance : Add AExp := ⟨AExp.add⟩
+/-- `-` on `AExp`. -/
 instance : Sub AExp := ⟨AExp.sub⟩
+/-- `*` on `AExp`. -/
 instance : Mul AExp := ⟨AExp.mul⟩
+/-- A numeric literal elaborates as `AExp.lit`, so `R 0 * 2 + 1` is an `AExp`. -/
 instance : OfNat AExp n := ⟨AExp.lit (Int.ofNat n)⟩
 
 /-! ### Lowering to `ParM`
 
 The binds are generated here, once, rather than written by hand at every use site. -/
 
-/-- Interpret a block as a `ParM` program. -/
+/-- Lower a block to a `ParM` program, starting from register file `ρ`: one `readAs` per `load`, one
+`writeAs` per `store`, bound left to right. -/
 def exec : Block → Regs → ParM Unit
   | [],                 _ => .pure ()
-  | .load r l  :: rest, ρ => ParM.bind (readAs l (0 : Int)) (fun v => exec rest (ρ.set r v))
-  | .store l e :: rest, ρ => ParM.bind (writeAs l (e.eval ρ)) (fun _ => exec rest ρ)
+  | .load r l  :: rest, ρ => doₚ
+      let v ← readAs l (0 : Int)
+      exec rest (ρ.set r v)
+  | .store l e :: rest, ρ => doₚ
+      writeAs l (e.eval ρ)
+      exec rest ρ
 
 /-! ### The syntactic footprint — a fold, computable by `rfl` -/
 
@@ -128,10 +144,59 @@ theorem exec_wellformed : ∀ (b : Block) (ρ : Regs) (σ : State), WellFormed (
           rw [WellFormed_bind]
           exact ⟨writeAs_wellformed _ _ σ, ih _ _⟩
 
+/-! ### Link ②: a block runs as a plain interpreter
+
+A `Block` is data, so its pure counterpart is an ordinary state transformer — no monad, no
+footprints, registers and heap threaded by hand. `exec_eq_execPure` is the `Block` IR's half of the
+pure bridge, exactly parallel to `exec_accesses`. See `docs/block-ir.md`, `docs/pure-bridge.md`. -/
+
+/-- The `Int` a `load` observes — `readAs`'s decode, with its `0` fallback. -/
+def loadVal (σ : State) (l : Loc) : Int := (Storable.decode (σ l)).getD (0 : Int)
+
+/-- Run a block as a plain state transformer. Mirrors `exec` instruction for instruction. -/
+def execPure : Block → Regs → State → Regs × State
+  | [],                 ρ, σ => (ρ, σ)
+  | .load r l  :: rest, ρ, σ => execPure rest (ρ.set r (loadVal σ l)) σ
+  | .store l e :: rest, ρ, σ => execPure rest ρ (σ.update l (.int (e.eval ρ)))
+
+/-- The lowering is faithful, for every block, register file and state. One induction; no example
+repeats it. -/
+theorem exec_eq_execPure : ∀ (bl : Block) (ρ : Regs) (σ : State),
+    (runSeq (exec bl ρ) σ).2 = (execPure bl ρ σ).2 := by
+  intro bl
+  induction bl with
+  | nil => intro ρ σ; rfl
+  | cons i rest ih =>
+      intro ρ σ
+      cases i with
+      | load r l =>
+          show (runSeq (ParM.bind (readAs l (0 : Int)) _) σ).2 = _
+          rw [runSeq_bind, readAs_runSeq]
+          exact ih _ _
+      | store l e =>
+          show (runSeq (ParM.bind (writeAs l (AExp.eval ρ e)) _) σ).2 = _
+          rw [runSeq_bind, writeAs_runSeq]
+          exact ih _ _
+
+/-- A block that starts with a memory instruction takes at least one round. -/
+theorem exec_time_pos (i : Instr) (rest : Block) (ρ : Regs) (σ : State) :
+    0 < time (exec (i :: rest) ρ) σ := by
+  cases i with
+  | load r l  => exact time_read_pos l _ σ
+  | store l e => exact time_write_pos l _ _ σ
+
 /-! ### Independence and the metatheorem, decided on syntax
 
 `footprintOf` is a computation, so `Indep` between two concrete blocks is **decidable** — `by decide`
 discharges it with no reasoning about states or interleavings. -/
+
+/-- The whole `WellFormed` obligation for two blocks, decided on the instruction lists alone. Shared
+by the equivalence result below and by the cost results in `Lib/Cost.lean`. -/
+theorem block_wellformed_parPair (b₁ b₂ : Block) (ρ₁ ρ₂ : Regs) (σ : State)
+    (h : Indep (footprintOf b₁) (footprintOf b₂)) :
+    WellFormed (ParM.parPair (exec b₁ ρ₁) (exec b₂ ρ₂)) σ :=
+  WellFormed_par_intro (by rw [exec_accesses, exec_accesses]; exact h)
+    (exec_wellformed b₁ ρ₁ σ) (exec_wellformed b₂ ρ₂ _)
 
 /-- Two blocks whose syntactic footprints are Bernstein-independent run in parallel exactly as they
 run in sequence. The hypothesis mentions only the instruction lists. -/
@@ -139,10 +204,7 @@ theorem block_par_seq_eq (b₁ b₂ : Block) (ρ₁ ρ₂ : Regs) (σ : State)
     (h : Indep (footprintOf b₁) (footprintOf b₂)) :
     ParM.parPair (exec b₁ ρ₁) (exec b₂ ρ₂)
       ∥≡ ParM.seqPair (exec b₁ ρ₁) (exec b₂ ρ₂) from σ := by
-  refine par_seq_eq _ _ σ (WellFormed_par_intro ?_ (exec_wellformed b₁ ρ₁ σ)
-    (exec_wellformed b₂ ρ₂ _))
-  rw [exec_accesses, exec_accesses]
-  exact h
+  exact par_seq_eq _ _ σ (block_wellformed_parPair b₁ b₂ ρ₁ ρ₂ σ h)
 
 /-- The `decide`-friendly form: for concrete blocks the whole obligation is one `by decide`. -/
 theorem block_par_seq_eq_of_indepB (b₁ b₂ : Block) (ρ₁ ρ₂ : Regs) (σ : State)

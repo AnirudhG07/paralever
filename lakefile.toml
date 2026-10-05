@@ -41,6 +41,20 @@ rev = "v4.34.0"
 [[lean_lib]]
 name = "Slides"
 srcDir = "docs/slides"
+# `leanLibCode` blocks read the highlighted source of Paralever declarations, so
+# Lake must build that facet before elaborating the deck. Named per module, not
+# `@paralever:highlighted` — Slides is itself a lib in this package, so the
+# whole-package form makes Slides depend on its own highlighted facet (build cycle).
+needs = [
+  "@paralever/+Paralever.Core.ParM:highlighted",
+  "@paralever/+Paralever.Core.Semantics:highlighted",
+  "@paralever/+Paralever.Core.Access:highlighted",
+  "@paralever/+Paralever.Theory.Sequentialize:highlighted",
+  "@paralever/+Paralever.Lib.Block:highlighted",
+  "@paralever/+Examples.SumArray:highlighted",
+  "@paralever/+Examples.Sort:highlighted",
+  "@paralever/+Examples.MatMul:highlighted",
+]
 
 [[lean_exe]]
 name = "slides"

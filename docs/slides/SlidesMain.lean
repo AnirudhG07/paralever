@@ -21,11 +21,12 @@ def loadTheme : IO CustomTheme := do
   let asset (name : String) : IO ThemeAsset := do
     return { filename := "assets/" ++ name, contents := ← IO.FS.readBinFile (base / "assets" / name) }
   let assets ← #[].mapM asset
-  -- stagger.js turns a `:::class "steps"` list into per-item reveal fragments
-  let stagger : ThemeAsset := { filename := "stagger.js", contents := ← IO.FS.readBinFile (base / "stagger.js") }
+  -- stagger.js (per-item reveal fragments for `:::class "steps"` lists) is deliberately
+  -- NOT loaded: every slide appears in full, with no staged reveals. To restore the
+  -- staggered behaviour, ship it as an asset here and add it back to `extraJs` below.
   return {
     stylesheet     := { filename := "lean.css", contents := ⟨css⟩ },
-    assets         := assets.push stagger,
+    assets         := assets,
     -- light theme → light highlight.js theme (not the dark default)
     highlightTheme := HighlightTheme.forRevealTheme "white"
   }
@@ -52,6 +53,6 @@ def main : IO UInt32 := do
   let deckCss ← IO.FS.readFile (base / "paralever.css")
   let config : Config := { cfg theme "_slides/paralever" with
     extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
-    extraJs  := #["stagger.js"] }
+    extraJs  := #[] }
   discard <| slidesMain config (doc := %doc Slides)
   return 0

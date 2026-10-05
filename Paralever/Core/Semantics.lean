@@ -11,27 +11,47 @@ namespace Paralever
 
 /-! ### State -/
 
+/-- The heap: a total map from location to value. Total on purpose — there is no allocation and no
+partiality, so every read succeeds and `accesses` never has to reason about definedness. Ownership
+is expressed by footprints (`Core/Access.lean`), not by the heap's domain. -/
 abbrev State := Loc → Val
 
 namespace State
 
+/-- `σ` with location `l` set to `v`. -/
 def update (σ : State) (l : Loc) (v : Val) : State :=
   fun k => if k = l then v else σ k
 
+/-- Reading back the location just written. -/
 @[simp, grind .] theorem update_same (σ : State) (l : Loc) (v : Val) :
     σ.update l v l = v := by simp [update]
 
+/-- A write is invisible at every other location — the frame property, at one cell. -/
 @[simp, grind .] theorem update_other (σ : State) {l k : Loc} (v : Val) (h : k ≠ l) :
     σ.update l v k = σ k := by simp [update, h]
 
-/-- Writes to disjoint locations commute — the state-level core of the theorem. -/
+/-- Writes to distinct locations commute. This is the whole sequentialization theorem in miniature:
+everything else is bookkeeping that lifts this one fact to whole programs. -/
 theorem update_comm (σ : State) {l₁ l₂ : Loc} (v₁ v₂ : Val) (h : l₁ ≠ l₂) :
     (σ.update l₁ v₁).update l₂ v₂ = (σ.update l₂ v₂).update l₁ v₁ := by grind only [update_other, update_same]
 
+/-- The `(location, value)` pairs over `[lo, hi)`. -/
+def window (σ : State) (lo hi : Nat) : List (Loc × Val) :=
+  (List.range' lo (hi - lo)).map (fun l => (l, σ l))
+
 end State
+
+def stateReprWidth : Nat := 16
+
+/-- `#eval σ` prints the first `stateReprWidth` cells as `(location, value)` pairs. A heap is a
+function, so no `Repr` can be exhaustive; use `State.window` for any other range. -/
+instance : Repr State where
+  reprPrec σ _ := repr (σ.window 0 stateReprWidth)
 
 /-! ### Memory actions -/
 
+/-- One memory action, stripped to what the race check needs: which location, and read or write.
+Values are irrelevant to races, so they are not recorded. -/
 inductive Label where
   | read  : Loc → Label
   | write : Loc → Label
@@ -39,22 +59,26 @@ inductive Label where
 
 namespace Label
 
+/-- The location the action touches. -/
 def loc : Label → Loc
   | .read l | .write l => l
 
+/-- Whether the action is a write. -/
 def isWrite : Label → Bool
   | .write _ => true
   | .read _  => false
 
-/-- Same location, at least one write. Bernstein's criterion for a single step. -/
+/-- Two actions conflict when they hit the same location and at least one writes. Bernstein's
+criterion at the granularity of a single step; read/read never conflicts. -/
 @[simp, grind .]
 def conflicts (a b : Label) : Bool :=
   a.loc == b.loc && (a.isWrite || b.isWrite)
 
 end Label
 
-/-- Head actions: the ones that could happen next. Recurses through nested `par`, so every pair of
-concurrent threads is compared. -- ref: Vafeiadis MFPS'11 -/
+/-- The actions `p` could perform *next* — one per live thread. Recurses through nested `par`, so a
+deeply forked program contributes every one of its ready heads and no pair is missed.
+-- ref: Vafeiadis MFPS'11 -/
 @[simp, grind .]
 def nextAccs {α : Type} : ParM α → List Label
   | .pure _      => []
@@ -62,13 +86,18 @@ def nextAccs {α : Type} : ParM α → List Label
   | .write l _ _ => [.write l]
   | .par p q _   => nextAccs p ++ nextAccs q
 
+/-- Whether any action on one side conflicts with any on the other. `step` re-evaluates this at
+every `par` node on every step, which is why a run that never reaches `wrong` is race-free at every
+instant rather than only at the start. -/
 @[simp, grind .]
 def racing (as bs : List Label) : Bool :=
   as.any fun a => bs.any fun b => a.conflicts b
 
 /-! ### Configurations and stepping -/
 
-/-- `wrong` is terminal and absorbing. -/
+/-- An execution state: either a program paired with a heap, or `wrong`. `wrong` is where a detected
+race lands, and it is terminal and absorbing — per Reynolds' grainless semantics, racy programs are
+*excluded* rather than assigned a behaviour, which is what makes the atomic grain irrelevant. -/
 @[grind]
 inductive Conf (α : Type) : Type 1 where
   | run   : ParM α → State → Conf α
@@ -90,7 +119,9 @@ def inR {α β γ : Type} (p : ParM α) (k : α × β → ParM γ) : Conf β →
 
 end Conf
 
-/-- Successors of a program in a state. Empty means terminal. -/
+/-- One small step: every configuration the program could move to from this heap. The list is the
+nondeterminism — a `par` node offers both branches, so all interleavings are covered. Empty means
+terminal; a singleton `[wrong]` means this step detected a race. -/
 @[simp, grind .]
 def step {α : Type} : ParM α → State → List (Conf α)
   | .pure _,      _ => []
@@ -102,26 +133,30 @@ def step {α : Type} : ParM α → State → List (Conf α)
         | .pure a, .pure b => [.run (k (a, b)) σ]
         | _, _ => (step p σ).map (Conf.inL q k) ++ (step q σ).map (Conf.inR p k)
 
+/-- `step`, lifted to configurations. `wrong` has no successors, hence it is absorbing. -/
 @[simp, grind .]
 def stepC {α : Type} : Conf α → List (Conf α)
   | .run p σ => step p σ
   | .wrong   => []
 
-/-- Reflexive-transitive closure of `stepC`. -/
+/-- Reflexive-transitive closure of `stepC`: "`c` can execute to `c'` under some schedule." Every
+statement about *all* interleavings is a statement about this relation. -/
 @[grind]
 inductive Reaches {α : Type} : Conf α → Conf α → Prop where
   | refl {c} : Reaches c c
   | tail {c c' c''} : Reaches c c' → c'' ∈ stepC c' → Reaches c c''
 
-/-- No execution races. This is the metatheorem's hypothesis. -/
+/-- No schedule reaches `wrong`, i.e. the program is race-free under every interleaving. -/
 @[simp]
 def Safe {α : Type} (c : Conf α) : Prop := ¬ Reaches c .wrong
 
 namespace Reaches
 
+/-- One step is a run. -/
 theorem single {α : Type} {c c' : Conf α} (h : c' ∈ stepC c) : Reaches c c' :=
   .tail .refl h
 
+/-- Runs compose. -/
 theorem trans {α : Type} {a b c : Conf α} (hab : Reaches a b) (hbc : Reaches b c) :
     Reaches a c := by
   induction hbc with

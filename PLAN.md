@@ -147,9 +147,11 @@ structural now that `iter` is gone. Full design and the `q`-branch asymmetry: `d
 than sequential — chunked sum still does `n` additions either way. **Work** (total ops) is
 schedule-invariant; **span** (longest dependency chain) is what shrinks with more threads and is
 what produces speedup. A flat access log gives footprint + work for free but not span — span needs
-the `par`-branch structure preserved (`max` at a fork, not `Σ`). Not built (not on the critical
-path — `papers.md` §8), but `accesses`'s structure is chosen so this is an added fold later, not a
-rewrite. Region notation + `region_disjoint` (M4, below) is what keeps the per-example `Indep`
+the `par`-branch structure preserved (`max` at a fork, not `Σ`). **Built** (`Lib/Cost.lean`,
+`docs/cost.md`): `work` is a fold, but `time` is *not* — it counts rounds of a parallel-round
+relation `pstep`, so `max` at a fork is the theorem `time_parPair_eq_max` rather than a stipulation,
+and `time_par_lt_seq` is the speedup result. `max` is earned by `WellFormed`; `RacyCost` in that file
+exhibits interfering branches where it genuinely fails. Region notation + `region_disjoint` (M4, below) is what keeps the per-example `Indep`
 proofs short despite footprints being dynamic rather than syntactic.
 
 ---

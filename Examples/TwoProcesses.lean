@@ -1,37 +1,29 @@
 import Paralever.Lib.Block
+import Paralever.Lib.Cost
 import Paralever.Lib.Render
 import Paralever.Pragma.ArrRef
 
-/-! # Example: two independent processes, written as IR blocks
+/-! # Two independent processes, written as IR blocks
 
-The same two processes as before, but written as `Block`s — lists of `load`/`store` instructions —
-instead of hand-nested `ParM.bind` chains. Nothing about the programs changed; what changed is that
+`procP` works over `a = [0,4)` and `b = [4,8)`; `procQ` over `c = [8,12)` and `d = [12,16)`. Each
+reads back a cell it just wrote, so neither is a reorderable element-wise map; they are independent
+only because their regions never meet.
 
-* the binds are **generated** by `exec`, not written here, and
-* the footprint is **computed** by `footprintOf`, so every proof below is `rfl` or `decide`.
-
-Compare the previous version of this file in git history: `procP_within` was a twelve-line chain of
-`footprintWithin_bind` applications. It is now gone entirely — `exec_accesses` replaced it, once,
-for all blocks.
-
-`procP` works over `a` at `[0,4)` and `b` at `[4,8)`; `procQ` over `c` at `[8,12)` and `d` at
-`[12,16)`. Each reads back a cell it just wrote, so neither is a reorderable element-wise map; they
-are independent only because their regions never meet. -/
+The six steps: **pure**, **seq**, **par**, then `pure = seq`, `seq = par`, `time par < time seq`.
+Rationale: `docs/block-ir.md`, `docs/cost.md`. -/
 
 namespace Paralever.Examples.TwoProcesses
 open Paralever
 
-/-! ### Layout -/
-
-def a : ArrRef := Array[0, 4]      -- procP's first array
-def b : ArrRef := Array[4, 4]      -- procP's second
-def c : ArrRef := Array[8, 4]      -- procQ's first
-def d : ArrRef := Array[12, 4]     -- procQ's second
-
-/-! ### The two processes, as straight-line IR
+/-! ### Layout and the two blocks
 
 `R n` is register `n`; arithmetic is ordinary `+`/`-`/`*` on `AExp`. Registers are not memory, so
 none of them appears in a footprint. -/
+
+def a : ArrRef := Array[0, 4]       -- procP's first array
+def b : ArrRef := Array[4, 8]       -- procP's second
+def c : ArrRef := Array[8, 12]      -- procQ's first
+def d : ArrRef := Array[12, 16]     -- procQ's second
 
 /-- `b[0] := a[0]+a[1]` ; `a[2] := 2·b[0]` ; `b[3] := a[0]-a[1]` -/
 def procP : Block :=
@@ -51,39 +43,7 @@ def procQ : Block :=
     .store   (c.loc 3) (R 1 - R 2),        -- c[3] := r1 - r2
     .store   (d.loc 0) (R 1 - R 2) ]       -- d[0] := r1 - r2
 
-/-! ### Footprints — now `rfl`, read straight off the instruction lists
-
-No state is mentioned, because `footprintOf` never looks at one. -/
-
-example : footprintOf procP = ⟨[0, 1, 4], [4, 2, 7]⟩ := rfl
-example : footprintOf procQ = ⟨[9, 14, 8], [14, 11, 12]⟩ := rfl
-
-/-- The Bernstein check is a decision procedure on the two lists. -/
-example : indepB (footprintOf procP) (footprintOf procQ) = true := rfl
-
-/-! ### The payoff — one `decide`, for every initial state and every register file
-
-`exec_accesses` (proved once in `Lib/Block.lean`) is what connects the syntactic footprint to the
-`accesses` the metatheorem is stated against. Nothing problem-specific is proved here at all. -/
-
-theorem procs_par_seq_eq (ρ₁ ρ₂ : Regs) (σ : State) :
-    ParM.parPair (exec procP ρ₁) (exec procQ ρ₂)
-      ∥≡ ParM.seqPair (exec procP ρ₁) (exec procQ ρ₂) from σ :=
-  block_par_seq_eq_of_indepB procP procQ ρ₁ ρ₂ σ (by decide)
-
-/-! ### Anti-vacuity: overlap the regions and the check fails
-
-`procQ'` writes `b[3]` — one of `procP`'s cells — so the `decide` above would not succeed for it,
-and the footprints genuinely conflict. -/
-
-def procQ' : Block := [ .load 0 (c.loc 1), .store (b.loc 3) (R 0) ]
-
-example : indepB (footprintOf procP) (footprintOf procQ') = false := rfl
-
-/-! ### The trees
-
-`exec` generated the binds; `render` walks the resulting `ParM` term. -/
-
+/-- A concrete heap and register file, for the numeric checks and the tree dumps below. -/
 def σ0 : State
   | 0  => .int 10 | 1  => .int 3  | 2  => .int 0 | 3  => .int 0      -- a
   | 4  => .int 0  | 5  => .int 0  | 6  => .int 0 | 7  => .int 0      -- b
@@ -91,6 +51,84 @@ def σ0 : State
   | _  => .int 0                                                      -- d
 
 def ρ0 : Regs := fun _ => 0
+
+/-! ### pure
+
+A `Block` is data, so its pure counterpart is an ordinary interpreter: no monad, no footprints,
+registers and heap threaded by hand. -/
+
+/-- `procP` then `procQ`, purely. -/
+def procsPure (ρ₁ ρ₂ : Regs) (σ : State) : State :=
+  (execPure procQ ρ₂ (execPure procP ρ₁ σ).2).2
+
+/-! ### seq -/
+
+def procsSeq (ρ₁ ρ₂ : Regs) : ParM (Unit × Unit) :=
+  ParM.seqPair (exec procP ρ₁) (exec procQ ρ₂)
+
+/-! ### par -/
+
+def procsPar (ρ₁ ρ₂ : Regs) : ParM (Unit × Unit) :=
+  ParM.parPair (exec procP ρ₁) (exec procQ ρ₂)
+
+/-! ### pure = seq -/
+
+theorem pure_eq_seq (ρ₁ ρ₂ : Regs) (σ : State) :
+    (runSeq (procsSeq ρ₁ ρ₂) σ).2 = procsPure ρ₁ ρ₂ σ := by
+  simp only [procsSeq, procsPure, ParM.seqPair, runSeq_bind, runSeq]
+  rw [exec_eq_execPure procP ρ₁ σ, exec_eq_execPure procQ ρ₂]
+
+/-- At `σ0`: `b[0] = 10 + 3`, `a[2] = 2 · 13`, `b[3] = 10 - 3`. -/
+example : (procsPure ρ0 ρ0 σ0 (b.loc 0), procsPure ρ0 ρ0 σ0 (a.loc 2),
+           procsPure ρ0 ρ0 σ0 (b.loc 3)) = (.int 13, .int 26, .int 7) := rfl
+
+/-! ### seq = par
+
+The footprints are read off the instruction lists — `footprintOf` never looks at a state — and
+`exec_accesses` connects them to the `accesses` the metatheorem is stated against. So the whole
+obligation is one `decide`. -/
+
+example : footprintOf procP = ⟨[0, 1, 4], [4, 2, 7]⟩ := rfl
+example : footprintOf procQ = ⟨[9, 14, 8], [14, 11, 12]⟩ := rfl
+example : indepB (footprintOf procP) (footprintOf procQ) = true := rfl
+
+theorem seq_eq_par (ρ₁ ρ₂ : Regs) (σ : State) : procsPar ρ₁ ρ₂ ∥≡ procsSeq ρ₁ ρ₂ from σ :=
+  block_par_seq_eq_of_indepB procP procQ ρ₁ ρ₂ σ (by decide)
+
+/-! ### time par < time seq -/
+
+private theorem wf (ρ₁ ρ₂ : Regs) (σ : State) : WellFormed (procsPar ρ₁ ρ₂) σ :=
+  block_wellformed_parPair procP procQ ρ₁ ρ₂ σ ((indepB_iff _ _).mp (by decide))
+
+/-- `max` is derived from the parallel-round semantics, not written into it (`docs/cost.md`). -/
+theorem time_eq_max (ρ₁ ρ₂ : Regs) (σ : State) :
+    time (procsPar ρ₁ ρ₂) σ = max (time (exec procP ρ₁) σ) (time (exec procQ ρ₂) σ) :=
+  time_parPair_eq_max _ _ σ (wf ρ₁ ρ₂ σ)
+
+theorem time_lt (ρ₁ ρ₂ : Regs) (σ : State) :
+    time (procsPar ρ₁ ρ₂) σ < time (procsSeq ρ₁ ρ₂) σ :=
+  time_par_lt_seq _ _ σ (wf ρ₁ ρ₂ σ) (exec_time_pos _ _ ρ₁ σ) (exec_time_pos _ _ ρ₂ σ)
+
+/-- Same operation count either way, with no hypothesis at all — only the rounds shrink. -/
+theorem work_eq (ρ₁ ρ₂ : Regs) (σ : State) :
+    work (procsPar ρ₁ ρ₂) σ = work (procsSeq ρ₁ ρ₂) σ := work_par_eq_seq _ _ σ
+
+/-- Measured at `σ0`: twelve operations either way, six rounds in parallel against twelve in
+sequence. -/
+example : (work (procsPar ρ0 ρ0) σ0, time (procsPar ρ0 ρ0) σ0) = (12, 6) := rfl
+example : (work (procsSeq ρ0 ρ0) σ0, time (procsSeq ρ0 ρ0) σ0) = (12, 12) := rfl
+
+/-! ### Anti-vacuity
+
+`procQ'` writes `b[3]`, one of `procP`'s cells, so the `decide` above would not succeed for it. -/
+
+def procQ' : Block := [ .load 0 (c.loc 1), .store (b.loc 3) (R 0) ]
+
+example : indepB (footprintOf procP) (footprintOf procQ') = false := rfl
+
+/-! ### The rendered trees
+
+`exec` generated the binds; `render` walks the resulting `ParM` term. -/
 
 /--
 info: read  [0] → Paralever.Val.int 10
@@ -124,6 +162,6 @@ info: par ⟨
 ⟩
 pure
 -/
-#guard_msgs in #eval IO.println (renderStr (ParM.parPair (exec procP ρ0) (exec procQ ρ0)) σ0)
+#guard_msgs in #eval IO.println (renderStr (procsPar ρ0 ρ0) σ0)
 
 end Paralever.Examples.TwoProcesses

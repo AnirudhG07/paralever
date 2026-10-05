@@ -19,32 +19,25 @@ namespace Paralever
 
 -- ref: docs/pure-bridge.md; Blom et al. STTT'21 (sequential correctness ⇒ parallelised correctness)
 
-/-! ### `readAll` computes a pure lookup
-
-The companion to `readAll_accesses`: reading a list of locations yields exactly the pure map of `σ`
-over them, and leaves the state alone. -/
-
-@[simp, grind .]
-theorem readAll_runSeq (R : List Loc) (σ : State) :
-    runSeq (readAll R) σ = (R.map σ, σ) := by
-  induction R generalizing σ with
-  | nil => rfl
-  | cons l ls ih =>
-      simp only [readAll, runSeq, runSeq_bind]
-      rw [ih]
-      simp
-
 /-! ### The read-and-combine body
 
 One reduction step: read the locations this step needs, fold their values into the accumulator.
 `locs k` is a *list*, so a step may read several cells (matmul reads one from `A` and one from `B`). -/
 
-/-- Read `locs k`, combine the values into `acc`. No writes — the accumulator stays pure. -/
+/-- The reduction body "read the cells step `k` needs, fold their values into `acc`". No writes: the
+accumulator is returned as a value, not stored.
+
+The split that makes the conversion mechanical — `f` is *what* to combine (pure, arbitrary), `locs`
+is *where* to read (the layout, arithmetic only). -/
 def readsCombine {α : Type} (locs : Nat → List Loc) (f : List Val → α → α)
     (k : Nat) (acc : α) : ParM α :=
-  ParM.bind (readAll (locs k)) (fun vs => .pure (f vs acc))
+  doₚ
+    let vs ← readAll (locs k)
+    .pure (f vs acc)
 
-/-- The pure specification of a whole fold: no monad, no `ParM`, just `σ` applied to the locations. -/
+/-- The algorithm itself, with no monad: fold `f` over the values `σ` holds at `locs k`, for `fuel`
+steps from index `k`. This is the specification `reduceFold_eq_foldPure` proves the `ParM` program
+meets. -/
 def foldPure {α : Type} (σ : State) (locs : Nat → List Loc) (f : List Val → α → α) :
     Nat → Nat → α → α
   | 0,        _, acc => acc
@@ -52,6 +45,7 @@ def foldPure {α : Type} (σ : State) (locs : Nat → List Loc) (f : List Val �
 
 /-! ### Footprint of one step — immediate, no `Val` case splits -/
 
+/-- One step reads exactly `locs k` and writes nothing, at every state and every accumulator. -/
 @[simp, grind .]
 theorem readsCombine_accesses {α : Type} (locs : Nat → List Loc) (f : List Val → α → α)
     (k : Nat) (acc : α) (σ : State) :
@@ -59,6 +53,7 @@ theorem readsCombine_accesses {α : Type} (locs : Nat → List Loc) (f : List Va
   simp only [readsCombine, accesses_bind, readAll_accesses, readAll_runSeq]
   simp [accesses, Footprint.union, Footprint.empty]
 
+/-- A `readsCombine` step is reads and a `pure`, so it is well-formed unconditionally. -/
 @[simp, grind .]
 theorem readsCombine_wellformed {α : Type} (locs : Nat → List Loc) (f : List Val → α → α)
     (k : Nat) (acc : α) (σ : State) :
@@ -116,10 +111,13 @@ theorem reduceFold_eq_foldPure {α : Type} (locs : Nat → List Loc) (f : List V
 `reduceArray_par_seq_eq` needs five hypotheses; for a `readsCombine` body three of them are
 discharged generically above, leaving only arithmetic. -/
 
+/-- `N` pure folds in parallel: iteration `p` folds `f` over the cells `locs p k` and writes
+`dst p`. -/
 def reduceArrayPureP {α : Type} (N m : Nat) (locs : Nat → Nat → List Loc) (f : List Val → α → α)
     (init : α) (toVal : α → Val) (dst : Nat → Loc) : ParM (List Unit) :=
   reduceArrayPar N m (fun p => readsCombine (locs p) f) init toVal dst
 
+/-- Sequential counterpart of `reduceArrayPureP`. -/
 def reduceArrayPureS {α : Type} (N m : Nat) (locs : Nat → Nat → List Loc) (f : List Val → α → α)
     (init : α) (toVal : α → Val) (dst : Nat → Loc) : ParM (List Unit) :=
   reduceArraySeq N m (fun p => readsCombine (locs p) f) init toVal dst

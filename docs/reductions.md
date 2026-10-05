@@ -15,9 +15,8 @@ for each p in parallel:
 ```
 
 Matmul is this (`C[i,j] = Σ_k A[i,k]·B[k,j]`), as is every dot product, row sum, norm, histogram bucket,
-and `argmin`. Before this file, `Examples/MatMul.lean` spent ~65 of its 207 lines on
-`dotStep_readswithin` and `dotStep_writeswithin` — two inductions over the fuel parameter that are
-*entirely mechanical*: same `Val` case splits, same `ReadsWithin.union` chains, same shape any other
+and `argmin`. Before this file, `Examples/MatMul.lean` spent most of its length on two footprint inductions over
+the fuel parameter that are *entirely mechanical*: same `Val` case splits, same `ReadsWithin.union` chains, same shape any other
 reduction would reproduce verbatim.
 
 ## The one structural fact that makes reductions easy

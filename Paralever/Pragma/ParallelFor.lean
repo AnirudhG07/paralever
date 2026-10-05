@@ -2,16 +2,17 @@ import Paralever.Theory.Intervals
 
 /-! # `#parallel_for` — mark a loop parallel, get the independence proof for free
 
-`PLAN.md` Milestone 8 / the `Pragma/` layout `CLAUDE.md` anticipates: a PolCert-style
-`bernsteinOK`-and-soundness pair (Li/Liang/Feng TASE'24), instantiated for `ParM`. The one theorem
-here (`parAll_wellformed_of_indexed_rw`) replaces the per-example induction every prior example
-(`SumArray`, `Sort`) redid by hand: give it, per iteration, where its *writes* land and where its
-*reads* land (separately — shared reads across iterations are fine, only writes need checking
-against everything), plus one disjointness fact between any two distinct iterations, and it
-produces `WellFormed`/`ParSeqEq` for the whole loop, any size, no further induction.
-`parAll_wellformed_of_indexed_footprint` is the common-case corollary where one region covers both
-reads and writes. `#parallel_for` itself is pure syntax — the same `macro_rules` sugar pattern as
-`SumArray.lean`'s `Σ∥`/`Σ;`, checked by `rfl`, carrying no proof obligation of its own.
+The loop validator: say, per iteration, where its writes land and where its reads land, plus one
+disjointness fact between any two distinct iterations, and `parAll_wellformed_of_indexed_rw` returns
+`WellFormed`/`ParSeqEq` for the whole loop at any size — no per-example induction.
+
+Reads and writes are bounded *separately* on purpose: iterations may share reads freely, only writes
+need checking against everything. `parAll_wellformed_of_indexed_footprint` is the corollary for the
+common case where one region covers both. `#parallel_for` itself is pure syntax, expanding to the
+`ParM.parAll` term you would otherwise write by hand.
+
+-- ref: PolCert's `bernsteinOK`-and-soundness pair (Li/Liang/Feng TASE'24), instantiated for `ParM`;
+`PLAN.md` Milestone 8.
 -/
 
 namespace Paralever.Pragma.ParallelFor

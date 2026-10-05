@@ -1,25 +1,27 @@
-/-! # Facts about real `Task`-based parallelism
+/-! # `Task` — the compilation target, never the source of truth
 
-`Task.mapList` (`Init/Task.lean`) is the real fork-join combinator Lean ships — spawn one `Task`
-per item, combine when all finish — and has zero lemmas anywhere in core, Batteries, or Mathlib,
-including the one fact you need to reason about it (`docs/theory.md`, `papers.md`). Its internal
-recursive helper is compiler-generated and inaccessible by name, so instead of fighting to alias
-it, `combineTasks` here is a from-scratch definition with the *identical* three-case algorithm
-(spawn on empty, `.map` on a singleton, `.bind` to recurse otherwise) — genuinely `Task.spawn`
-under the hood, fully our own to reason about.
+**Nothing in this file proves anything about parallelism, and nothing in it can.** `Task` is a
+one-field structure with a real body, so `(Task.spawn f).get = f ()` holds by `rfl`: in Lean's logic
+the parallel program and the sequential one are *literally the same term*. A model in which a race is
+not expressible cannot have a theorem excluding one. That is why the metatheorem lives on `ParM`,
+whose `par` is a constructor whose meaning is fixed by `run`, and why `Task` appears here only as the
+thing `ParM` programs compile *to*. -- ref: `docs/program-model.md`; `docs/theory.md` "Final verdict"
 
-This is the "second model" from the discussion in the session: instead of `ParM`'s abstract
-interleaving semantics (proved correct once, for *any* schedule, gated on `WellFormed`), this
-model writes the parallel algorithm directly against Lean's real `Task` and proves it correct by
-straight computation — no `WellFormed`, no `Indep`, no schedule quantification. It is strictly
-**less powerful**: `Task.spawn`/`.map`/`.bind` are `rfl`-trivial in the logic
-(`docs/program-model.md`), so this method is *blind* to interference — it can prove a race-free
-program correct, but it cannot even state what a race would look like, let alone detect one. It
-only works because there is nothing to race on: chunks close over a fully materialized, immutable
-input value, never a shared mutable heap. In exchange it is complete and "calculatable" — every
-instance below is discharged by literal computation (`rfl`/`decide`/`simp`), no per-program
-independence proof to construct. -/
+What this file still buys: the compiled program computes the right *value*, checked by computation
+(`rfl`/`simp`) with no `WellFormed`, no `Indep`, no quantification over schedules — cheap, complete,
+and blind to interference. It is sound only because there is nothing to race on: every chunk closes
+over a fully materialized immutable value, never a shared mutable heap.
 
+`Task.mapList` (`Init/Task.lean`) is Lean's own fork-join combinator and has no lemmas anywhere in
+core, Batteries or Mathlib; its recursive helper is compiler-generated and inaccessible by name. So
+`combineTasks` below re-implements the identical three-case algorithm under our own name, genuinely
+`Task.spawn` underneath. -/
+
+/-- Fork-join over a list of running `Task`s: wait for each, then apply `f` to all the results in
+order. `as` is the reversed accumulator of results collected so far, so callers start it at `[]`.
+
+Three cases, matching `Task.mapList`: spawn the final `f` when nothing is left, `.map` the last task,
+`.bind` to recurse otherwise. `sync := true` skips the spawn and combines on the calling thread. -/
 @[simp, grind .]
 def combineTasks {α β : Type} (f : List α → β) (prio : Task.Priority) (sync : Bool) :
     List (Task α) → List α → Task β
@@ -27,8 +29,9 @@ def combineTasks {α β : Type} (f : List α → β) (prio : Task.Priority) (syn
   | [t], as => t.map (fun a => f (a :: as).reverse) prio sync
   | t :: ts, as => t.bind (fun a => combineTasks f prio sync ts (a :: as)) prio sync
 
-/-- General accumulator form — needed for the induction; `combineTasks_eq` below is the clean
-`as = []` corollary actually used. -/
+/-- `combineTasks`'s result with an arbitrary accumulator: `f` applied to the accumulated results
+followed by each remaining task's own. The induction-strength form; `combineTasks_eq` is the `as = []`
+corollary callers use. -/
 @[simp, grind .]
 theorem combineTasks_eq_acc {α β : Type} (f : List α → β) (prio : Task.Priority) (sync : Bool) :
     ∀ (ts : List (Task α)) (as : List α),
@@ -43,29 +46,31 @@ theorem combineTasks_eq_acc {α β : Type} (f : List α → β) (prio : Task.Pri
       | cons t' ts' =>
           grind [Task.bind, combineTasks]
 
-/-- `Task.mapList_eq`'s content, for `combineTasks` in place of the inaccessible stdlib internals:
-the parallel combine's result is exactly `f` applied to the list of each task's own result. Proved
-by computation, not by any independence argument — this is the "lesser powerful" method's whole
-proof obligation, and it is always this cheap. -/
+/-- The parallel combine returns exactly `f` applied to the list of each task's result. The lemma
+`Task.mapList` is missing, supplied for `combineTasks`.
+
+Proved by computation; no independence argument appears, and none could — `Task.spawn`/`.map`/`.bind`
+are `rfl`-trivial here, so this says what the program *computes* and nothing about concurrency. -/
 @[simp, grind .]
 theorem combineTasks_eq {α β : Type} (f : List α → β) (ts : List (Task α))
     (prio : Task.Priority := .default) (sync : Bool := false) :
     (combineTasks f prio sync ts []).get = f (ts.map Task.get) := by
   simp only [combineTasks_eq_acc, List.reverse_nil, List.nil_append]
 
-/-- **Spawn `n` independent pure computations as real `Task`s, combine.** The one thing every
-`_Task.lean` example (`SumArrayTask`, `SortTask`) does by hand, generalized so a new example only
-supplies its `n` closures, not another `combineTasks` call site.
+/-- **Spawn each closure in `works` as a real `Task`, then combine the results with `f`.** The one
+thing every `*Task.lean` example does by hand, so a new example supplies only its closures.
 
-`SortTask.lean`'s subtlety applies here too, unconditionally: `works` must each only *read* shared
-data and *return* a value — never write to a shared mutable `Array`/`IO.Ref`, since a `Ref`'s
-read-modify-write is not atomic against other real OS threads even at disjoint indices. Any
-assembly into a mutable structure happens sequentially, after `.get`, in the caller. -/
+Each `w ∈ works` must *read* shared data and *return* a value — never write to a shared mutable
+`Array` or `IO.Ref`, even at disjoint indices, because a `Ref`'s read-modify-write is not atomic
+against other OS threads. Lean's type theory cannot see that violation and neither can `parTasks_eq`;
+it is a discipline on the caller. Assembly into a mutable structure happens after `.get`,
+sequentially. -/
 def parTasks {α β : Type} (f : List α → β) (works : List (Unit → α)) : Task β :=
   combineTasks f .default false (works.map Task.spawn) []
 
-/-- Correctness by computation, unconditional on `works` — no `WellFormed`, no `Indep`, because
-`parTasks` never touches shared mutable state for those to protect. -/
+/-- `parTasks` returns `f` applied to the results of calling each closure. Unconditional on `works` —
+and notice how little that costs, which is the measure of how little it says: spawning is `rfl`-equal
+to calling, so this holds whether or not the closures would race. -/
 theorem parTasks_eq {α β : Type} (f : List α → β) (works : List (Unit → α)) :
     (parTasks f works).get = f (works.map (fun w => w ())) := by
   unfold parTasks
