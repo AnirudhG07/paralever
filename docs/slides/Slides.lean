@@ -66,15 +66,14 @@ add the partial sums<em>parallel</em></div>
 ```
 
 :::class "steps"
-* `k` threads of `m` steps each — interleavings grow factorially
-* comparing them needs a semantics for *nondeterministic* vs *deterministic*
+* `k` threads of `m` steps each admit `(km)! / (m!)^k` interleavings
+* the comparison relates a *nondeterministic* program to a *deterministic* one
 * one theorem for all such pairs, not one proof per program
 :::
 
 :::notes
-The goal is a single metatheorem with a small per-program side condition, rather than a bespoke proof
-for every parallelisation. Enumerating interleavings is infeasible: for k threads of m steps the
-count is (km)! / (m!)^k.
+The target is a single metatheorem with a small per-program side condition. Enumerating schedules is
+infeasible even for small k and m.
 :::
 
 # Non-interference makes the schedule irrelevant
@@ -89,10 +88,7 @@ count is (km)! / (m!)^k.
 </div>
 ```
 
-:::notes
-This is the shape every approach in the literature takes. The content is in making "do not
-interfere" precise, and proving the implication.
-:::
+The remaining work is to make "do not interfere" precise, and to prove the implication.
 
 # Hoare triples compose sequentially, but not across a heap
 
@@ -107,11 +103,11 @@ interfere" precise, and proving the implication.
 </div>
 ```
 
-The second triple needs a side condition for every pointer pair. This is the *frame problem*.
+The second triple needs a side condition per pointer pair: the *frame problem*.
 
 :::notes
-Owicki–Gries handles interference with a quadratic cross-check of every statement against every
-other. That cost is what separation logic removes.
+Owicki–Gries handles interference by cross-checking every statement against every other — quadratic.
+That cost is what separation logic removes.
 :::
 
 # Separation logic: ownership, and the footprint
@@ -119,7 +115,7 @@ other. That cost is what separation logic removes.
 :::class "steps"
 * `l ↦ v` — the heap is *exactly* one cell, at `l`, holding `v` (ownership, not a fact)
 * `P ∗ Q` — the heap splits into two *disjoint* parts satisfying `P` and `Q`
-* `l₁ ↦ 3 ∗ l₂ ↦ 4` implies `l₁ ≠ l₂`
+* `l₁ ↦ 3 ∗ l₂ ↦ 4` entails `l₁ ≠ l₂`
 :::
 
 ```html
@@ -127,35 +123,34 @@ other. That cost is what separation logic removes.
   <div class="nd mono thm">      {P} C {Q}
 ─────────────────────────
    {P ∗ R} C {Q ∗ R}<em>frame rule — R is untouched</em></div>
-  <div class="nd key">footprint of `C`<em>the locations C reads, and the locations C writes</em></div>
+  <div class="nd key">footprint of `C`<em>the set of locations C reads, paired with the set it writes</em></div>
 </div>
 ```
 
-`C` is verified against its footprint alone; the rest of the heap carries through unchanged.
+`C` is verified against its footprint; the rest of the heap carries through unchanged.
 
 :::class "cite"
 *Reynolds*; *O'Hearn*; *Ishtiaq* — separation logic, ~2001
 :::
 
-# O'Hearn: disjoint heaps cannot interfere
+# Theorem (O'Hearn, CONCUR 2004)
+
+:::class "gbox" "thm"
+If `C₁` satisfies `{P₁} C₁ {Q₁}` and `C₂` satisfies `{P₂} C₂ {Q₂}`, and the initial heap splits as
+`P₁ ∗ P₂`, then the parallel composition `C₁ ∥ C₂` satisfies `{P₁ ∗ P₂} C₁ ∥ C₂ {Q₁ ∗ Q₂}`.
+:::
 
 ```html
-<div class="dgm col">
-  <div class="nd mono thm">{P₁} C₁ {Q₁}       {P₂} C₂ {Q₂}
+<div class="dgm col tight">
+  <div class="nd mono">{P₁} C₁ {Q₁}       {P₂} C₂ {Q₂}
 ────────────────────────────────
-   {P₁ ∗ P₂}  C₁ ∥ C₂  {Q₁ ∗ Q₂}</em></div>
-  <div class="nd good wide">both premises mention only one thread — no interleaving occurs in the rule</div>
+   {P₁ ∗ P₂}  C₁ ∥ C₂  {Q₁ ∗ Q₂}</div>
+  <div class="nd good wide">each premise mentions one thread — no interleaving appears in the rule</div>
 </div>
 ```
 
-:::class "steps"
-* the `∗` in `P₁ ∗ P₂` forces a heap split before the fork
-* *Ownership Hypothesis*: a component accesses only cells it owns
-:::
-
-:::class "cite"
-*O'Hearn*, _Resources, Concurrency and Local Reasoning_, *CONCUR 2004*
-:::
+*Ownership Hypothesis*: a component accesses only cells it owns. The `∗` forces a heap split before
+the fork.
 
 # A data race is a same-location access pair with one write
 
@@ -169,19 +164,63 @@ other. That cost is what separation logic removes.
 </table>
 ```
 
-Read/read is excluded from the definition. Every independence criterion below inherits that
-asymmetry.
+Read/read is excluded. Every independence criterion below inherits that asymmetry.
 
 :::class "cite"
 `Label.conflicts` in `Core/Semantics.lean` is this definition: same location, at least one write
 :::
 
-# Brookes: a parallel trace factors into solo traces
+# Theorem (Bernstein, 1966) — and its Lean counterpart
 
 :::class "gbox" "thm"
-*Parallel Decomposition Lemma.* If a trace of `C₁ ∥ C₂` runs from a state split as `σ₁ ∗ σ₂`, and
-the components' footprints stay separate, then that trace is an *interleaving* of a trace of `C₁`
-from `σ₁` and a trace of `C₂` from `σ₂`, and the final states recombine as `σ₁' ∗ σ₂'`.
+Two statements `S₁`, `S₂` may be executed in either order, or concurrently, with the same result
+precisely when their write sets are disjoint from each other and from the other's read set. The read
+sets may overlap freely.
+:::
+
+```html
+<div class="dgm">
+  <div class="nd mono">W(S₁) ∩ W(S₂) = ∅
+W(S₁) ∩ R(S₂) = ∅
+W(S₂) ∩ R(S₁) = ∅
+                 ↑ no R∩R clause<em>Bernstein's three conditions</em></div>
+  <div class="nd mono defbox">def Indep (f₁ f₂ : Footprint) : Prop :=
+  Disjoint f₁.writes f₂.writes ∧
+  Disjoint f₁.writes f₂.reads  ∧
+  Disjoint f₂.writes f₁.reads<em>Core/Access.lean</em></div>
+</div>
+```
+
+`Indep` is strictly weaker than `∗`-disjointness, which also forbids shared reads.
+
+# Definition: `WellFormed` — independence at every `par` node
+
+:::class "gbox" "thm"
+A program is *well-formed* in a state when, at every `par` node occurring anywhere in it, the two
+branches have independent footprints, measured against the state that node sees along the canonical
+run.
+:::
+
+:::class "gbox" "defbox"
+```
+def WellFormed : ParM τ → State → Prop
+  | .pure _,      _ => True
+  | .read l k,    σ => WellFormed (k (σ l)) σ
+  | .write l v k, σ => WellFormed (k ()) (σ.update l v)
+  | .par p q k,   σ => Indep (accesses p σ) (accesses q σ₁)
+                     ∧ WellFormed p σ ∧ WellFormed q σ₁ ∧ WellFormed (k (a,b)) σ₂
+```
+:::
+
+Independence of `p` against `q` constrains nothing about `par` nodes nested inside `p`. A single
+top-level check is unsound.
+
+# Lemma (Brookes, CONCUR 2004, §5–§7)
+
+:::class "gbox" "thm"
+*Parallel Decomposition.* If a trace of `C₁ ∥ C₂` runs from a state split as `σ₁ ∗ σ₂`, and the
+components' footprints stay separate, then that trace is an interleaving of a trace of `C₁` from `σ₁`
+and a trace of `C₂` from `σ₂`, and the final states recombine as `σ₁' ∗ σ₂'`.
 :::
 
 ```html
@@ -194,120 +233,83 @@ from `σ₁` and a trace of `C₂` from `σ₂`, and the final states recombine 
     <div class="nd">a solo run of <code>C₂</code></div>
   </div>
   <div class="arr">▼</div>
-  <div class="nd key">every interleaving agrees — including <code>C₁ ; C₂</code></div>
+  <div class="nd key">every interleaving agrees — the sequential order among them</div>
 </div>
 ```
 
-:::class "cite"
-*Brookes*, _A Semantics for Concurrent Separation Logic_, *CONCUR 2004* — §5–§7
+Brookes states race-freedom and soundness as the headline results.
+
+# Deriving the equivalence from the decomposition lemma
+
+The mechanized form of the lemma is a *uniqueness* statement: a well-formed program reaches exactly
+one outcome, the canonical one.
+
+:::class "gbox" "thm"
+`wellFormed_canonical` — if `p` is well-formed in `σ`, then `p` can reach `(r, σ')` if and only if
+`(r, σ') = runSeq p σ`.
 :::
 
-# The corollary is unstated in the literature
+Apply it twice, to `parPair p q` and to `seqPair p q`, then use `runSeq (parPair p q) σ = runSeq
+(seqPair p q) σ`:
 
-```html
-<table class="dgmt">
-  <thead><tr><th>Work</th><th>Lemma</th><th>Corollary</th><th>Mechanized</th><th>Generic</th></tr></thead>
-  <tbody>
-    <tr><td>Brookes, CONCUR'04</td><td>yes</td><td><span class="vd no">no</span></td><td>no</td><td>yes</td></tr>
-    <tr><td>Vafeiadis, MFPS'11</td><td>yes</td><td><span class="vd no">no</span></td><td>Coq</td><td>yes</td></tr>
-    <tr><td>Apt &amp; Olderog</td><td>pre-SL</td><td>statement</td><td><span class="vd no">no</span></td><td>yes</td></tr>
-    <tr><td>DPJ, OOPSLA'09</td><td>yes</td><td>yes</td><td><span class="vd no">no</span></td><td>Java-like</td></tr>
-    <tr><td>PolCert, TASE'24</td><td>yes</td><td>yes</td><td>Coq</td><td><span class="vd no">affine loops</span></td></tr>
-    <tr><td>Blom et al., STTT'21</td><td>yes</td><td>yes</td><td><span class="vd no">no</span></td><td>yes</td></tr>
-  </tbody>
-</table>
+```lean -stretch
+theorem corollary_derivation {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
+    (h : WellFormed (ParM.parPair p q) σ) (r : α × β) (σ' : State) :
+    Reaches (.run (ParM.parPair p q) σ) (.run (.pure r) σ')
+      ↔ (r, σ') = runSeq (ParM.seqPair p q) σ := by
+  rw [wellFormed_canonical _ σ r σ' h, runSeq_par_eq_seq]
 ```
 
-:::class "gap"
-*paralever* — lemma and corollary, generic over the program, mechanized in Lean 4
+The step is routine once uniqueness is available. It appears in neither Brookes nor Vafeiadis; both
+stop at soundness.
+
+# Theorem (this work) — and its Lean counterpart
+
+:::class "gbox" "thm"
+If `parPair p q` is well-formed in `σ`, then `parPair p q` and `seqPair p q` reach exactly the same
+`(result, final-state)` pairs from `σ`, under every schedule.
 :::
 
-:::class "steps"
-* independence is *Bernstein's* condition, so shared reads are admitted
-* checked at every `par` node, not only the outermost
+```lean -stretch
+theorem the_metatheorem {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
+    (h : WellFormed (ParM.parPair p q) σ) :
+    ParM.parPair p q ∥≡ ParM.seqPair p q from σ :=
+  par_seq_eq p q σ h
+```
+
+`p ∥≡ q from σ` abbreviates `ParSeqEq p q σ`, which is
+
+:::class "gbox" "defbox"
+```
+∀ r σ', Reaches (run p σ) (run (pure r) σ') ↔ Reaches (run q σ) (run (pure r) σ')
+```
 :::
 
-# Bernstein's conditions admit shared reads; `∗` does not
+# How the results connect
 
 ```html
 <div class="dgm col tight">
-  <div class="nd mono thm">W(S₁) ∩ W(S₂) = ∅     write/write
-W(S₁) ∩ R(S₂) = ∅     write→read
-W(S₂) ∩ R(S₁) = ∅     read→write
-                      no R∩R clause</div>
-  <div class="nd mono blue">for i, j in parallel:   C[i][j] = Σₖ A[i][k] * B[k][j]</div>
-  <table class="dgmt">
-    <tbody>
-      <tr><th>writes</th><td>C[i][j]</td><td>disjoint across iterations</td><td><span class="vd ok">OK</span></td></tr>
-      <tr><th>reads</th><td>row i of A<br>col j of B</td><td>shared by every j in that row<br>shared by every i in that col</td><td><span class="vd no">OVERLAP</span></td></tr>
-    </tbody>
-  </table>
   <div class="dgm tight">
-    <div class="nd bad"><code>∗</code>-disjointness <span class="vd no">REJECTS</span><em>no heap split exists</em></div>
-    <div class="nd good">Bernstein <span class="vd ok">ACCEPTS</span><em>R∩R is never checked</em></div>
+    <div class="nd">Bernstein 1966<em>reordering criterion</em></div>
+    <div class="arr">▶</div>
+    <div class="nd blue"><code>Indep</code><em>on footprints</em></div>
+    <div class="arr">▶</div>
+    <div class="nd blue"><code>WellFormed</code><em><code>Indep</code> at every <code>par</code> node</em></div>
   </div>
+  <div class="arr">▼</div>
+  <div class="dgm tight">
+    <div class="nd">Brookes §5–7<em>decomposition lemma</em></div>
+    <div class="arr">▶</div>
+    <div class="nd blue"><code>wellFormed_canonical</code><em>uniqueness of the outcome</em></div>
+  </div>
+  <div class="arr">▼</div>
+  <div class="nd key wide"><code>par_seq_eq</code> &nbsp;·&nbsp; <code>parAll_par_seq_eq</code><em>binary, then N-ary by induction on the list</em></div>
+  <div class="arr lbl2">▼<small>per program, discharge</small></div>
+  <div class="nd good wide"><code>WellFormed</code> — by footprint confinement plus arithmetic</div>
 </div>
 ```
 
-:::class "cite"
-*Bernstein*, 1966 · *Bocchino, Adve et al.*, *OOPSLA 2009*
-:::
-
-# `Task` cannot host the theorem
-
-```html
-<div class="dgm col tight">
-  <div class="nd mono bad">(Task.spawn f).get = f ()<em>holds by rfl — parallel and sequential are the same term</em></div>
-  <div class="arr">▼</div>
-  <div class="nd key wide">no theorem to state, and no independence hypothesis to discharge</div>
-</div>
-```
-
-:::class "steps"
-* `Task` — compilation target only, never the object of study
-* deep syntax embedding — Lean must supply binders, types, termination
-* shallow `σ → Set (α × σ)` — no structure to induct on
-:::
-
-A free monad satisfies all three, and `par` is our own constructor.
-
-:::notes
-Lean's effectful task API is worse: BaseIO.asTask and friends are opaque with no equations, so
-proving there means axiomatising the runtime.
-:::
-
-# Races map to an absorbing `wrong`, so grain is irrelevant
-
-```html
-<div class="dgm col tight">
-  <div class="nd blue wide">racy programs step to <code>wrong</code>, which is terminal</div>
-  <div class="arr">▼</div>
-  <div class="nd good wide">for race-free programs, every choice of atomic grain agrees</div>
-  <div class="arr">▼</div>
-  <div class="nd key wide">the hypothesis <i>excludes</i> racy programs rather than assuming their behaviour</div>
-</div>
-```
-
-:::class "cite"
-*Reynolds*, _Toward a Grainless Semantics for Shared-Variable Concurrency_, *FSTTCS 2004*
-:::
-
-# Three alternatives to disjointness
-
-```html
-<table class="dgmt">
-  <thead><tr><th>Route</th><th>Criterion</th><th>Status here</th></tr></thead>
-  <tbody>
-    <tr><td>movers / reduction</td><td>commutativity: <code>R*·A·L*</code> is atomic</td><td>more general, harder soundness — fallback</td></tr>
-    <tr><td>confluence (LVars)</td><td>inflationary writes, threshold reads</td><td>most Mathlib-friendly — fallback</td></tr>
-    <tr><td>pure algebra</td><td>chunked reduce = fold iff associative</td><td>cannot express mutable shared state</td></tr>
-  </tbody>
-</table>
-```
-
-:::class "cite"
-*Lipton*, 1975 · *Kuper & Newton*, LVars, 2013 · third homomorphism theorem / *SyDPaCC*
-:::
+The N-ary case is a corollary of the binary one, since `parAll` is right-nested binary `par`.
 
 # `ParM`: a program is an inductive tree of effects
 
@@ -321,17 +323,42 @@ inductive ParM : Type → Type 1 where
 ```
 :::
 
-Each effect node carries its continuation, so `bind` is a defined graft, not a constructor, and the
-root of the tree is always the next action.
+Each effect node carries its continuation, so `bind` is a defined graft rather than a constructor,
+and the root of the tree is always the next action.
 
 :::class "steps"
-* `par` is a constructor — its meaning is fixed by `run`, not by Lean
-* no `parN`: `List (ParM α)` is an illegal nested inductive
+* `par` is a constructor; its meaning is fixed by `run`, not by Lean
+* no `parN` — `List (ParM α)` is an illegal nested inductive
 * no loop constructor, so every value is a finite tree
 :::
 
 :::class "cite"
 freer representation — *Xia et al.*, _Interaction Trees_, *POPL 2020*, without coinduction
+:::
+
+# `Task` cannot host the theorem
+
+Lean's `Task` is a one-field structure with a real body:
+
+```html
+<div class="dgm col tight">
+  <div class="nd mono bad">(Task.spawn f).get = f ()<em>holds by rfl — parallel and sequential are the same term</em></div>
+  <div class="arr">▼</div>
+  <div class="nd key wide">nothing to state, and no independence hypothesis to discharge</div>
+</div>
+```
+
+:::class "steps"
+* `Task` — compilation target only, never the object of study
+* a deep syntax embedding would make Lean's binders, types and termination our problem
+* a shallow `σ → Set (α × σ)` offers no structure to induct on
+:::
+
+The decomposition lemma is an induction, so the model must support one.
+
+:::notes
+Lean's effectful task API is worse: BaseIO.asTask and friends are opaque with no equations, so
+proving there means axiomatising the runtime.
 :::
 
 # One tree, five interpreters
@@ -373,49 +400,7 @@ the independence hypothesis is stated against.
 A continuation is a function, so reaching the next node requires applying it to a value. Hence
 `accesses` takes a `State` and threads writes through it.
 
-# `Indep` is Bernstein; `WellFormed` is `Indep` everywhere
-
-:::class "gbox" "defbox"
-```
-Footprint      := (reads : List Loc, writes : List Loc)
-
-Indep f₁ f₂    := Disjoint f₁.writes f₂.writes
-                ∧ Disjoint f₁.writes f₂.reads
-                ∧ Disjoint f₂.writes f₁.reads
-
-WellFormed (par p q k) σ  := Indep (accesses p σ) (accesses q σ₁)
-                           ∧ WellFormed p σ ∧ WellFormed q σ₁
-                           ∧ WellFormed (k …) σ₂
-```
-:::
-
-Independence of `p` against `q` constrains nothing about `par` nodes nested inside `p`. A
-single top-level check is therefore unsound.
-
-:::class "cite"
-`Core/Access.lean` · counterexample in `docs/decomposition.md`
-:::
-
-# The metatheorem
-
-```lean -stretch
-theorem the_metatheorem {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
-    (h : WellFormed (ParM.parPair p q) σ) :
-    ParM.parPair p q ∥≡ ParM.seqPair p q from σ :=
-  par_seq_eq p q σ h
-```
-
-`p ∥≡ q from σ` abbreviates `ParSeqEq p q σ`, defined as
-
-:::class "gbox" "defbox"
-```
-∀ r σ', Reaches (run p σ) (run (pure r) σ') ↔ Reaches (run q σ) (run (pure r) σ')
-```
-:::
-
-Equality of reachable `(result, final-state)` pairs, quantified over every schedule.
-
-# The proof has four parts
+# The proof of `wellFormed_canonical` has four parts
 
 ```html
 <div class="dgm col tight">
@@ -447,10 +432,63 @@ with `p`'s solo run.
 :::
 
 When `q` steps it writes only inside `q`'s footprint, which `Indep` makes disjoint from `p`'s reads,
-so `p`'s view is unchanged. `step_combined` establishes one step; `WellFormed_preserved` allows the
+so `p`'s view is unchanged. `step_combined` establishes one step; `WellFormed_preserved` licenses the
 next.
 
-# Choosing a route
+# Races map to an absorbing `wrong`, so grain is irrelevant
+
+```html
+<div class="dgm col tight">
+  <div class="nd blue wide">racy programs step to <code>wrong</code>, which is terminal</div>
+  <div class="arr">▼</div>
+  <div class="nd good wide">for race-free programs, every choice of atomic grain agrees</div>
+  <div class="arr">▼</div>
+  <div class="nd key wide">the hypothesis <i>excludes</i> racy programs rather than assuming their behaviour</div>
+</div>
+```
+
+:::class "cite"
+*Reynolds*, _Toward a Grainless Semantics for Shared-Variable Concurrency_, *FSTTCS 2004*
+:::
+
+# Related work
+
+```html
+<table class="dgmt">
+  <thead><tr><th>Work</th><th>Contributes</th><th>Restriction</th></tr></thead>
+  <tbody>
+    <tr><td>Brookes, CONCUR'04</td><td>the decomposition lemma, in a trace model</td><td>stops at race-freedom and soundness</td></tr>
+    <tr><td>Vafeiadis, MFPS'11</td><td>soundness in Coq, operational, no traces</td><td>safety-by-fuel; no equivalence corollary</td></tr>
+    <tr><td>Apt &amp; Olderog</td><td>cleanest statement of disjoint parallelism</td><td>textbook, pre-separation-logic, unmechanized</td></tr>
+    <tr><td>DPJ, OOPSLA'09</td><td>region effects; non-interference ⟹ determinism</td><td>on paper, for a Java-like calculus</td></tr>
+    <tr><td>PolCert, TASE'24</td><td>Bernstein mechanized in Coq, as a validator</td><td>affine loop nests only</td></tr>
+    <tr><td>Blom et al., STTT'21</td><td>sequential correctness ⟹ parallel correctness</td><td>VerCors/Viper, not a proof assistant</td></tr>
+  </tbody>
+</table>
+```
+
+:::class "gap"
+*paralever* — the equivalence corollary, generic over the program, mechanized in Lean 4
+:::
+
+# Three alternatives to disjointness
+
+```html
+<table class="dgmt">
+  <thead><tr><th>Route</th><th>Criterion</th><th>Status here</th></tr></thead>
+  <tbody>
+    <tr><td>movers / reduction</td><td>commutativity: <code>R*·A·L*</code> is atomic</td><td>more general, harder soundness — fallback</td></tr>
+    <tr><td>confluence (LVars)</td><td>inflationary writes, threshold reads</td><td>most Mathlib-friendly — fallback</td></tr>
+    <tr><td>pure algebra</td><td>chunked reduce = fold iff associative</td><td>cannot express mutable shared state</td></tr>
+  </tbody>
+</table>
+```
+
+:::class "cite"
+*Lipton*, 1975 · *Kuper & Newton*, LVars, 2013 · third homomorphism theorem / *SyDPaCC*
+:::
+
+# Choosing a route to discharge `WellFormed`
 
 ```html
 <div class="dgm col tight">
@@ -517,12 +555,7 @@ Equal lengths, and non-overlapping regions by `omega`. Holds for every `n` and e
 ```
 
 Five hypotheses: well-formedness (`trivial`), reads-within (`grind`), no-writes (`rfl`), `dst`
-injective (`omega`), `dst` outside the read region (`omega`).
-
-:::class "stats"
-:::
-
-MatMul: 207 → 107 lines; both fuel inductions removed.
+injective (`omega`), `dst` outside the read region (`omega`). MatMul: 207 → 107 lines.
 
 :::class "cite"
 *Blom, Darabi, Huisman, Safari*, _Correct Program Parallelisations_, *STTT 23(5) 2021*
@@ -641,8 +674,8 @@ example {α : Type} (locs : Nat → List Loc) (f : List Val → α → α)
   reduceFold_eq_foldPure locs f σ m 0 init
 ```
 
-The user writes `f` (what to combine) and `locs` (where to read). `readsCombine` builds the `ParM`
-program; this equation certifies the translation. Previously proved per example.
+The user supplies `f` (what to combine) and `locs` (where to read). `readsCombine` builds the `ParM`
+program; this equation certifies the translation.
 
 # Rejected cases: the hypothesis is load-bearing
 
@@ -680,7 +713,7 @@ Each row is checked by `rfl`. `DoubleInto`'s `incFromPrev` (`A[i] := A[i-1] + 1`
 </table>
 ```
 
-Every rewritten example still builds with zero `sorry`. The rendered `TwoProcesses` trees are
+Every rewritten example builds with zero `sorry`. The rendered `TwoProcesses` trees are
 byte-identical before and after.
 
 # Limits
@@ -721,13 +754,13 @@ pointer-inequality tracking inside a refinement calculus
 
 ```html
 <div class="dgm col tight">
-  <div class="nd wide">O'Hearn<em>the <code>∥</code> rule — premises mention one thread each</em></div>
+  <div class="nd wide">O'Hearn CONCUR'04<em>disjoint concurrency rule — premises mention one thread each</em></div>
   <div class="arr">▼</div>
-  <div class="nd wide">Brookes<em>decomposition lemma — a parallel trace factors</em></div>
+  <div class="nd wide">Brookes CONCUR'04 §5–7<em>a parallel trace factors into solo traces</em></div>
   <div class="arr">▼</div>
-  <div class="nd bad wide">unstated corollary<em>factors ⟹ <code>par ≡ seq</code></em></div>
+  <div class="nd blue wide"><code>wellFormed_canonical</code><em>mechanized as uniqueness of the outcome</em></div>
   <div class="arr">▼</div>
-  <div class="nd key wide">paralever<em>that corollary, generic, mechanized in Lean 4</em></div>
+  <div class="nd key wide"><code>par_seq_eq</code><em><code>WellFormed</code> ⟹ parallel and sequential agree, every schedule</em></div>
   <div class="dgm tight">
     <div class="nd">Bernstein, not <code>∗</code><em>shared reads admitted</em></div>
     <div class="nd">free monad, not <code>Task</code><em><code>par</code> is our constructor</em></div>
