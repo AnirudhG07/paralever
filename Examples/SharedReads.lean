@@ -67,7 +67,7 @@ theorem wellFormed_findMax (σ : State) : WellFormed findMax σ := by
 theorem wellFormed_findMax_all (σ : State) : WellFormed (ParM.parAll [findMax]) σ := by
   apply WellFormed_parAll_cons
   · exact wellFormed_findMax σ
-  · simp [ParM.parAll, accesses, Footprint.empty]
+  · simp [accesses_parAll_nil, Footprint.empty]
   · exact WellFormed_parAll_nil _
 
 /-- The payoff. Both branches read every input location, and the footprints are still independent:
@@ -77,7 +77,8 @@ theorem wellFormed_minmax (σ : State) : WellFormed minmaxPar σ := by
   · exact wellFormed_findMin σ
   · rcases h0 : σ 0 with a | _ | _ <;> rcases h1 : σ 1 with b | _ | _ <;>
       rcases h2 : σ 2 with c | _ | _ <;>
-      simp +decide [findMin, findMax, ParM.parAll, ParM.parPair, h0, h1, h2]
+      simp +decide [findMin, findMax, accesses_parAll_cons, accesses_parAll_nil,
+        Footprint.union, Footprint.empty, h0, h1, h2]
   · exact wellFormed_findMax_all _
 
 theorem seq_eq_par (σ : State) : minmaxPar ∥≡ minmaxSeq from σ :=

@@ -29,6 +29,16 @@ notation:50 p " ∥≡ " q " from " σ => ParSeqEq p q σ
 is the *end* location, not a length. -/
 notation "Array[" s ", " e "]" => ArrRef.mk s (e - s)
 
+/-! ### `∥` and `;;` — the two pair combinators, infix
+
+`∥` is Concurrent Kleene Algebra's parallel composition; `;;` is spelled to read as sequencing.
+Pure notation: both expand to the constructors, so a program written with them is the same term as
+one written by hand, and `∥≡` still lexes as a single token.
+-- ref: papers.md §4.3 (Hoare, Möller, Struth, Wehrman) -/
+
+@[inherit_doc ParM.parPair] infixl:65 " ∥ " => ParM.parPair
+@[inherit_doc ParM.seqPair] infixl:65 " ;; " => ParM.seqPair
+
 /-! ### `doₚ` — a `do`-shaped block that is literally `ParM.bind`
 
 `do` works and is `rfl`-equal, but it desugars to `Bind.bind`, so a `simp`/`rw` lemma stated about
@@ -45,6 +55,9 @@ declare_syntax_cat doPStep
 /-- `let x ← p` — run `p` and bind its result to `x` in the rest of the block. -/
 syntax "let " ident " ← " term : doPStep
 
+/-- `let (x, y) ← p` — bind a pair result, as a `par`/`seq` join produces. -/
+syntax "let " "(" ident ", " ident ")" " ← " term : doPStep
+
 /-- A bare `ParM` term — run it for its effect, or, as the last step, for its result. -/
 syntax term : doPStep
 
@@ -60,12 +73,15 @@ partial def expandDoP : List (TSyntax `doPStep) → MacroM (TSyntax `term)
   | [s] => match s with
       | `(doPStep| let $_ ← $_) =>
           Macro.throwError "doₚ: a block cannot end with `let` — the last line is the result"
+      | `(doPStep| let ($_, $_) ← $_) =>
+          Macro.throwError "doₚ: a block cannot end with `let` — the last line is the result"
       | `(doPStep| $e:term) => return e
       | _ => Macro.throwUnsupported
   | s :: rest => do
       let body ← expandDoP rest
       match s with
       | `(doPStep| let $x ← $p) => `(ParM.bind $p (fun $x => $body))
+      | `(doPStep| let ($x, $y) ← $p) => `(ParM.bind $p (fun r => (fun $x $y => $body) r.1 r.2))
       | `(doPStep| $e:term)     => `(ParM.bind $e (fun _ => $body))
       | _ => Macro.throwUnsupported
 

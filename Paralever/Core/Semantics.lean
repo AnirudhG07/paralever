@@ -76,6 +76,8 @@ def conflicts (a b : Label) : Bool :=
 
 end Label
 
+mutual
+
 /-- The actions `p` could perform *next* — one per live thread. Recurses through nested `par`, so a
 deeply forked program contributes every one of its ready heads and no pair is missed.
 -- ref: Vafeiadis MFPS'11 -/
@@ -84,14 +86,29 @@ def nextAccs {α : Type} : ParM α → List Label
   | .pure _      => []
   | .read l _    => [.read l]
   | .write l _ _ => [.write l]
-  | .par p q _   => nextAccs p ++ nextAccs q
+  | .par cs _    => (nextAccsChilds cs).flatten
 
-/-- Whether any action on one side conflicts with any on the other. `step` re-evaluates this at
-every `par` node on every step, which is why a run that never reaches `wrong` is race-free at every
-instant rather than only at the start. -/
+/-- One label list *per child*, kept separate so the race check below can range over pairs. -/
+@[simp, grind .]
+def nextAccsChilds {αs : List Type} : Childs ParM αs → List (List Label)
+  | .nil       => []
+  | .cons p ps => nextAccs p :: nextAccsChilds ps
+
+end
+
+/-- Whether any action on one side conflicts with any on the other. -/
 @[simp, grind .]
 def racing (as bs : List Label) : Bool :=
   as.any fun a => bs.any fun b => a.conflicts b
+
+/-- Whether any *two distinct children* conflict. `step` re-evaluates this at every `par` node on
+every step, which is why a run that never reaches `wrong` is race-free at every instant rather than
+only at the start. With one N-ary node all pairs are checked at once, rather than spread over
+nesting levels. -/
+@[simp, grind .]
+def racingAll : List (List Label) → Bool
+  | []         => false
+  | hd :: rest => rest.any (fun other => racing hd other) || racingAll rest
 
 /-! ### Configurations and stepping -/
 
@@ -103,35 +120,46 @@ inductive Conf (α : Type) : Type 1 where
   | run   : ParM α → State → Conf α
   | wrong : Conf α
 
-namespace Conf
-
-/-- Rebuild a `par` node around a stepped left branch. -/
+/-- Every child has finished, with its tuple of results. `none` means at least one is still running,
+so the fork cannot join yet. -/
 @[simp, grind .]
-def inL {α β γ : Type} (q : ParM β) (k : α × β → ParM γ) : Conf α → Conf γ
-  | .run p σ => .run (.par p q k) σ
-  | .wrong   => .wrong
+def allPure {αs : List Type} : Childs ParM αs → Option (Results αs)
+  | .nil               => some ()
+  | .cons (.pure a) ps => (allPure ps).map (fun vs => (a, vs))
+  | .cons _ _          => none
 
-/-- Rebuild a `par` node around a stepped right branch. -/
-@[simp, grind .]
-def inR {α β γ : Type} (p : ParM α) (k : α × β → ParM γ) : Conf β → Conf γ
-  | .run q σ => .run (.par p q k) σ
-  | .wrong   => .wrong
-
-end Conf
+mutual
 
 /-- One small step: every configuration the program could move to from this heap. The list is the
-nondeterminism — a `par` node offers both branches, so all interleavings are covered. Empty means
-terminal; a singleton `[wrong]` means this step detected a race. -/
+nondeterminism — a `par` node offers *every* ready child, so all interleavings are covered. Empty
+means terminal; a singleton `[wrong]` means this step detected a race. -/
 @[simp, grind .]
 def step {α : Type} : ParM α → State → List (Conf α)
   | .pure _,      _ => []
   | .read l k,    σ => [.run (k (σ l)) σ]
   | .write l v k, σ => [.run (k ()) (σ.update l v)]
-  | .par p q k,   σ =>
-      if racing (nextAccs p) (nextAccs q) then [.wrong]
-      else match p, q with
-        | .pure a, .pure b => [.run (k (a, b)) σ]
-        | _, _ => (step p σ).map (Conf.inL q k) ++ (step q σ).map (Conf.inR p k)
+  | .par cs k,    σ =>
+      if racingAll (nextAccsChilds cs) then [.wrong]
+      else match allPure cs with
+        | some vs => [.run (k vs) σ]
+        | none    => (stepChilds cs σ).map fun r =>
+            match r with
+            | some x => .run (.par x.1 k) x.2
+            | none   => .wrong
+
+/-- Step any one child, rebuilding the spine around it. Type-preserving: `Childs ParM αs` in,
+`Childs ParM αs` out. `none` is that child aborting, which the whole fork inherits. -/
+@[simp, grind .]
+def stepChilds {αs : List Type} : Childs ParM αs → State →
+    List (Option (Childs ParM αs × State))
+  | .nil,       _ => []
+  | .cons p ps, σ =>
+      ((step p σ).map fun c => match c with
+        | .run p' σ' => some (Childs.cons p' ps, σ')
+        | .wrong     => none)
+      ++ (stepChilds ps σ).map fun r => r.map fun x => (Childs.cons p x.1, x.2)
+
+end
 
 /-- `step`, lifted to configurations. `wrong` has no successors, hence it is absorbing. -/
 @[simp, grind .]
@@ -145,6 +173,44 @@ statement about *all* interleavings is a statement about this relation. -/
 inductive Reaches {α : Type} : Conf α → Conf α → Prop where
   | refl {c} : Reaches c c
   | tail {c c' c''} : Reaches c c' → c'' ∈ stepC c' → Reaches c c''
+
+/-- Reflexive-transitive closure of `stepChilds`: "these children can collectively move to that
+configuration, nobody having aborted". The children-level analogue of `Reaches`, and what replaces
+the old left/right branch lemmas — with N children there is no left and right, only "some child
+moved". -/
+inductive ReachesChilds {αs : List Type} :
+    Childs ParM αs → State → Childs ParM αs → State → Prop where
+  | refl {cs σ} : ReachesChilds cs σ cs σ
+  | tail {cs σ cs' σ' cs'' σ''} : ReachesChilds cs σ cs' σ' →
+      some (cs'', σ'') ∈ stepChilds cs' σ' → ReachesChilds cs σ cs'' σ''
+
+namespace ReachesChilds
+
+theorem trans {αs : List Type} {a a' a'' : Childs ParM αs} {σ σ' σ'' : State}
+    (h1 : ReachesChilds a σ a' σ') (h2 : ReachesChilds a' σ' a'' σ'') :
+    ReachesChilds a σ a'' σ'' := by
+  induction h2 with
+  | refl => exact h1
+  | tail _ hmem ih => exact ih.tail hmem
+
+end ReachesChilds
+
+/-- A fork whose children have all finished has nothing left to step — so a `stepChilds` move and a
+join are mutually exclusive, which is what lets `step`'s `par` case be read as a trichotomy. -/
+theorem stepChilds_eq_nil_of_allPure {αs : List Type} :
+    ∀ (cs : Childs ParM αs) (σ : State), (allPure cs).isSome = true → stepChilds cs σ = [] := by
+  intro cs σ h
+  induction cs with
+  | nil => rfl
+  | cons p ps ih =>
+      match p, h with
+      | .pure a, h =>
+          have hps : (allPure ps).isSome = true := by
+            revert h
+            simp only [allPure]
+            cases allPure ps <;> simp [Option.map]
+          simp only [stepChilds, step, ih hps]
+          rfl
 
 /-- No schedule reaches `wrong`, i.e. the program is race-free under every interleaving. -/
 @[simp]

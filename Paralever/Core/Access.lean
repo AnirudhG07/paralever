@@ -92,39 +92,62 @@ Both definitions below are total structural recursions: `ParM` has no `iter`, so
 finite tree, and each case recurses into `p`, `q`, or a continuation applied to a value already in
 hand — the same pattern `ParM.bind` uses. -/
 
+mutual
+
 /-- Run `p` from `σ` under the canonical left-to-right schedule, returning its result and the final
 heap. This is the *reference* execution: `accesses` and `WellFormed` are stated against it, and
-`wellFormed_canonical` proves every real interleaving of a well-formed program agrees with it.
-
-Written with an explicit `{τ}` rather than reusing `α`/`β`/`γ` so that the three recursive calls in
-the `par` case — left branch, right branch, continuation, each at a different type — are
-unambiguous. -/
+`wellFormed_canonical` proves every real interleaving of a well-formed program agrees with it. -/
 @[simp, grind .]
 def runSeq {τ : Type} : ParM τ → State → τ × State
   | .pure a,      σ => (a, σ)
   | .read l k,    σ => runSeq (k (σ l)) σ
   | .write l v k, σ => runSeq (k ()) (σ.update l v)
-  | .par p q k,   σ =>
-      let (a, σ₁) := runSeq p σ
-      let (b, σ₂) := runSeq q σ₁
-      runSeq (k (a, b)) σ₂
+  | .par cs k,    σ =>
+      let r := runChilds cs σ
+      runSeq (k r.1) r.2
+
+/-- The children, left to right, threading the heap. The reference order a fork is measured against. -/
+@[simp, grind .]
+def runChilds {αs : List Type} : Childs ParM αs → State → Results αs × State
+  | .nil,       σ => ((), σ)
+  | .cons p ps, σ =>
+      let r := runSeq p σ
+      let r' := runChilds ps r.2
+      ((r.1, r'.1), r'.2)
+
+end
+
+mutual
 
 /-- Every location `p` reads or writes along the canonical run from `σ`.
 
 A fold over the same tree `runSeq` walks, which is why it must carry a state: continuations are
-functions, so you cannot see what comes after a `read` without supplying the value it returns. Note
-the asymmetry in the `par` case: `q`'s branch is measured from `σ₁`, the heap after `p`, not from
-`σ`. `accesses_runSeq_isolated` shows that asymmetry vanishes under `Indep`; `docs/access.md` says
-why it is there at all. -/
+functions, so you cannot see what comes after a `read` without supplying the value it returns. Each
+child is measured from the heap the one before it left; `accesses_runSeq_isolated` shows that
+staggering vanishes under independence. -/
 @[simp, grind .]
 def accesses {τ : Type} : ParM τ → State → Footprint
   | .pure _,      _ => .empty
   | .read l k,    σ => Footprint.union ⟨[l], []⟩ (accesses (k (σ l)) σ)
   | .write l v k, σ => Footprint.union ⟨[], [l]⟩ (accesses (k ()) (σ.update l v))
-  | .par p q k,   σ =>
-      let (a, σ₁) := runSeq p σ
-      let (b, σ₂) := runSeq q σ₁
-      Footprint.union (accesses p σ) (Footprint.union (accesses q σ₁) (accesses (k (a, b)) σ₂))
+  | .par cs k,    σ =>
+      let r := runChilds cs σ
+      Footprint.union (accessesChilds cs σ) (accesses (k r.1) r.2)
+
+/-- The children's combined footprint, each measured from the heap the one before it left. -/
+@[simp, grind .]
+def accessesChilds {αs : List Type} : Childs ParM αs → State → Footprint
+  | .nil,       _ => .empty
+  | .cons p ps, σ => Footprint.union (accesses p σ) (accessesChilds ps (runSeq p σ).2)
+
+end
+
+/-- Each child's footprint **on its own**, measured from the heap the one before it left. What the
+all-pairs independence check ranges over. -/
+@[simp, grind .]
+def childFootprints {αs : List Type} : Childs ParM αs → State → List Footprint
+  | .nil,       _ => []
+  | .cons p ps, σ => accesses p σ :: childFootprints ps (runSeq p σ).2
 
 /-! ### `WellFormed`
 
@@ -133,24 +156,61 @@ nodes nested *inside* `p` or `q` — `docs/decomposition.md` has the counterexam
 outermost check alone is unsound. `WellFormed` therefore checks Bernstein independence at *every*
 `par` node in the tree, each against the heap that node sees along the canonical run. Same recursion
 shape as `accesses`. -/
+/-- **Bernstein between every pair of children.** The N-ary independence obligation, stated flatly
+rather than spread over nesting levels. -/
+@[simp, grind .]
+def IndepAll : List Footprint → Prop
+  | []      => True
+  | f :: fs => (∀ g ∈ fs, Indep f g) ∧ IndepAll fs
+
+/-- Decidable `IndepAll`. -/
+@[simp, grind .]
+def indepAllB : List Footprint → Bool
+  | []      => true
+  | f :: fs => fs.all (fun g => indepB f g) && indepAllB fs
+
+theorem indepAllB_iff (fs : List Footprint) : indepAllB fs = true ↔ IndepAll fs := by
+  induction fs with
+  | nil => simp [indepAllB, IndepAll]
+  | cons f fs ih =>
+      simp only [indepAllB, IndepAll, Bool.and_eq_true, List.all_eq_true, ih, indepB_iff]
+
+mutual
+
+/-- Bernstein independence checked at *every* `par` node, each against the heap that node sees along
+the canonical run. The outermost check alone would be unsound — `docs/decomposition.md` has the
+counterexample. -/
 @[simp, grind .]
 def WellFormed {τ : Type} : ParM τ → State → Prop
   | .pure _,      _ => True
   | .read l k,    σ => WellFormed (k (σ l)) σ
   | .write l v k, σ => WellFormed (k ()) (σ.update l v)
-  | .par p q k,   σ =>
-      let (a, σ₁) := runSeq p σ
-      let (b, σ₂) := runSeq q σ₁
-      Indep (accesses p σ) (accesses q σ₁) ∧ WellFormed p σ ∧ WellFormed q σ₁ ∧
-      WellFormed (k (a, b)) σ₂
+  | .par cs k,    σ =>
+      let r := runChilds cs σ
+      IndepAll (childFootprints cs σ) ∧ WellFormedChilds cs σ ∧ WellFormed (k r.1) r.2
+
+/-- Every child is itself well-formed, from the heap the one before it left. -/
+@[simp, grind .]
+def WellFormedChilds {αs : List Type} : Childs ParM αs → State → Prop
+  | .nil,       _ => True
+  | .cons p ps, σ => WellFormed p σ ∧ WellFormedChilds ps (runSeq p σ).2
+
+end
 
 /-- Build `WellFormed (parPair p q) σ` from the three facts that actually need proving. The goal is
-a four-way conjunction whose last component is trivial for `parPair`'s `pure` continuation; this
-hides that bookkeeping. -/
+a conjunction whose last component is trivial for `parPair`'s `pure` continuation; this hides that
+bookkeeping. -/
 theorem WellFormed_par_intro {α β : Type} {p : ParM α} {q : ParM β} {σ : State}
     (hindep : Indep (accesses p σ) (accesses q (runSeq p σ).2))
     (hp : WellFormed p σ) (hq : WellFormed q (runSeq p σ).2) :
-    WellFormed (ParM.parPair p q) σ :=
-  ⟨hindep, hp, hq, trivial⟩
+    WellFormed (ParM.parPair p q) σ := by
+  refine ⟨?_, ⟨hp, hq, trivial⟩, trivial⟩
+  show IndepAll [accesses p σ, accesses q (runSeq p σ).2]
+  refine ⟨?_, ?_, trivial⟩
+  · intro g hg
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
+    exact hg ▸ hindep
+  · intro g hg
+    simp at hg
 
 end Paralever

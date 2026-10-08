@@ -125,8 +125,9 @@ theorem par_eq_seq (p : ParM α) (q : ParM β) (σ : State)
 "Under any schedule, parallel = sequential." Determinism and sequential-equivalence in one
 statement. Then the N-ary `parN` version with pairwise `Indep`, then nesting.
 
-**Anti-vacuity obligation:** exhibit racy `p`, `q` where this *fails*, proved in Lean, so `h` is
-demonstrably load-bearing.
+**Anti-vacuity obligation — ✅ discharged** (`Examples/Racy.lean`): two racy pairs with
+`¬ ParSeqEq` proved in Lean, so `h` is load-bearing against the conclusion and not merely
+unprovable. See `docs/semantics.md` § Anti-vacuity witness.
 
 ### Independence = Bernstein, not `∗` — ✅ implemented
 

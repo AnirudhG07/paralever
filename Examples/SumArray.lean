@@ -90,9 +90,9 @@ theorem sumRangePar_no_writes (chunks : ChunkPlan) (σ : State) :
   | nil => rfl
   | cons c cs ih =>
       simp only [sumRangePar] at ih
-      simp only [sumRangePar, List.map_cons, ParM.parAll, ParM.parPair, accesses_bind, accesses,
-        Footprint.union, Footprint.empty]
-      simp [sumRange_no_writes, ih]
+      show (accesses (ParM.parAll ((c :: cs).map sumRange)) σ).writes = []
+      rw [List.map_cons, accesses_parAll_cons]
+      simp [Footprint.union, sumRange_no_writes, ih]
 
 /-- Holds for *any* `ChunkPlan`, including uneven ones, and any state — no `decide`, so it does not
 degrade with chunk count or chunk size. `sumRange` never writes, so the state never changes across

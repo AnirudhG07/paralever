@@ -11,7 +11,7 @@ tree; nothing runs. Meaning comes from separate interpreters over the same tree:
 |---|---|
 | `run : ParM α → State → Schedule → Option (α × State)` | semantics |
 | `accesses : ParM α → State → Footprint` | dynamic footprints |
-| `compile : ParM α → (Unit → α)` | real Lean + `Task` |
+| `compile : ParM α → (Unit → α)` | real Lean + `Task` — **not built**; see `Compile/TaskFacts.lean` for why `Task` can host no theorem, and `PLAN.md` for the intended shape |
 | `cost : ParM α → Nat × Nat` (later) | work / span |
 
 One program, many meanings. This is why footprints can be dynamic without a separate static
@@ -62,21 +62,46 @@ In the freer form **the head of the tree is literally the next action**. Consequ
 
 Standard construction; same idea as interaction trees (Xia et al., POPL 2020) minus coinduction.
 
-## Why there is no `parN` constructor
+## Why `par` is N-ary, and what that cost
 
-`parN : List (ParM α) → (List α → ParM β) → ParM β` is rejected by the kernel: `List (ParM α)` is
-a *nested* inductive occurrence whose parameter `ParM α` mentions the locally bound `α`.
+`par` takes a whole list of children at once, each free to return its own type:
 
-Workarounds we rejected: a mutual `ParM`/`ParMList` pair (mutual induction tax on every proof), or
-fixing the branch result type to a global constant like `Val` (loses generality).
+```
+| par {β} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β
+```
 
-**Chosen:** derive N-ary parallelism from binary `par` (`parAll`). Better on three counts:
+The obvious spelling, `List (ParM α) → (List α → ParM β) → ParM β`, is rejected by the kernel —
+*"nested inductive datatypes parameters cannot contain local variables"*. The obstacle is the `α`
+bound by the constructor, not the nesting. Five representations were tested; at most three of
+{genuine `List`, heterogeneous children, static result types, working interpreters} are achievable
+at once:
 
-- fewer constructors → fewer cases in every induction;
-- the N-ary sequentialization theorem becomes a *corollary* of the binary one by induction on the
-  list, rather than a second proof;
-- nothing is lost. The scheduler may interleave at any point, so a right-nested tree of binary
-  `par`s is genuinely k-way parallel. The nesting fixes an *association*, not a *serialization*.
+| children as | genuine `List` | heterogeneous | static result types | interpreters |
+|---|---|---|---|---|
+| `List (ParM α)`, `α` constructor-local | ✓ | ✓ | ✓ | kernel rejects the type |
+| `List (ParM ρ ρ)`, `ρ` a family parameter | ✓ | ✗ all children `ρ` | ✓ | ✓ |
+| `Childs αs`, type-indexed spine | ✗ own spine | ✓ | ✓ | ✓ |
+| `List ((α : Type) × ParM α)` | ✓ | ✓ | ✗ dynamic | universe clash in mutual defs |
+| `Fin n → ParM α` | ✗ | ✓ | ✓ | structural recursion fails |
+
+**Chosen:** the type-indexed spine. `Childs` is generic in its node type and defined *before* `ParM`,
+so `ParM` has exactly four constructors and no `mutual` block; `nil`/`cons` are `List`'s own
+constructors and nothing in the semantics distinguishes one child from another.
+
+What it costs, and these are real:
+
+- Lean's `induction` tactic **refuses nested inductives**. `ParM.inductionOn` and
+  `ParM.mutualInduction` replace it; the latter's `cons` case is where every 2-to-N step lives.
+- every interpreter comes in a pair (`runSeq`/`runChilds`, `accesses`/`accessesChilds`,
+  `step`/`stepChilds`, `work`/`workChilds`, `pstep`/`pstepChilds`, `render`/`renderChilds`).
+- the independence obligation is flat — `IndepAll (childFootprints cs σ)`, Bernstein between every
+  pair — and `indep_accessesChilds` is the bridge that turns it into the block-wise `Indep` the
+  two-branch arguments need.
+- the continuation receives a nested tuple with a trailing `Unit` (`Results [α,β] = α × β × Unit`).
+
+What it buys: one `par` node for any N, `step` offering one successor per ready child in a single
+step, an all-pairs race check evaluated at every instant rather than spread over nesting levels, and
+no partial-join schedules.
 
 ## `ParM` has no `iter` / unbounded-loop constructor
 

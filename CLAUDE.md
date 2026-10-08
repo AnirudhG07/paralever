@@ -72,8 +72,14 @@ These are load-bearing; violating them silently produces vacuous theorems.
    so naive disjointness rejects it.
 4. **`ParM` is inductive ⇒ only terminating programs exist.** `while true` is unrepresentable.
    Lean 4 has no native coinductive types, so this boundary is fixed, not a TODO.
-5. **No `parN` constructor** — `List (ParM α)` is an illegal nested inductive. N-ary parallelism is
-   derived from binary `par`, which makes the N-ary theorem a corollary.
+5. **`par` is N-ary and heterogeneous** — one constructor taking `Childs ParM αs`, a type-indexed
+   spine, plus a `Results αs → ParM β` continuation. Binary `parPair` is the two-child case.
+   `List (ParM α)` with a constructor-local `α` *is* rejected by the kernel ("nested inductive
+   datatypes parameters cannot contain local variables"), which is why the children carry their own
+   spine; the type index is what keeps the children's result types static. Consequence: Lean's
+   `induction` tactic refuses `ParM`, so every proof uses `ParM.inductionOn` or
+   `ParM.mutualInduction` (`Core/ParM.lean`), and the N-ary theorems are proved by induction on the
+   children list — the `cons` case is the 2-to-N step.
 6. **Races ↦ absorbing `wrong`** (`run` returns `Option`), per Reynolds' grainless semantics. This
    is what makes the atomic grain irrelevant and keeps racy programs *excluded* rather than
    silently assumed away.
@@ -104,10 +110,11 @@ Paralever/
              Pure (pure↔ParM bridge + faithfulness theorem),
              Render (print a ParM tree — another interpreter, for debugging)
   Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
-  Compile/   TaskFacts
+  Search/    RaceSearch (race-site scan, schedules, follow_sound, Prog grammar)
+  Compile/   TaskFacts, Exec (execTask — runs a program on real threads)
 Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo,
-             OpaqueAgents, PureToParM, TwoProcesses, *Task
-Test/        Sanity, AccessSanity
+             OpaqueAgents, PureToParM, TwoProcesses, Region, Racy, ExecDemo, *Task
+Test/        Sanity, AccessSanity, RaceSearch
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
              opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md, ...)
 ```

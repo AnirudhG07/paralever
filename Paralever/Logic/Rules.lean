@@ -82,11 +82,9 @@ theorem Triple.par {α β : Type} {P : State → Prop} {c : ParM α} {Q : α →
   intro σ ⟨hP, hP'⟩ r σ' hReach
   have hwf' := hwf σ hP hP'
   have heq : (r, σ') = runSeq (ParM.parPair c c') σ := (wellFormed_canonical _ σ r σ' hwf').mp hReach
-  obtain ⟨hindep, hwfc, hwfc', hwfk⟩ := hwf'
+  obtain ⟨_, ⟨hwfc, hwfc', _⟩, _⟩ := hwf'
   have hunfold : runSeq (ParM.parPair c c') σ =
-      (((runSeq c σ).1, (runSeq c' (runSeq c σ).2).1), (runSeq c' (runSeq c σ).2).2) := by
-    show runSeq (ParM.par c c' .pure) σ = _
-    simp only [runSeq]
+      (((runSeq c σ).1, (runSeq c' (runSeq c σ).2).1), (runSeq c' (runSeq c σ).2).2) := rfl
   rw [hunfold] at heq
   obtain ⟨hr, hσ'eq⟩ := Prod.mk.injEq .. ▸ heq
   have hReachC : Reaches (.run c σ) (.run (.pure (runSeq c σ).1) (runSeq c σ).2) :=

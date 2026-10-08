@@ -98,12 +98,12 @@ theorem swapRoundPar_footprint (plan : SwapPlan) (σ : State) :
     (accesses (swapRoundPar plan) σ).reads ⊆ plan.locs ∧
     (accesses (swapRoundPar plan) σ).writes ⊆ plan.locs := by
   induction plan generalizing σ with
-  | nil => simp [swapRoundPar, ParM.parAll, accesses, Footprint.empty, SwapPlan.locs]
+  | nil => simp [swapRoundPar, accesses_parAll_nil, Footprint.empty, SwapPlan.locs]
   | cons p ps ih =>
       obtain ⟨i, j⟩ := p
       simp only [swapRoundPar] at ih
-      simp only [swapRoundPar, List.map_cons, ParM.parAll, ParM.parPair, accesses_bind, accesses,
-        Footprint.union, SwapPlan.locs_cons]
+      simp only [swapRoundPar, List.map_cons, accesses_parAll_cons, Footprint.union,
+        SwapPlan.locs_cons]
       obtain ⟨hr, hw⟩ := compareSwap_footprint i j σ
       obtain ⟨hr', hw'⟩ := ih (runSeq (compareSwap i j) σ).2
       constructor <;> (try simp only [List.append_nil, Footprint.empty]) <;>

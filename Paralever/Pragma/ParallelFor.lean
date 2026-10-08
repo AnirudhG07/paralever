@@ -71,8 +71,8 @@ theorem parAll_wellformed_of_indexed_rw {τ : Type} (idxs : List Nat) (body : Na
       refine ⟨WellFormed_parAll_cons (body i) (is.map body) σ (hwf i List.mem_cons_self σ)
         hindep ihWF, ?_, ?_⟩
       all_goals
-        simp only [ParM.parAll, accesses_bind, ParM.parPair, accesses, Footprint.union,
-          Footprint.empty, List.append_nil]
+        rw [accesses_parAll_cons]
+        simp only [Footprint.union]
       · intro l hl
         rcases List.mem_append.mp hl with hl | hl
         · exact ⟨i, List.mem_cons_self, hPri.apply l hl⟩

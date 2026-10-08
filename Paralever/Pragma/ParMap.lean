@@ -75,21 +75,22 @@ of `parMap_par_seq_eq`, by computation rather than through the metatheorem. -/
 @[simp, grind .]
 theorem parMap_eq_map {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
     runSeq (parMap f chunks) σ = (chunks.map f, σ) := by
-  induction chunks generalizing σ with
-  | nil => rfl
-  | cons c cs ih =>
-      simp only [parMap] at ih
-      simp only [parMap, List.map_cons, ParM.parAll, ParM.parPair, runSeq, runSeq_bind, ih]
+  -- `parAll` is one `par` node now, so route through its canonical-run bridge to `seqAll`
+  show runSeq (ParM.parAll (chunks.map (fun c => ParM.pure (f c)))) σ = _
+  rw [runSeq_parAll_eq_seqAll]
+  exact seqMap_eq_map f chunks σ
 
 /-- Zero memory operations, for any chunking — `work` counts reads and writes, and there are none.
 -- ref: `docs/cost.md` -/
 theorem work_parMap_zero {α β : Type} (f : List α → β) (chunks : List (List α)) (σ : State) :
     work (parMap f chunks) σ = 0 := by
+  show work (ParM.parAll (chunks.map (fun c => ParM.pure (f c)))) σ = 0
+  rw [work_parAll_eq_seqAll]
   induction chunks generalizing σ with
   | nil => rfl
   | cons c cs ih =>
-      simp only [parMap] at ih
-      simp only [parMap, List.map_cons, ParM.parAll, work_bind, work_parPair, work, runSeq, ih]
+      rw [List.map_cons, ParM.seqAll, work_bind, work_seqPair, ih (runSeq (ParM.pure (f c)) σ).2]
+      simp [work]
 
 /-- Zero parallel rounds, hence no measurable speedup: this cost model counts memory rounds, and
 `parMap` performs no memory operations at all. Honest rather than flattering — the result is the point

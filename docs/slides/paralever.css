@@ -235,11 +235,6 @@
 .reveal .treewrap svg { width: 46%; height: auto; }
 .reveal .treewrap svg text { font-family: var(--mono); fill: var(--ink); }
 
-/* ---- .colhalf : one column of a two-col slide; keeps its own content flowing ---- */
-.reveal .colhalf { min-width: 0; }
-.reveal .colhalf > *:first-child { margin-top: 0; }
-.reveal .two-col ul { margin-left: 0.6em; }
-
 /* ---- .pipewrap : the pure -> seq -> par proof pipeline ---- */
 .reveal .pipewrap { display: flex; justify-content: center; margin: 0.2em auto; }
 .reveal .pipewrap svg { width: 88%; height: auto; }
@@ -287,3 +282,14 @@
 .reveal .lineage .le.ours .thm { font-weight: 600; }
 .reveal .lineage .le.ours .miss { color: var(--lean-teal); font-style: normal; font-weight: 600; }
 .reveal .lineage .le.ours .miss::before { content: "\2713  "; color: var(--lean-teal); }
+
+/* ---- two halves via Verso's own hstack/vstack ----
+   reveal's .r-hstack has no sizing policy, so children must be told to share the row
+   equally; min-width:0 is what lets a wide code block wrap instead of forcing overflow.
+   List spacing inherited from lean.css is airy at full width and far too airy in a
+   half-width column, so tighten it here only. */
+.reveal .r-hstack > .r-vstack { flex: 1 1 0; min-width: 0; }
+.reveal .r-vstack ul, .reveal .r-vstack ol { line-height: 1.45; }
+.reveal .r-vstack li { margin-bottom: 0.12em; }
+.reveal .r-vstack p { margin: 0.3em 0; }
+.reveal .r-vstack > *:first-child { margin-top: 0; }

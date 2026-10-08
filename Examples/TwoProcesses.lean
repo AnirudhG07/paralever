@@ -141,9 +141,8 @@ pure
 -/
 #guard_msgs in #eval IO.println (renderStr (exec procP ρ0) σ0)
 
-/--
-info: par ⟨
-  left ∥
+/-- info: par ⟨
+  [0] ∥
     read  [0] → Paralever.Val.int 10
     read  [1] → Paralever.Val.int 3
     write [4] ← Paralever.Val.int 13
@@ -151,7 +150,7 @@ info: par ⟨
     write [2] ← Paralever.Val.int 26
     write [7] ← Paralever.Val.int 7
     pure
-  right ∥
+  [1] ∥
     read  [9] → Paralever.Val.int 2
     write [14] ← Paralever.Val.int 7
     read  [14] → Paralever.Val.int 7

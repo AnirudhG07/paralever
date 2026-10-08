@@ -399,8 +399,8 @@ theorem mergeSortPar_spec (N : Nat) :
         have hFpar : FootprintWithin
             (accesses (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2)) (mergeSortPar N (lo+(hi-lo)/2) hi)) σ)
             (TouchesOnly lo hi N) := by
-          simp only [accesses, ParM.parPair]
-          exact FootprintWithin.union hFL' (FootprintWithin.union hFR' (FootprintWithin.empty _))
+          rw [accesses_parPair]
+          exact FootprintWithin.union hFL' hFR' 
         refine ⟨?_, ?_⟩
         · rw [accesses_bind]
           apply FootprintWithin.union hFpar
@@ -471,7 +471,7 @@ theorem runSeq_eq (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → ∀ σ : St
       · rw [mergeSortPar.eq_1, dif_neg h1, mergeSortSeq.eq_1, dif_neg h1]
         have hl : lo + (hi - lo) / 2 - lo ≤ n := by omega
         have hr : hi - (lo + (hi - lo) / 2) ≤ n := by omega
-        simp only [runSeq_bind, ParM.parPair, ParM.seqPair, runSeq,
+        simp only [runSeq_bind, runSeq_parPair, ParM.seqPair, runSeq,
           ih lo (lo + (hi - lo) / 2) hl σ]
         rw [ih (lo + (hi - lo) / 2) hi hr (runSeq (mergeSortSeq N lo (lo + (hi - lo) / 2)) σ).2]
 
@@ -553,7 +553,7 @@ theorem time_le (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → hi ≤ N → 
               (mergeSortPar N (lo + (hi - lo) / 2) hi)) σ
             = runSeq (ParM.seqPair (mergeSortSeq N lo (lo + (hi - lo) / 2))
               (mergeSortSeq N (lo + (hi - lo) / 2) hi)) σ := by
-          simp only [ParM.parPair, ParM.seqPair, runSeq, runSeq_bind,
+          simp only [runSeq_parPair, ParM.seqPair, runSeq, runSeq_bind,
             runSeq_eq N n lo (lo + (hi - lo) / 2) hl σ]
           rw [runSeq_eq N n (lo + (hi - lo) / 2) hi hr _]
         have hePl : runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ
@@ -568,7 +568,9 @@ theorem time_le (N : Nat) : ∀ (n lo hi : Nat), hi - lo ≤ n → hi ≤ N → 
               (runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).2
             = time (mergeSortPar N (lo + (hi - lo) / 2) hi) σ :=
           time_locality _ _ σ (accesses (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).writes
-            hwfPP.2.2.1 ⟨hwfPP.1.2.1, hwfPP.1.1⟩ (runSeq_frame _ σ)
+            (wellFormed_parPair_parts _ _ σ hwfPP).2.2
+            ⟨(wellFormed_parPair_parts _ _ σ hwfPP).1.2.1,
+             (wellFormed_parPair_parts _ _ σ hwfPP).1.1⟩ (runSeq_frame _ σ)
         rw [hePl] at hC
         have h2l := ih lo (lo + (hi - lo) / 2) hl hmid σ
         have h2r := ih (lo + (hi - lo) / 2) hi hr hN
@@ -591,7 +593,7 @@ theorem time_lt (N lo hi : Nat) (hhiN : hi ≤ N) (h4 : 4 ≤ hi - lo) (σ : Sta
         (mergeSortPar N (lo + (hi - lo) / 2) hi)) σ
       = runSeq (ParM.seqPair (mergeSortSeq N lo (lo + (hi - lo) / 2))
         (mergeSortSeq N (lo + (hi - lo) / 2) hi)) σ := by
-    simp only [ParM.parPair, ParM.seqPair, runSeq, runSeq_bind,
+    simp only [runSeq_parPair, ParM.seqPair, runSeq, runSeq_bind,
       runSeq_eq N (hi - lo) lo (lo + (hi - lo) / 2) hl σ]
     rw [runSeq_eq N (hi - lo) (lo + (hi - lo) / 2) hi hr _]
   have hePl : runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ
@@ -606,7 +608,9 @@ theorem time_lt (N lo hi : Nat) (hhiN : hi ≤ N) (h4 : 4 ≤ hi - lo) (σ : Sta
         (runSeq (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).2
       = time (mergeSortPar N (lo + (hi - lo) / 2) hi) σ :=
     time_locality _ _ σ (accesses (mergeSortPar N lo (lo + (hi - lo) / 2)) σ).writes
-      hwfPP.2.2.1 ⟨hwfPP.1.2.1, hwfPP.1.1⟩ (runSeq_frame _ σ)
+      (wellFormed_parPair_parts _ _ σ hwfPP).2.2
+      ⟨(wellFormed_parPair_parts _ _ σ hwfPP).1.2.1,
+       (wellFormed_parPair_parts _ _ σ hwfPP).1.1⟩ (runSeq_frame _ σ)
   rw [hePl] at hC
   have h2l := time_le N (hi - lo) lo (lo + (hi - lo) / 2) hl hmid σ
   have h2r := time_le N (hi - lo) (lo + (hi - lo) / 2) hi hr hhiN

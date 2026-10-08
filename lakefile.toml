@@ -54,6 +54,7 @@ needs = [
   "@paralever/+Examples.SumArray:highlighted",
   "@paralever/+Examples.Sort:highlighted",
   "@paralever/+Examples.MatMul:highlighted",
+  "@paralever/+Examples.Region:highlighted",
 ]
 
 [[lean_exe]]

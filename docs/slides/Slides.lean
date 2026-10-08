@@ -454,92 +454,100 @@ if x &lt; y then write A[2] &lt;- x+y
 
 # Four constructors, and `par` is one of them
 
-:::::class "two-col" "wide-left"
-:::class "colhalf"
-```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 32) (endLine := 39) -stretch
+::::::hstack
+:::::vstack
+```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 84) (endLine := 91) -stretch
 inductive ParM : Type → Type 1 where
   | pure  {α : Type}     : α → ParM α
   | read  {α : Type}     : Loc → (Val → ParM α) → ParM α
   | write {α : Type}     : Loc → Val → (Unit → ParM α) → ParM α
-  /-- Fork two programs, then continue with both results. The only constructor whose meaning Lean
-  does not already fix: `run` interprets it by interleaving, which is what makes the
+  /-- Fork every child at once, then continue with all their results. The only constructor whose
+  meaning Lean does not already fix: `run` interprets it by interleaving, which is what makes the
   sequentialization theorem non-vacuous. -/
-  | par   {α β γ : Type} : ParM α → ParM β → (α × β → ParM γ) → ParM γ
+  | par   {β : Type} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β
 ```
 
-* `pure a` — stop here and hand back `a`; the end of a branch
+* `pure a` — stop here and hand back `a`
 * `read l k` — look at cell `l`; what is in it is handed to `k`
 * `write l v k` — put `v` into cell `l`, then carry on with `k`
-* `par p q k` — start `p` and `q`, wait for *both*, hand both results to `k`
-:::
-:::class "colhalf"
-The last argument of each is a *function*: the rest of the program, waiting for a value. So
-`read 5 k` is not "read cell 5" — it is "read cell 5, then do `k` of what you found". That is why
-the top of the tree is always the next thing to run.
-
-At `par p q k` nothing says which branch goes first, or whether they alternate. `run` decides, and
-may decide differently every time; `k` runs only after both have finished.
-:::
+* `par cs k` — start *every* child in `cs`, wait for all, hand all results to `k`
 :::::
+:::::vstack
+The last argument of each is a *function*: the rest of the program, waiting for a value. So
+`read 5 k` is "read cell 5, then do `k` of what you found". That is why the top of the tree is
+always the next thing to run.
+
+`par` is N-ary. `Childs ParM αs` is the list of children, indexed by the types they return, and
+`Results αs` is the matching tuple of their values:
+
+```
+Childs ParM [Unit, Val]   two children, returning Unit and Val
+Results    [Unit, Val]  = Unit × Val × Unit
+```
+
+Nothing says which child goes first, or whether they alternate. `run` decides, and may decide
+differently every time; `k` runs only after all of them finish.
+:::::
+::::::
 
 :::notes
 Lean's Task cannot host this: (Task.spawn f).get = f () by rfl, so parallel and sequential would be
 the same term and there would be no theorem. Task stays as the compilation target.
 :::
 
-# A `par` node holds two branches and a continuation
+# A `par` node holds a list of children and one continuation
 
-`parPair (transfer balA balB 100) writeAudit` — accounts at cells `0,1`, the audit log at `10`.
+`sumRangePar [[0,1],[2,3],[4,5]]` — three chunks of a six-cell array, one fork.
 
 ```html
 <div class="dgm col tight">
-  <div class="nd key">par&nbsp; p&nbsp; q&nbsp; k</div>
+  <div class="nd key">par&nbsp; cs&nbsp; k</div>
   <div class="dgm tight top">
-    <div class="nd mono blue">read  [0] → 500      balA
-read  [1] → 0        balB
-write [0] ← 400      balA - 100
-write [1] ← 100      balB + 100
-pure<em>left child &nbsp;p : ParM Unit</em></div>
-    <div class="nd mono blue">write [10] ← 1       auditLog
-pure<em>right child &nbsp;q : ParM Unit</em></div>
+    <div class="nd mono blue">read  [0] → 0
+read  [1] → 1
+pure<em>child [0] &nbsp;: ParM Int</em></div>
+    <div class="nd mono blue">read  [2] → 2
+read  [3] → 3
+pure<em>child [1] &nbsp;: ParM Int</em></div>
+    <div class="nd mono blue">read  [4] → 4
+read  [5] → 5
+pure<em>child [2] &nbsp;: ParM Int</em></div>
   </div>
-  <div class="arr lbl2">▼<small>join — both children finished</small></div>
-  <div class="nd mono">k (a, b) = pure (a, b)<em>continuation &nbsp;k : α × β → ParM γ</em></div>
+  <div class="arr lbl2">▼<small>join — every child finished</small></div>
+  <div class="nd mono">k vs = pure (resultsToList vs)<em>continuation &nbsp;k : Results αs → ParM γ</em></div>
 </div>
 ```
 
-* the left child reads two cells and writes two cells, in that order
-* the right child writes one cell
-* neither child is a `par`, so this tree has exactly one fork in it
-* `k` only runs once *both* children are finished — it receives `(a, b)`, one result from each
+* three children, **one** fork node — not a staircase of nested binary forks
+* every child reads two cells and writes none, so they are trivially independent
+* `k` runs once *all* children finish, and receives one result from each
 
 :::class "cite"
-printed by `render`, which is the same walk `accesses` does — `Lib/Render.lean`
+printed by `render`, the same walk `accesses` does — `Lib/Render.lean`
 :::
 
-# `parPair`, `seqPair`, `parAll`, `seqAll` are all derived
+# `parPair` is `N = 2`; `parAll` is the same node, any length
 
-Only `par` is primitive. Everything else is built from it and from `bind`.
+Only `par` is primitive. Both pairings are it, at different arities.
 
-```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 68) (endLine := 68) -stretch
-def parPair (p : ParM α) (q : ParM β) : ParM (α × β) := .par p q .pure
+```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 205) (endLine := 206) -stretch
+def parPair (p : ParM α) (q : ParM β) : ParM (α × β) :=
+  .par Π[ p q ] (fun r => .pure (r.1, r.2.1))
 ```
 
-```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 72) (endLine := 74) -stretch
+```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 235) (endLine := 236) -stretch
+def parAll {α : Type} (ps : List (ParM α)) : ParM (List α) :=
+  .par (childsOf ps) (fun x => .pure (resultsToList ps x))
+```
+
+```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 210) (endLine := 212) -stretch
 @[simp, grind .]
 def seqPair (p : ParM α) (q : ParM β) : ParM (α × β) :=
   bind p (fun a => bind q (fun b => .pure (a, b)))
 ```
 
-```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 81) (endLine := 84) -stretch
-@[simp, grind .]
-def parAll : List (ParM α) → ParM (List α)
-  | []      => .pure []
-  | p :: ps => bind (parPair p (parAll ps)) (fun r => .pure (r.1 :: r.2))
-```
-
-So the N-ary theorem is a corollary of the binary one, by induction on the list.
-
+So the theorem is proved **N-arily**, by induction on the children list, and `parPair`'s case is
+`N = 2`. There is no binary theorem for it to be a corollary of.
 
 # `step` is nondeterministic; `runSeq` is the reference run
 
@@ -557,7 +565,7 @@ State := Loc → Val</div>
 </div>
 ```
 
-```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 145) (endLine := 147) -stretch
+```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 173) (endLine := 175) -stretch
 inductive Reaches {α : Type} : Conf α → Conf α → Prop where
   | refl {c} : Reaches c c
   | tail {c c' c''} : Reaches c c' → c'' ∈ stepC c' → Reaches c c''
@@ -566,21 +574,18 @@ inductive Reaches {α : Type} : Conf α → Conf α → Prop where
 `runSeq p σ` is the other half: one fixed left-to-right run, a function rather than a relation. It is
 the reference the theorem compares against.
 
-# `WellFormed`: check `Indep` at every `par`, not just the top
+# `WellFormed`: check Bernstein at every `par`, not just the top
 
-:::::class "two-col" "wide-left"
-:::class "colhalf"
-```leanLibCode Paralever.Core.Access (package := paralever) (decl := Paralever.WellFormed) -stretch
-@[simp, grind .]
+::::::hstack
+:::::vstack
+```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 184) (endLine := 190) -stretch
 def WellFormed {τ : Type} : ParM τ → State → Prop
   | .pure _,      _ => True
   | .read l k,    σ => WellFormed (k (σ l)) σ
   | .write l v k, σ => WellFormed (k ()) (σ.update l v)
-  | .par p q k,   σ =>
-      let (a, σ₁) := runSeq p σ
-      let (b, σ₂) := runSeq q σ₁
-      Indep (accesses p σ) (accesses q σ₁) ∧ WellFormed p σ ∧ WellFormed q σ₁ ∧
-      WellFormed (k (a, b)) σ₂
+  | .par cs k,    σ =>
+      let r := runChilds cs σ
+      IndepAll (childFootprints cs σ) ∧ WellFormedChilds cs σ ∧ WellFormed (k r.1) r.2
 ```
 
 It walks the whole tree; only `par` checks anything.
@@ -588,9 +593,9 @@ It walks the whole tree; only `par` checks anything.
 * `pure` — nothing to check
 * `read l k` — walk into `k` with the value in cell `l`
 * `write l v k` — walk into `k` with `l` now holding `v`
-* `par p q k` — the four conjuncts opposite
-:::
-:::class "colhalf"
+* `par cs k` — the three conjuncts opposite
+:::::
+:::::vstack
 At a `par` node, in order:
 
 * `Indep (accesses p σ) (accesses q σ₁)` — the branches' footprints satisfy Bernstein
@@ -604,8 +609,8 @@ the reference run reaches.
 
 `p` being independent of `q` says nothing about a `par` buried inside `p`, so checking only the
 outermost node would be unsound.
-:::
 :::::
+::::::
 
 # A top-level check passes this racy program
 
@@ -949,6 +954,129 @@ just wrote, so neither is a plain elementwise map.
 </div>
 ```
 
+# Parallelise a region, not the whole program
+
+```html
+<div class="pipewrap">
+<svg viewBox="0 0 950 320" role="img" aria-label="region substitution">
+  <defs>
+    <marker id="regtip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker>
+  </defs>
+  <g font-size="18" text-anchor="middle">
+    <rect x="20"  y="30" width="200" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="120" y="56">markStart</text>
+    <text x="120" y="76" font-size="13" fill="#475569" font-style="italic">sequential</text>
+
+    <rect x="290" y="22" width="310" height="72" rx="9" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.5"/>
+    <text x="445" y="52">sumInto &#8741; prodInto</text>
+    <text x="445" y="76" font-size="13" fill="#475569" font-style="italic">the region</text>
+
+    <rect x="670" y="30" width="200" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="770" y="56">markDone</text>
+    <text x="770" y="76" font-size="13" fill="#475569" font-style="italic">sequential</text>
+  </g>
+  <g stroke="#475569" stroke-width="2" marker-end="url(#regtip)" fill="none">
+    <line x1="222" y1="58" x2="286" y2="58"/>
+    <line x1="602" y1="58" x2="666" y2="58"/>
+  </g>
+
+  <g stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3" fill="none">
+    <line x1="445" y1="96" x2="445" y2="138"/>
+    <line x1="120" y1="88" x2="120" y2="214"/>
+    <line x1="770" y1="88" x2="770" y2="214"/>
+  </g>
+
+  <g font-size="15" text-anchor="middle">
+    <rect x="276" y="138" width="338" height="54" rx="8" fill="#ffffff" stroke="#4f46e5"/>
+    <text x="445" y="159" font-weight="bold">WellFormed &#8212; here and nowhere else</text>
+    <text x="445" y="180" font-size="13" fill="#475569">same reads, different writes: one `decide`</text>
+
+    <text x="120" y="228" font-size="13" fill="#475569">trivial</text>
+    <text x="770" y="228" font-size="13" fill="#475569">trivial</text>
+  </g>
+
+  <g stroke="#475569" stroke-width="2" marker-end="url(#regtip)" fill="none">
+    <path d="M 445 192 C 445 240, 445 246, 445 256"/>
+  </g>
+  <rect x="222" y="258" width="446" height="52" rx="9" fill="#fefce8" stroke="#a16207" stroke-width="2.5"/>
+  <text x="445" y="282" font-size="18" text-anchor="middle" font-weight="bold">par_seq_eq_region</text>
+  <text x="445" y="302" font-size="13" text-anchor="middle" fill="#475569">the whole program's outcomes are unchanged</text>
+</svg>
+</div>
+```
+
+```leanLibCode Examples.Region (package := paralever) (startLine := 64) (endLine := 74) -stretch
+def wholeSeq : ParM Unit :=
+  doₚ
+    markStart
+    let (_s, _p) ← sumInto ;; prodInto
+    markDone
+
+def wholePar : ParM Unit :=
+  doₚ
+    markStart
+    let (_s, _p) ← sumInto ∥ prodInto
+    markDone
+```
+
+# The pure proofs compose, and the region is invisible to them
+
+```html
+<div class="pipewrap">
+<svg viewBox="0 0 950 260" role="img" aria-label="Computes assembly">
+  <defs>
+    <marker id="cmptip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker>
+  </defs>
+  <g font-size="15" text-anchor="middle">
+    <rect x="10"  y="14"  width="196" height="36" rx="7" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="108" y="38">Computes markStart</text>
+    <rect x="10"  y="68"  width="196" height="36" rx="7" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="108" y="92">Computes sumInto</text>
+    <rect x="10"  y="122" width="196" height="36" rx="7" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="108" y="146">Computes prodInto</text>
+    <rect x="10"  y="176" width="196" height="36" rx="7" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="108" y="200">Computes markDone</text>
+
+    <rect x="286" y="95" width="210" height="52" rx="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+    <text x="391" y="117" font-weight="bold">Computes.parPair</text>
+    <text x="391" y="137" font-size="12" fill="#475569">or .seqPair &#8212; same result</text>
+
+    <rect x="566" y="95" width="180" height="52" rx="8" fill="#ffffff" stroke="#475569"/>
+    <text x="656" y="117" font-weight="bold">Computes.bind</text>
+    <text x="656" y="137" font-size="12" fill="#475569">chains the pieces</text>
+
+    <rect x="790" y="88" width="150" height="66" rx="9" fill="#fefce8" stroke="#a16207" stroke-width="2.5"/>
+    <text x="865" y="112" font-weight="bold">wholePure</text>
+    <text x="865" y="133" font-size="12" fill="#475569">one pure</text>
+    <text x="865" y="148" font-size="12" fill="#475569">state transformer</text>
+  </g>
+  <g stroke="#475569" stroke-width="1.7" marker-end="url(#cmptip)" fill="none">
+    <path d="M 208 86  C 250 100, 260 110, 282 115"/>
+    <path d="M 208 140 C 250 132, 260 128, 282 124"/>
+    <line x1="498" y1="121" x2="562" y2="121"/>
+    <path d="M 208 32  C 540 32, 600 70, 650 91"/>
+    <path d="M 208 194 C 540 194, 600 158, 650 151"/>
+    <line x1="748" y1="121" x2="786" y2="121"/>
+  </g>
+</svg>
+</div>
+```
+
+```leanLibCode Examples.Region (package := paralever) (startLine := 87) (endLine := 96) -stretch
+theorem seq_computes : Computes wholeSeq (fun _ => ()) wholePure :=
+  (markStart_computes.bind (fun _ =>
+    (sumInto_computes.seqPair prodInto_computes).bind (fun _ => markDone_computes)))
+
+/-- **The parallel program computes the same pure function.** Identical proof, with
+`Computes.parPair` in place of `Computes.seqPair` — no independence hypothesis is needed here,
+because this is a statement about the canonical run. -/
+theorem par_computes : Computes wholePar (fun _ => ()) wholePure :=
+  (markStart_computes.bind (fun _ =>
+    (sumInto_computes.parPair prodInto_computes).bind (fun _ => markDone_computes)))
+```
+
 # `A[i] := A[i-1] + 1` fails the check, as it must
 
 ```html
@@ -1000,27 +1128,24 @@ one is not measuring parallelism.
 
 # One round advances every ready branch
 
-```leanLibCode Paralever.Lib.Cost (package := paralever) (startLine := 133) (endLine := 142) -stretch
+```leanLibCode Paralever.Lib.Cost (package := paralever) (startLine := 172) (endLine := 179) -stretch
 def pstep {τ : Type} : ParM τ → State → Option (ParM τ × List (Loc × Val))
   | .pure _,      _ => none
   | .read l k,    σ => some (k (σ l), [])
   | .write l v k, _ => some (k (), [(l, v)])
-  | .par p q k,   σ =>
-      match pstep p σ, pstep q σ with
-      | some (p', wp), some (q', wq) => some (.par p' q' k, wp ++ wq)   -- BOTH advance
-      | some (p', wp), none          => some (.par p' q  k, wp)
-      | none,          some (q', wq) => some (.par p  q' k, wq)
-      | none,          none          => pstep (k ((runSeq p σ).1, (runSeq q σ).1)) σ  -- join
+  | .par cs k,    σ =>
+      match pstepChilds cs σ with
+      | some (cs', ws) => some (.par cs' k, ws)
+      | none           => pstep (k (runChilds cs σ).1) σ  -- join: every child has finished
 ```
 
-`time p σ` counts rounds to completion. The words `max` and `Indep` occur nowhere above.
-
-# `max` is a theorem
-
-:::class "gbox" "thm"
-For independent `p` and `q`, the parallel composition takes exactly as many rounds as the slower
-branch, and the sequential one takes their sum.
-:::
+```leanLibCode Paralever.Lib.Cost (package := paralever) (startLine := 189) (endLine := 193) -stretch
+match pstep p σ, pstepChilds ps σ with
+      | some (p', wp), some (ps', wq) => some (.cons p' ps', wp ++ wq)
+      | some (p', wp), none           => some (.cons p' ps,  wp)
+      | none,          some (ps', wq) => some (.cons p  ps',  wq)
+      | none,          none           => none
+```
 
 ```lean -stretch
 example {α β : Type} (p : ParM α) (q : ParM β) (σ : State)

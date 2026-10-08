@@ -78,7 +78,16 @@ of the project lives. Everything else in the core is bookkeeping.
 
 ## Anti-vacuity witness
 
-`p = wr l 1`, `q = wr l 2`. Their next actions are `write l` and `write l` — conflicting — so
-`parPair p q` steps to `wrong` and `hsafe` fails. Without the race check it would reach both
-`l = 1` and `l = 2` while the sequential program reaches only `l = 2`, so the conclusion is false.
-Either way the hypothesis is demonstrably load-bearing. Keep this as a test.
+`Examples/Racy.lean` refutes `ParSeqEq` outright, so the hypothesis is load-bearing against the
+*conclusion* and not merely unprovable. Two cases:
+
+`DetectedRace` — `p = wr l 1`, `q = wr l 2`. Their next actions are `write l` and `write l`, so
+`parPair p q` steps to `wrong`, which is absorbing: the parallel program reaches no `.pure` leaf at
+all, while the sequential one reaches its canonical outcome (`not_parSeqEq`).
+
+`OrderDependent` — the sharper case, where both sides terminate normally and still disagree.
+`observer = write own 7; read shared` against `mutator = write shared 99`. The first step is
+race-free (`own ≠ shared`), so one schedule runs `mutator` to completion and `observer` then reads
+`99`; the sequential order reads the original `1`. `par_reaches` exhibits the parallel outcome,
+`seq_not_reaches` rules it out sequentially via `wellFormed_canonical`, and `par_reaches_wrong`
+shows the *other* schedule aborts — the race is real, just not visible at the first step.

@@ -10,6 +10,8 @@ import Paralever.Pragma.ParallelFor
 import Paralever.Pragma.ArrRef
 import Paralever.Pragma.ParMap
 import Paralever.Compile.TaskFacts
+import Paralever.Compile.Exec
+import Paralever.Search.RaceSearch
 import Paralever.Logic.BIInstance
 import Paralever.Logic.Rules
 import Paralever.Lib.Compose
@@ -39,7 +41,8 @@ Where things live:
 | `Lib/` | the proof-burden layer: typed access, block IR, reductions, the pure bridge, cost |
 | `Pragma/` | user-facing loop forms — `#parallel_for`, `mapArray`, `parMap`, `ArrRef` |
 | `Logic/` | Tier-2 Hoare triples and the iris-lean BI instance |
-| `Compile/` | `Task` facts — a compilation target only; nothing is proved about parallelism there |
+| `Compile/` | `execTask`, which runs a program on real threads, and the `Task` facts it rests on |
+| `Search/` | counterexample search: race-site scan, schedules, `follow_sound` |
 
 Design rationale lives in `docs/`, one file per topic; the plan is `PLAN.md` and the reading list is
 `papers.md`. Start at `docs/program-model.md`.

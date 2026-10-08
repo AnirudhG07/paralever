@@ -1,21 +1,3 @@
-/-! # `Task` — the compilation target, never the source of truth
-
-**Nothing in this file proves anything about parallelism, and nothing in it can.** `Task` is a
-one-field structure with a real body, so `(Task.spawn f).get = f ()` holds by `rfl`: in Lean's logic
-the parallel program and the sequential one are *literally the same term*. A model in which a race is
-not expressible cannot have a theorem excluding one. That is why the metatheorem lives on `ParM`,
-whose `par` is a constructor whose meaning is fixed by `run`, and why `Task` appears here only as the
-thing `ParM` programs compile *to*. -- ref: `docs/program-model.md`; `docs/theory.md` "Final verdict"
-
-What this file still buys: the compiled program computes the right *value*, checked by computation
-(`rfl`/`simp`) with no `WellFormed`, no `Indep`, no quantification over schedules — cheap, complete,
-and blind to interference. It is sound only because there is nothing to race on: every chunk closes
-over a fully materialized immutable value, never a shared mutable heap.
-
-`Task.mapList` (`Init/Task.lean`) is Lean's own fork-join combinator and has no lemmas anywhere in
-core, Batteries or Mathlib; its recursive helper is compiler-generated and inaccessible by name. So
-`combineTasks` below re-implements the identical three-case algorithm under our own name, genuinely
-`Task.spawn` underneath. -/
 
 /-- Fork-join over a list of running `Task`s: wait for each, then apply `f` to all the results in
 order. `as` is the reversed accumulator of results collected so far, so callers start it at `[]`.
