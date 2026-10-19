@@ -41,13 +41,9 @@ one written by hand, and `∥≡` still lexes as a single token.
 
 /-! ### `doₚ` — a `do`-shaped block that is literally `ParM.bind`
 
-`do` works and is `rfl`-equal, but it desugars to `Bind.bind`, so a `simp`/`rw` lemma stated about
-`ParM.bind` never fires: the goal still shows `do let v ← …` and the `Monad` instance is in the way.
-That is why `Examples/SumArray.lean` was written in raw constructors.
-
-A `doₚ` block has the same shape as `do` and expands to `ParM.bind` *literally*, so it reads like
-ordinary imperative code while keeping the proof behaviour of the hand-written form. The last line of
-a block is its result. -/
+`do` is `rfl`-equal but desugars to `Bind.bind`, so a lemma about `ParM.bind` never fires — the
+`Monad` instance is in the way, which is why `Examples/SumArray.lean` uses raw constructors. `doₚ`
+expands to `ParM.bind` literally; a block's last line is its result. -/
 
 -- One step of a `doₚ` block: either a binding or a statement whose value is discarded.
 declare_syntax_cat doPStep

@@ -82,6 +82,53 @@ theorem indep_of_footprint_subset {f g : Footprint} {A B : List Loc}
    fun l h1 h2 => hAB l (hfw h1) (hgr h2),
    fun l h1 h2 => hAB l (hfr h2) (hgw h1)⟩
 
+/-- **Componentwise containment.** `f` touches no more than `g` does, read-for-read and
+write-for-write. This is what a *syntactic* footprint gives when the address is not known until the
+run: not the exact set, but a bound. -/
+def Footprint.Sub (f g : Footprint) : Prop := f.reads ⊆ g.reads ∧ f.writes ⊆ g.writes
+
+namespace Footprint.Sub
+
+theorem rfl' (f : Footprint) : f.Sub f := ⟨fun _ h => h, fun _ h => h⟩
+
+theorem of_eq {f g : Footprint} (h : f = g) : f.Sub g := h ▸ rfl' f
+
+theorem trans {f g h : Footprint} (hfg : f.Sub g) (hgh : g.Sub h) : f.Sub h :=
+  ⟨fun _ m => hgh.1 (hfg.1 m), fun _ m => hgh.2 (hfg.2 m)⟩
+
+/-- Either half of a union is bounded by it — the bound for a branch taken at run time. -/
+theorem left (a b : Footprint) : a.Sub (Footprint.union a b) :=
+  ⟨fun _ m => List.mem_append.mpr (Or.inl m), fun _ m => List.mem_append.mpr (Or.inl m)⟩
+
+theorem right (a b : Footprint) : b.Sub (Footprint.union a b) :=
+  ⟨fun _ m => List.mem_append.mpr (Or.inr m), fun _ m => List.mem_append.mpr (Or.inr m)⟩
+
+/-- Bounds compose over `union`, which is what lets the bound be read off the syntax by a fold. -/
+theorem union {a a' b b' : Footprint} (ha : a.Sub a') (hb : b.Sub b') :
+    (Footprint.union a b).Sub (Footprint.union a' b') := by
+  constructor
+  · intro l m
+    simp only [Footprint.union, List.mem_append] at m ⊢
+    exact m.elim (fun h => Or.inl (ha.1 h)) (fun h => Or.inr (hb.1 h))
+  · intro l m
+    simp only [Footprint.union, List.mem_append] at m ⊢
+    exact m.elim (fun h => Or.inl (ha.2 h)) (fun h => Or.inr (hb.2 h))
+end Footprint.Sub
+
+/-- Independence is preserved by shrinking either side — so checking Bernstein on *bounds* implies
+it for the actual footprints. Load-bearing for data-dependent addressing: `Indep` has no `R∩R`
+clause, so widening a read set can never manufacture a conflict that was not there. -/
+theorem Indep.of_sub {f g f' g' : Footprint} (hf : f'.Sub f) (hg : g'.Sub g) (h : Indep f g) :
+    Indep f' g' :=
+  ⟨fun l h1 h2 => h.1 l (hf.2 h1) (hg.2 h2),
+   fun l h1 h2 => h.2.1 l (hf.2 h1) (hg.1 h2),
+   fun l h1 h2 => h.2.2 l (hg.2 h1) (hf.1 h2)⟩
+
+/-- Nothing conflicts with a computation that touches nothing. -/
+theorem Indep.empty_right (f : Footprint) : Indep f Footprint.empty :=
+  ⟨fun _ _ h => (List.not_mem_nil h).elim, fun _ _ h => (List.not_mem_nil h).elim,
+   fun _ h _ => (List.not_mem_nil h).elim⟩
+
 /-- Independence does not depend on which branch you call left. -/
 theorem Indep.symm {f₁ f₂ : Footprint} (h : Indep f₁ f₂) : Indep f₂ f₁ :=
   ⟨fun l hb ha => h.1 l ha hb, h.2.2, h.2.1⟩
@@ -151,11 +198,9 @@ def childFootprints {αs : List Type} : Childs ParM αs → State → List Footp
 
 /-! ### `WellFormed`
 
-The real per-program obligation. Top-level `Indep` between `p` and `q` says nothing about `par`
-nodes nested *inside* `p` or `q` — `docs/decomposition.md` has the counterexample showing the
-outermost check alone is unsound. `WellFormed` therefore checks Bernstein independence at *every*
-`par` node in the tree, each against the heap that node sees along the canonical run. Same recursion
-shape as `accesses`. -/
+The real per-program obligation: Bernstein at *every* `par` node, each against the heap that node
+sees along the canonical run. The outermost check alone is unsound — `docs/decomposition.md` has the
+counterexample. -/
 /-- **Bernstein between every pair of children.** The N-ary independence obligation, stated flatly
 rather than spread over nesting levels. -/
 @[simp, grind .]

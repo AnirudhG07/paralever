@@ -439,7 +439,7 @@ theorem reaches_par_of_reachesChilds {β : Type} {αs : List Type}
             exfalso
             rw [stepChilds_eq_nil_of_allPure a' σa' (by rw [hp]; rfl)] at hmem
             simp at hmem
-      simp only [stepC, step, hnr', Bool.false_eq_true, if_false]
+      simp only [stepC, step, hnr', Bool.false_eq_true, ite_false]
       cases hp : allPure a' with
       | some vs => rw [hp] at hnotpure; simp at hnotpure
       | none =>
@@ -448,14 +448,9 @@ theorem reaches_par_of_reachesChilds {β : Type} {αs : List Type}
 
 /-! ### Operational locality and the single-step canonical invariant
 
-Piece 3, and where exactly `WellFormed` earns its place. `step`'s racing check is re-evaluated fresh
-at every single step, not once at the top, so a real step that *doesn't* crash is automatically
-non-racing at that instant, at any nesting depth, independence or not. Independence is needed for one
-narrower thing: when the *right* branch of a `.par` moves before the left finishes, its real starting
-state is the raw joint state, not the left-first reference point `σ₁` the whole theorem is stated
-against, and only `Indep` makes replaying that step against `σ₁` give the same outcome.
-`step_combined` is the single-step form of exactly that. One step at a time is enough; it needs no
-containment statement about arbitrary reachable depths. -- ref: `docs/decomposition.md` -/
+Piece 3. `step` re-checks racing at every step, so `Indep` is needed for one narrower thing: a right
+branch moving first starts from the raw joint state, not the left-first reference point `σ₁`.
+`step_combined` is the single-step form of that. -- ref: `docs/decomposition.md` -/
 
 /-- Bernstein against a union on the right splits into the two halves. -/
 theorem Indep.union_right {A B C : Footprint} (hb : Indep A B) (hc : Indep A C) :
@@ -547,7 +542,7 @@ theorem step_locality_all :
         simp only [List.mem_singleton, Conf.run.injEq] at hstep
         obtain ⟨hP3, hσ3⟩ := hstep
         refine ⟨σ', ?_, ?_⟩
-        · simp only [stepC, step, hnr, Bool.false_eq_true, if_false]
+        · simp only [stepC, step, hnr, Bool.false_eq_true, ite_false]
           simp_all
         · intro x hx; rw [hσ3]; exact hagree x hx
       · -- some child moved
@@ -561,7 +556,7 @@ theorem step_locality_all :
             obtain ⟨σ3', hstep', hag'⟩ :=
               ih2 σ σ' F hwf.2.1 hwf.1 hF.left hagree x.1 x.2 hr
             refine ⟨σ3', ?_, ?_⟩
-            · simp only [stepC, step, hnr, Bool.false_eq_true, if_false]
+            · simp only [stepC, step, hnr, Bool.false_eq_true, ite_false]
               rename_i hnp
               simp only [hnp, List.mem_map]
               exact ⟨some (x.1, σ3'), hstep', by rw [← hP3]⟩
@@ -920,15 +915,10 @@ theorem stepChilds_combined {αs : List Type} (cs : Childs ParM αs) :
 
 /-! ### Preservation and chaining
 
-Piece 4. `step_combined` gives the invariant for *one* step; using it again on the *next* step needs
-`WellFormed` re-established at that point, which needs `Indep`'s three Bernstein conditions
-individually — `step_combined`'s own containment conjunct bundles reads and writes together via
-one `FDisjoint`, which isn't fine-grained enough to reconstruct them. `step_subset_rw` is the
-finer version (same proof shape as `step_combined`'s footprint half, `.reads`/`.writes` tracked as
-separate `List.Subset` facts), and `WellFormed_preserved` is what actually chains: it doesn't
-re-derive containment for a compound moved branch from scratch — `ihp`/`ihq` (the *same*
-`WellFormed_preserved`, structurally smaller) already give `WellFormed` for that branch directly,
-so the only new content per step is checking `Indep` monotonically shrinks via `step_subset_rw`. -/
+Piece 4. Re-invoking `step_combined` on the next step needs `WellFormed` re-established, hence
+`Indep`'s three conditions separately — which `step_combined`'s bundled `FDisjoint` cannot give.
+`step_subset_rw` tracks `.reads`/`.writes` apart, and `WellFormed_preserved` chains.
+-- ref: `docs/decomposition.md` § Preservation and chaining -/
 
 /-- Appending respects containment on both sides — what lifts component subset facts through
 `Footprint.union`. -/
@@ -1449,7 +1439,7 @@ theorem wellFormed_canonical_all :
           allPure_pureChilds αs (runChilds cs σ).1
         have hnr0 : racingAll (nextAccsChilds (pureChilds αs (runChilds cs σ).1)) = false :=
           hnr _ _ hRc
-        simp only [stepC, step, hnr0, Bool.false_eq_true, if_false, hap]
+        simp only [stepC, step, hnr0, Bool.false_eq_true, ite_false, hap]
         simp
       refine Reaches.trans (hRpar.tail hjoin) ((ihk (runChilds cs σ).1 (runChilds cs σ).2 r σ'
         hwfk).mpr ?_)

@@ -2,42 +2,28 @@ import Paralever.Theory.Intervals
 
 /-! # `ArrRef` — array-shaped locations, instead of bare `Loc`
 
-`ParM`'s only primitives are `.read`/`.write` at a raw `Loc := Nat`. Every example so far computes
-addresses by hand (`i*n+k`) and re-derives its own footprint-bound induction. `ArrRef` is the
-missing layer between "bare heap address" and "your actual array": once locations are always
-`a.loc i` for a named `a : ArrRef`, two facts become *generic*, proved once here instead of
-per-example:
+The layer between a raw `Loc` and your actual array. Two facts become generic, proved once here:
+`ArrM.get`/`.set`'s footprint is exactly `{a.loc i}` confined to `a.InRange`, and two non-overlapping
+`ArrRef`s are independent whatever indices they touch (`disjoint_of_range`) — one `omega` on four
+constants instead of a bespoke induction.
 
-1. `ArrM.get`/`ArrM.set`'s footprint is always exactly `{a.loc i}`, confined to `a.InRange`
-   (`ArrM.get_footprintWithin`/`.set_footprintWithin`) — feeds straight into
-   `Theory/Intervals.lean`'s `FootprintWithin` combinators.
-2. Two `ArrRef`s (or two slices of the same one — `MergeSort.lean`'s data/scratch channels, or its
-   own `[lo,mid)`/`[mid,hi)` split) with non-overlapping `[base,base+len)` ranges are automatically
-   independent, no matter what indices inside each are actually touched
-   (`ArrRef.disjoint_of_range`) — one `omega` call on the two pairs of constants, not a bespoke
-   induction re-deriving the same fact every time.
-
-Composing `ArrM.get`/`.set` into a larger program (loops, recursion) still needs its own structural
-induction to bound *that* program's footprint — `ArrRef` doesn't eliminate that, only the address
-arithmetic and the disjointness step at the end of it. -/
+Composing them into loops or recursion still needs that program's own footprint bound; `ArrRef` only
+removes the address arithmetic and the final disjointness step. -/
 
 namespace Paralever
 open Paralever
 
-/-- A named view into the heap covering the `len` consecutive locations `[base, base+len)`. Not a
-container: it holds no elements, only the address range, and the values live in the `State` as
-always. -/
+/-- The `len` consecutive locations `[base, base+len)`. Not a container: values live in the
+`State`. -/
 structure ArrRef where
   base : Loc
   len  : Nat
+  deriving Repr, DecidableEq, Inhabited
 
-/-- The `Loc` of index `i` in `a` — the one piece of address arithmetic every example otherwise
-does by hand. -/
+/-- The `Loc` of index `i` in `a`. -/
 def ArrRef.loc (a : ArrRef) (i : Nat) : Loc := a.base + i
 
-/-- `l` lies in `a`'s range. A `Loc → Prop`, so it is exactly the shape
-`FootprintWithin`/`ReadsWithin`/`WritesWithin` take — this is what makes `ArrRef` plug into
-`Theory/Intervals.lean` with no glue. -/
+/-- `l` lies in `a`'s range. A `Loc → Prop`, the shape `FootprintWithin` takes. -/
 def ArrRef.InRange (a : ArrRef) (l : Loc) : Prop := a.base ≤ l ∧ l < a.base + a.len
 
 /-- An in-bounds index addresses a location in range. -/
@@ -45,9 +31,30 @@ def ArrRef.InRange (a : ArrRef) (l : Loc) : Prop := a.base ≤ l ∧ l < a.base 
 theorem ArrRef.loc_mem (a : ArrRef) {i : Nat} (hi : i < a.len) : a.InRange (a.loc i) := by
   unfold ArrRef.loc ArrRef.InRange; grind
 
-/-- The sub-range `[lo, hi)` of `a` as an `ArrRef` in its own right, so two halves of one backing
-array (`MergeSort.lean`'s `[lo,mid)`/`[mid,hi)`) are two `ArrRef`s and `disjoint_of_range` applies to
-them unchanged. -/
+/-- Every cell of `a` — the bound a data-dependent index gets, since which cell is unknown
+statically. -- ref: `docs/block-ir.md` -/
+def ArrRef.cells (a : ArrRef) : List Loc :=
+  (List.range (max a.len 1)).map (fun i => a.base + i)
+
+/-- **Confined to its array by construction**: the index wraps, so `addr_mem_cells` needs no
+hypothesis — unlike a raw `store l` (`Examples/Pointers.lean`). -/
+def ArrRef.addr (a : ArrRef) (i : Int) : Loc := a.base + i.toNat % max a.len 1
+
+/-- `addr` lands in `cells`, for every index. -/
+theorem ArrRef.addr_mem_cells (a : ArrRef) (i : Int) : a.addr i ∈ a.cells := by
+  unfold ArrRef.addr ArrRef.cells
+  exact List.mem_map.mpr ⟨i.toNat % max a.len 1,
+    List.mem_range.mpr (Nat.mod_lt _ (Nat.lt_of_lt_of_le Nat.zero_lt_one (Nat.le_max_right _ _))),
+    rfl⟩
+
+/-- …and inside the range when the array is non-empty. -/
+theorem ArrRef.addr_inRange (a : ArrRef) (h : 0 < a.len) (i : Int) : a.InRange (a.addr i) := by
+  unfold ArrRef.addr ArrRef.InRange
+  have : max a.len 1 = a.len := Nat.max_eq_left h
+  rw [this]
+  exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ h) a.base⟩
+
+/-- The sub-range `[lo, hi)` as an `ArrRef`, so two halves of one array are two `ArrRef`s. -/
 def ArrRef.slice (a : ArrRef) (lo hi : Nat) : ArrRef := ⟨a.base + lo, hi - lo⟩
 
 /-- A slice's locations are the parent's — `FootprintWithin.mono`'s hypothesis for lifting a bound on
@@ -58,12 +65,8 @@ theorem ArrRef.slice_inRange {a : ArrRef} {lo hi : Nat} (hle : hi ≤ a.len) {l 
   unfold ArrRef.slice ArrRef.InRange at *
   grind
 
-/-- **Non-overlapping ranges share no location.** `a` entirely before `b` or `b` entirely before `a`
-is all it takes, and that is one `omega` on the four constants `a.base`, `a.len`, `b.base`, `b.len` —
-no reasoning about which indices are actually touched inside either.
-
-This is the disjointness hypothesis `indep_of_footprint_within`/`indep_of_read_write_confined` want,
-so it is the last step of almost every array example's independence proof. -/
+/-- **Non-overlapping ranges share no location** — one `omega` on four constants, with no
+reasoning about which indices are touched. The last step of almost every array proof. -/
 @[simp, grind .]
 theorem ArrRef.disjoint_of_range {a b : ArrRef}
     (h : a.base + a.len ≤ b.base ∨ b.base + b.len ≤ a.base) :

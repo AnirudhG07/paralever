@@ -67,10 +67,7 @@ def Results : List Type → Type
   | α :: αs => α × Results αs
 
 /-- A heterogeneous list of `Node`-things, indexed by the types they return.
-
-Generic in `Node` and defined before `ParM`, so `ParM`'s own constructors never mention a spine.
-`nil`/`cons` are `List`'s constructors, not a fork: forking happens once, at the `par` node, and
-nothing in the semantics treats one child differently from another. -/
+N-ary Children on a fork from parent, an inductive type to add a new child to the parent instead of another child branch(like binary tree) -/
 inductive Childs (Node : Type → Type 1) : List Type → Type 1 where
   | nil  : Childs Node []
   | cons {α : Type} {αs : List Type} : Node α → Childs Node αs → Childs Node (α :: αs)
@@ -115,9 +112,7 @@ def Childs.All (motive : (α : Type) → ParM α → Prop) :
   | _, .nil       => True
   | _, .cons p ps => motive _ p ∧ Childs.All motive ps
 
-/-- **Induction on programs.** Lean's `induction` tactic refuses a nested inductive, so this is the
-principle to use instead: `induction p using ParM.inductionOn with | hpure .. | hread .. | …`.
-The `par` case gets an IH for every child (`Childs.All`) and one for the continuation. -/
+/-- **Induction on programs.** The `par` case gets an Induction Hypothesis for every child (`Childs.All`) and one for the continuation. -/
 @[elab_as_elim]
 theorem ParM.inductionOn {motive : (α : Type) → ParM α → Prop}
     (hpure : ∀ {α : Type} (a : α), motive α (.pure a))
@@ -143,8 +138,8 @@ def pureChilds : (αs : List Type) → Results αs → Childs ParM αs
   | [],     _  => .nil
   | _ :: as, vs => .cons (.pure vs.1) (pureChilds as vs.2)
 
-/-- **Mutual induction over a program and a children list.** Use this when the statement needs its
-own children-level form (most of `Theory/`): `motive2` is that form, and the `hcons` case is the
+/-- **Mutual induction over a program and a children list.** When the statement needs its
+own children-level form: `motive2` is that form, and the `hcons` case is the
 2-to-N step — assume it for one child and for the rest, conclude it for the whole list.
 
 `inductionOn` is the lighter version, for when the children only need the program's own motive. -/

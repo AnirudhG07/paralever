@@ -45,6 +45,14 @@ inductive AExp where
   | add : AExp → AExp → AExp
   | sub : AExp → AExp → AExp
   | mul : AExp → AExp → AExp
+  /-- `min a b` and `max a b`. Present so a compare-exchange can be written **branch-free**: a
+  sorting network never needs a conditional, so the language needs none and footprints stay exact.
+  -- ref: `docs/block-ir.md` -/
+  | min : AExp → AExp → AExp
+  | max : AExp → AExp → AExp
+  /-- Integer division, total: division by zero is `0`, as in Lean's `Int`. Present so a learning
+  rate below one can be written without leaving the integers. -/
+  | div : AExp → AExp → AExp
   deriving Repr, DecidableEq
 
 /-- The two memory operations. `load r l` is `r := M[l]`; `store l e` is `M[l] := e`. -/
@@ -74,6 +82,9 @@ def AExp.eval (ρ : Regs) : AExp → Int
   | .add a b => a.eval ρ + b.eval ρ
   | .sub a b => a.eval ρ - b.eval ρ
   | .mul a b => a.eval ρ * b.eval ρ
+  | .min a b => let x := a.eval ρ; let y := b.eval ρ; if x ≤ y then x else y
+  | .max a b => let x := a.eval ρ; let y := b.eval ρ; if x ≤ y then y else x
+  | .div a b => (a.eval ρ) / (b.eval ρ)
 
 /-- `+` on `AExp`, so expressions are written as ordinary arithmetic. -/
 instance : Add AExp := ⟨AExp.add⟩

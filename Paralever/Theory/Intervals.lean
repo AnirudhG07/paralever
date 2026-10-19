@@ -67,12 +67,8 @@ def FootprintWithin (f : Footprint) (P : Loc → Prop) : Prop := ReadsWithin f P
 
 /-! ### The combinator algebra
 
-One member per shape a footprint can be built out of, for each of the three predicates. A
-confinement proof for a real program is assembled from these: `empty` at a `pure` leaf, `read`/
-`write` at a primitive node, `union` wherever `accesses` combines two footprints, `mono` to relax
-the predicate, and `apply` to turn the finished bound back into a membership fact about one
-location. `Footprint.empty` and `Footprint.union` are the only shapes `accesses` produces, so the
-list is complete. -/
+One member per shape a footprint can be built out of, for each of the three predicates. `empty` and
+`union` are the only shapes `accesses` produces, so the list is complete. -/
 
 namespace ReadsWithin
 

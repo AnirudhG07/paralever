@@ -17,6 +17,24 @@ vocabulary rather than spelling out `Reaches`/`Conf.run`/`ParM.pure` directly. -
 def ParSeqEq {α : Type} (p q : ParM α) (σ : State) : Prop :=
   ∀ r σ', Reaches (.run p σ) (.run (.pure r) σ') ↔ Reaches (.run q σ) (.run (.pure r) σ')
 
+/-! ### `ParSeqEq` is an equivalence relation
+
+It is a pointwise `Iff`, so this costs nothing. `trans` is what lets a program with *several*
+parallel regions be sequentialised one region at a time. -/
+
+namespace ParSeqEq
+
+theorem refl {α : Type} (p : ParM α) (σ : State) : ParSeqEq p p σ := fun _ _ => Iff.rfl
+
+theorem symm {α : Type} {p q : ParM α} {σ : State} (h : ParSeqEq p q σ) : ParSeqEq q p σ :=
+  fun r σ' => (h r σ').symm
+
+theorem trans {α : Type} {p q r : ParM α} {σ : State}
+    (h₁ : ParSeqEq p q σ) (h₂ : ParSeqEq q r σ) : ParSeqEq p r σ :=
+  fun v σ' => (h₁ v σ').trans (h₂ v σ')
+
+end ParSeqEq
+
 /-- Well-formedness transfers from the parallel composition to the sequential one. The `Indep`
 conjunct is not needed: `seqPair` has no top-level `par` node to check, only `p`'s and `q`'s own
 internal structure, which `WellFormed (parPair p q) σ` already supplies. A `WellFormed_bind`
@@ -39,12 +57,11 @@ theorem par_seq_eq {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
       wellFormed_canonical _ σ r σ' (wellFormed_of_seqPair p q σ h),
       runSeq_par_eq_seq]
 
-/-! ### N-ary generalization
+/-! ### N-ary form
 
-A corollary of the binary case, not a second theorem. `parAll`/`seqAll` are binary `par`/`seqPair`
-nested over a list, so the same assembly goes through by induction on the list and no new proof
-technique appears — which is why `ParM` has no `parN` constructor to prove this about (`List (ParM α)`
-would be an illegal nested inductive; see `docs/program-model.md`). -/
+Not a corollary of the binary case but the other way round: `parPair` is `parAll`'s two-child
+instance, and the induction over children happened in `wellFormed_canonical_all`. What is left is
+the definitional bridge. -- ref: docs/program-model.md § Why `par` is N-ary -/
 
 /-- The sequential fold agrees with the children-block run: same results in order, same final heap.
 Induction on the list — the bridge between `seqAll`'s nested `bind`s and `parAll`'s single node. -/
@@ -114,8 +131,9 @@ expects, recovered from the single-node definition. -/
 theorem accesses_parAll_cons {τ : Type} (p : ParM τ) (ps : List (ParM τ)) (σ : State) :
     accesses (ParM.parAll (p :: ps)) σ
       = Footprint.union (accesses p σ) (accesses (ParM.parAll ps) (runSeq p σ).2) := by
-  simp only [ParM.parAll, ParM.childsOf, accesses, accessesChilds, Footprint.union,
-    Footprint.empty, List.append_nil, List.append_assoc]
+  simp only [ParM.parAll, ParM.childsOf, accesses, accessesChilds, Footprint.union, Footprint.empty,
+    List.append_nil]
+
 
 /-- `WellFormed (parAll (p :: ps)) σ` from the three facts about the head and tail that need proving.
 `apply` this to peel one element off a `parAll` well-formedness goal; the tail's independence and
@@ -159,6 +177,7 @@ theorem parAll_par_seq_eq {τ : Type} (ps : List (ParM τ)) (σ : State)
 
 /-- `parPair` and `seqPair` have the same canonical run. The content of `par_seq_eq`
 is that the *operational* relation also collapses onto it. -/
+@[simp, grind .]
 theorem runSeq_parPair_eq_seqPair {α β : Type} (p : ParM α) (q : ParM β) (σ : State) :
     runSeq (ParM.parPair p q) σ = runSeq (ParM.seqPair p q) σ :=
   runSeq_par_eq_seq p q σ
@@ -201,26 +220,51 @@ theorem parSeqEq_bind_cont {α β : Type} (c : ParM α) (f g : α → ParM β) (
 
 `prefix ; (p ∥ q) ; suffix` versus `prefix ; (p ; q) ; suffix`. -/
 
-/-- **Parallelizing one region of a larger sequential program.** Run sequentially up to the
-region, replace the region by its parallel version, continue sequentially after the join: the
-whole program's outcomes are unchanged. Only the region needs an independence obligation. -/
+/-- **Substituting one region of a larger sequential program.** Run sequentially up to the region,
+replace the region by anything with the same canonical run, continue sequentially after it: the
+whole program's outcomes are unchanged. Only the region carries an obligation, and the code before
+and after it is untouched — which is what makes this usable on a program whose other phases are
+genuinely sequential.
+
+Stated for an arbitrary pair `r`, `r'` rather than for `parPair`/`seqPair`, because the two
+instances that matter — a binary fork and an N-ary loop — differ only in which run-equality lemma is
+supplied. -/
+theorem par_seq_eq_region_of {α β δ : Type}
+    (pre : ParM α) (r r' : ParM β) (post : β → ParM δ) (σ : State)
+    (hrun : ∀ τ : State, runSeq r τ = runSeq r' τ)
+    (hwf' : ∀ τ : State, WellFormed r τ → WellFormed r' τ)
+    (hpar : WellFormed (ParM.bind pre (fun _ => ParM.bind r post)) σ) :
+    ParSeqEq (ParM.bind pre (fun _ => ParM.bind r post))
+             (ParM.bind pre (fun _ => ParM.bind r' post)) σ := by
+  have hpre : WellFormed pre σ := ((WellFormed_bind pre _ σ).mp hpar).1
+  have hreg : WellFormed (ParM.bind r post) (runSeq pre σ).2 :=
+    ((WellFormed_bind pre _ σ).mp hpar).2
+  have hwfr : WellFormed r (runSeq pre σ).2 :=
+    ((WellFormed_bind r post (runSeq pre σ).2).mp hreg).1
+  have hseq : WellFormed (ParM.bind r' post) (runSeq pre σ).2 :=
+    wellFormed_bind_congr r r' post (runSeq pre σ).2 (hwf' _ hwfr) (hrun _) hreg
+  refine parSeqEq_bind_cont pre _ _ σ hpar ?_ ?_
+  · rw [WellFormed_bind]; exact ⟨hpre, hseq⟩
+  · rw [runSeq_bind, runSeq_bind, hrun]
+
+/-- **Parallelizing one binary region.** `par_seq_eq_region_of` at `r := parPair p q`. -/
 theorem par_seq_eq_region {α β γ δ : Type}
     (pre : ParM α) (p : ParM β) (q : ParM γ) (post : β × γ → ParM δ) (σ : State)
     (hpar : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.parPair p q) post)) σ) :
     ParSeqEq (ParM.bind pre (fun _ => ParM.bind (ParM.parPair p q) post))
-             (ParM.bind pre (fun _ => ParM.bind (ParM.seqPair p q) post)) σ := by
-  have hpre : WellFormed pre σ := ((WellFormed_bind pre _ σ).mp hpar).1
-  have hreg : WellFormed (ParM.bind (ParM.parPair p q) post) (runSeq pre σ).2 :=
-    ((WellFormed_bind pre _ σ).mp hpar).2
-  have hwfpair : WellFormed (ParM.parPair p q) (runSeq pre σ).2 :=
-    ((WellFormed_bind (ParM.parPair p q) post (runSeq pre σ).2).mp hreg).1
-  have hseq : WellFormed (ParM.bind (ParM.seqPair p q) post) (runSeq pre σ).2 :=
-    wellFormed_bind_congr (ParM.parPair p q) (ParM.seqPair p q) post (runSeq pre σ).2
-      (wellFormed_of_seqPair p q (runSeq pre σ).2 hwfpair)
-      (runSeq_parPair_eq_seqPair p q (runSeq pre σ).2) hreg
-  refine parSeqEq_bind_cont pre _ _ σ hpar ?_ ?_
-  · rw [WellFormed_bind]; exact ⟨hpre, hseq⟩
-  · rw [runSeq_bind, runSeq_bind, runSeq_parPair_eq_seqPair]
+             (ParM.bind pre (fun _ => ParM.bind (ParM.seqPair p q) post)) σ :=
+  par_seq_eq_region_of pre _ _ post σ (runSeq_parPair_eq_seqPair p q)
+    (fun τ h => wellFormed_of_seqPair p q τ h) hpar
+
+/-- **Parallelizing one N-ary loop region.** `par_seq_eq_region_of` at `r := parAll ps`: a loop
+inside an otherwise sequential program may be run with all its iterations at once. -/
+theorem parAll_seq_eq_region {α τ' δ : Type}
+    (pre : ParM α) (ps : List (ParM τ')) (post : List τ' → ParM δ) (σ : State)
+    (hpar : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.parAll ps) post)) σ) :
+    ParSeqEq (ParM.bind pre (fun _ => ParM.bind (ParM.parAll ps) post))
+             (ParM.bind pre (fun _ => ParM.bind (ParM.seqAll ps) post)) σ :=
+  par_seq_eq_region_of pre _ _ post σ (runSeq_parAll_eq_seqAll ps)
+    (fun τ h => wellFormed_of_seqAll ps τ h) hpar
 
 /-! ### Link ② compositionally: `Computes`
 

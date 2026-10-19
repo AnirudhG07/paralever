@@ -1,6 +1,7 @@
 import Paralever.Lib.TouchesOnly
 import Paralever.Lib.Notation
 import Paralever.Lib.Cost
+import Paralever.Lang.Imp
 
 /-! # Recursive parallel mergesort
 
@@ -107,17 +108,11 @@ decreasing_by all_goals omega
 
 /-! ### Independence — "different memory ⇒ done," via `Theory/Intervals.lean`
 
-`mergeStep`/`copyBack` contain no `.par` node — a fuel-recursive loop has no independence obligation
-of its own to discharge, so `WellFormed` for either is unconditionally true (`_wellformed` below).
-
-`mergeSortPar` is different: it *does* contain a `.par` node (once per recursion level, combining
-the two recursive sub-sorts), and that is the one and only place `Indep` is ever invoked in this
-file. The obligation is discharged by `Theory/Intervals.lean`'s generic machinery: bound each side's
-*entire* footprint (reads and writes, across its whole recursive sub-computation) to a location
-predicate, show the two predicates are never true of the same location (one `omega` call), get
-`Indep` for free from `indep_of_footprint_within` — no Bernstein-condition case analysis, ever,
-for any depth of nesting. `TouchesOnly` is exactly that predicate: "in the data range being sorted,
-or its matching scratch range." -/
+`mergeStep`/`copyBack` have no `.par` node, so `WellFormed` for either is unconditional. The one
+`.par` node is `mergeSortPar`'s, and `Theory/Intervals.lean` discharges it: bound each side's entire
+footprint to a predicate, show the two are never true of the same location (one `omega`), read
+`Indep` off `indep_of_footprint_within` — no Bernstein case analysis at any depth. `TouchesOnly` is
+that predicate: "in the data range being sorted, or its matching scratch range." -/
 
 /-! `TouchesOnly lo hi N` — "in the data channel `[lo,hi)` or the matching scratch channel
 `[N+lo,N+hi)`" — is the one predicate every footprint bound below targets. It and its two lemmas
@@ -143,12 +138,12 @@ theorem mergeStep_within (mid hi auxBase : Nat) :
       by_cases hc1 : i ≥ mid
       · by_cases hc2 : j ≥ hi
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k = .pure () := by
-            simp only [mergeStep]; rw [if_pos hc1, if_pos hc2]
+            simp only [mergeStep]; rw [ite_eq_left hc1, ite_eq_left hc2]
           rw [heq]; simp only [accesses]; exact FootprintWithin.empty _
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k
               = .read j (fun v => .write (auxBase + k) v
                   (fun _ => mergeStep mid hi auxBase fuel i (j + 1) (k + 1))) := by
-            simp only [mergeStep]; rw [if_pos hc1, if_neg hc2]
+            simp only [mergeStep]; rw [ite_eq_left hc1, ite_eq_right hc2]
           rw [heq]
           simp only [accesses]
           have hmono : ∀ l, ((i ≤ l ∧ l < mid) ∨ (j+1 ≤ l ∧ l < hi) ∨ (auxBase+(k+1) ≤ l ∧ l < auxBase+(k+1)+fuel))
@@ -170,7 +165,7 @@ theorem mergeStep_within (mid hi auxBase : Nat) :
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k
               = .read i (fun v => .write (auxBase + k) v
                   (fun _ => mergeStep mid hi auxBase fuel (i + 1) j (k + 1))) := by
-            simp only [mergeStep]; rw [if_neg hc1, if_pos hc2]
+            simp only [mergeStep]; rw [ite_eq_right hc1, ite_eq_left hc2]
           rw [heq]
           simp only [accesses]
           have hmono : ∀ l, ((i+1 ≤ l ∧ l < mid) ∨ (j ≤ l ∧ l < hi) ∨ (auxBase+(k+1) ≤ l ∧ l < auxBase+(k+1)+fuel))
@@ -197,7 +192,7 @@ theorem mergeStep_within (mid hi auxBase : Nat) :
                       else
                         .write (auxBase + k) vj (fun _ => mergeStep mid hi auxBase fuel i (j + 1) (k + 1))
                   | _, _ => .pure ())) := by
-            simp only [mergeStep]; rw [if_neg hc1, if_neg hc2]
+            simp only [mergeStep]; rw [ite_eq_right hc1, ite_eq_right hc2]
           rw [heq]
           simp only [accesses]
           have hi1 : (i ≤ i ∧ i < mid) ∨ (j ≤ i ∧ i < hi) ∨ (auxBase+k ≤ i ∧ i < auxBase+k+(fuel+1)) :=
@@ -232,7 +227,7 @@ theorem mergeStep_within (mid hi auxBase : Nat) :
                       FootprintWithin.write (auxBase+k) _ hk1
                     have hb4 := FootprintWithin.mono hmonoR (ih (i+1) j (k+1) (σ.update (auxBase+k) (Val.int x)))
                     exact FootprintWithin.union hb3 hb4
-                  · simp only [hxy, if_false]
+                  · simp only [hxy, ite_false]
                     simp only [accesses]
                     have hb3 : FootprintWithin (Footprint.mk [] [auxBase+k])
                         (fun l => (i ≤ l ∧ l < mid) ∨ (j ≤ l ∧ l < hi) ∨ (auxBase+k ≤ l ∧ l < auxBase+k+(fuel+1))) :=
@@ -290,18 +285,18 @@ theorem mergeStep_wellformed (mid hi auxBase : Nat) :
       by_cases hc1 : i ≥ mid
       · by_cases hc2 : j ≥ hi
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k = .pure () := by
-            simp only [mergeStep]; rw [if_pos hc1, if_pos hc2]
+            simp only [mergeStep]; rw [ite_eq_left hc1, ite_eq_left hc2]
           rw [heq]; trivial
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k
               = .read j (fun v => .write (auxBase + k) v
                   (fun _ => mergeStep mid hi auxBase fuel i (j + 1) (k + 1))) := by
-            simp only [mergeStep]; rw [if_pos hc1, if_neg hc2]
+            simp only [mergeStep]; rw [ite_eq_left hc1, ite_eq_right hc2]
           rw [heq]; simp only [WellFormed]; exact ih i (j+1) (k+1) _
       · by_cases hc2 : j ≥ hi
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k
               = .read i (fun v => .write (auxBase + k) v
                   (fun _ => mergeStep mid hi auxBase fuel (i + 1) j (k + 1))) := by
-            simp only [mergeStep]; rw [if_neg hc1, if_pos hc2]
+            simp only [mergeStep]; rw [ite_eq_right hc1, ite_eq_left hc2]
           rw [heq]; simp only [WellFormed]; exact ih (i+1) j (k+1) _
         · have heq : mergeStep mid hi auxBase (fuel+1) i j k
               = .read i (fun vi => .read j (fun vj =>
@@ -312,7 +307,7 @@ theorem mergeStep_wellformed (mid hi auxBase : Nat) :
                       else
                         .write (auxBase + k) vj (fun _ => mergeStep mid hi auxBase fuel i (j + 1) (k + 1))
                   | _, _ => .pure ())) := by
-            simp only [mergeStep]; rw [if_neg hc1, if_neg hc2]
+            simp only [mergeStep]; rw [ite_eq_right hc1, ite_eq_right hc2]
           rw [heq]
           simp only [WellFormed]
           cases σ i with
@@ -321,7 +316,7 @@ theorem mergeStep_wellformed (mid hi auxBase : Nat) :
               | int y =>
                   by_cases hxy : x ≤ y
                   · simp only [hxy, if_true, WellFormed]; exact ih (i+1) j (k+1) _
-                  · simp only [hxy, if_false, WellFormed]; exact ih i (j+1) (k+1) _
+                  · simp only [hxy, ite_false, WellFormed]; exact ih i (j+1) (k+1) _
               | bool b => trivial
               | unit => trivial
           | bool b => trivial
@@ -400,7 +395,7 @@ theorem mergeSortPar_spec (N : Nat) :
             (accesses (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2)) (mergeSortPar N (lo+(hi-lo)/2) hi)) σ)
             (TouchesOnly lo hi N) := by
           rw [accesses_parPair]
-          exact FootprintWithin.union hFL' hFR' 
+          exact FootprintWithin.union hFL' hFR'
         refine ⟨?_, ?_⟩
         · rw [accesses_bind]
           apply FootprintWithin.union hFpar
@@ -635,5 +630,95 @@ theorem work_eq (lo hi : Nat) (σ : State) :
        work (ParM.seqPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4,
        time (ParM.parPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4,
        time (ParM.seqPair (mergeSortPar 4 0 2) (mergeSortPar 4 2 4)) σ4)
+
+/-! ## 4. The same algorithm, written in the surface language
+
+`AExp` has no comparison, so §1's `mergeStep` — which branches on `x ≤ y` — is not expressible, and
+patching it with a conditional would make the footprint a union of branches and lose exactness.
+Batcher's odd-even merge sort takes the route hardware takes instead: its merge is a fixed network
+of compare-exchanges, branch-free given `min` and `max`, so the footprint stays exact and the
+obligation stays a `Bool`. The parallelism is nested — `wfB` checks Bernstein at every `parallel`
+block of the recursion tree, at every depth. -/
+
+namespace Surface
+open Paralever.Lang
+
+/-- A no-op. -/
+def skipP : ParProg := ParProg.block []
+
+/-- Branch-free compare-exchange: the smaller value to `i`, the larger to `j`. Both registers hold
+the original values when the stores run, so no temporary is needed. -/
+def cmpEx (i j : Loc) : ParProg :=
+  paralever { %0 := [i]; %1 := [j];
+        [i] := AExp.min (R 0) (R 1);
+        [j] := AExp.max (R 0) (R 1) }
+
+/-- Batcher's odd-even merge of two sorted halves, at comparator distance `r`. The two sub-merges
+run in parallel, and so does the whole row of comparators after them. -/
+def oeMerge : Nat → Nat → Nat → Nat → ParProg
+  | 0,        _,  _, _ => skipP
+  | fuel + 1, lo, n, r =>
+      let m := r * 2
+      if m < n then
+        ParProg.block
+          [ .par [ oeMerge fuel lo n m, oeMerge fuel (lo + r) n m ]
+          , .par ((List.range ((n - r) / m)).map (fun t =>
+              let i := lo + r + t * m; cmpEx i (i + r))) ]
+      else cmpEx lo (lo + r)
+
+/-- Sort `[lo, lo+n)` for `n` a power of two: **sort the two halves in parallel**, then merge. The
+recursion builds a tree of `parallel` blocks, each thread containing more of them. -/
+def oeSort : Nat → Nat → Nat → ParProg
+  | 0,        _,  _ => skipP
+  | fuel + 1, lo, n =>
+      if n ≤ 1 then skipP
+      else
+        let m := n / 2
+        ParProg.block
+          [ .par [ oeSort fuel lo m, oeSort fuel (lo + m) m ]
+          , oeMerge (fuel + 1) lo n 1 ]
+
+/-! ### The obligation, at every depth
+
+One `decide` covers the whole tree: `wfB` on a `parallel` block checks its own threads pairwise
+*and* recurses into each of them, so a race nested three levels down is caught here. -/
+
+example : ParProg.wfB (oeSort 4 0 4) = true := by decide
+example : ParProg.wfB (oeSort 8 0 8) = true := by decide
+
+/-- Nesting is checked, not assumed: an inner block that races is rejected even when the outer
+threads are disjoint. -/
+example : ParProg.wfB (.par [cmpEx 0 1, cmpEx 2 3]) = true  := by decide
+example : ParProg.wfB (.par [cmpEx 0 1, cmpEx 1 2]) = false := by decide
+
+/-! ### Par = Seq, cost, and execution -/
+
+theorem par_seq_eq_8 (ρ : Regs) (σ : State) :
+    ParSeqEq (ParProg.execPar (oeSort 8 0 8) ρ) (ParProg.execSeq (oeSort 8 0 8) ρ) σ :=
+  ParProg.par_seq_eq (by decide) ρ σ
+
+/-- **Par ≤ Seq in rounds** — §3's `time_le` is the hand-built version of this. -/
+theorem time_le_8 (ρ : Regs) (σ : State) :
+    time (ParProg.execPar (oeSort 8 0 8) ρ) σ ≤ time (ParProg.execSeq (oeSort 8 0 8) ρ) σ :=
+  ParProg.time_le (by decide) ρ σ
+
+/-- The threaded and single-threaded runs agree, so a benchmark of the two is fair. -/
+theorem runTask_eq_seq (ρ : Regs) (σ : State) :
+    ParProg.runTask (oeSort 8 0 8) ρ σ = ParProg.runTaskSeq (oeSort 8 0 8) ρ σ :=
+  ParProg.runTask_eq_runTaskSeq (by decide) ρ σ
+
+/-- And it sorts. `#eval` spawns a `Task` per thread of every block, at every depth. -/
+def σ8 : State
+  | 0 => .int 8 | 1 => .int 3 | 2 => .int 6 | 3 => .int 1
+  | 4 => .int 7 | 5 => .int 2 | 6 => .int 5 | 7 => .int 4
+  | _ => .int 0
+
+-- #eval ParProg.evalTask (oeSort 8 0 8) σ8 [0,1,2,3,4,5,6,7]
+-- ⇒ [1, 2, 3, 4, 5, 6, 7, 8]
+
+example : (runSeq (ParProg.execPar (oeSort 8 0 8) (fun _ => 0)) σ8).2 0 = .int 1 := rfl
+example : (runSeq (ParProg.execPar (oeSort 8 0 8) (fun _ => 0)) σ8).2 7 = .int 8 := rfl
+
+end Surface
 
 end Paralever.Examples.MergeSort

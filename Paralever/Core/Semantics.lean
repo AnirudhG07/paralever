@@ -167,17 +167,13 @@ def stepC {α : Type} : Conf α → List (Conf α)
   | .run p σ => step p σ
   | .wrong   => []
 
-/-- Reflexive-transitive closure of `stepC`: "`c` can execute to `c'` under some schedule." Every
-statement about *all* interleavings is a statement about this relation. -/
+/-- Reflexive-transitive closure of `stepC`: "`c` can execute to `c'` under some schedule." Every statement about *all* interleavings is a statement about this relation. -/
 @[grind]
 inductive Reaches {α : Type} : Conf α → Conf α → Prop where
   | refl {c} : Reaches c c
   | tail {c c' c''} : Reaches c c' → c'' ∈ stepC c' → Reaches c c''
 
-/-- Reflexive-transitive closure of `stepChilds`: "these children can collectively move to that
-configuration, nobody having aborted". The children-level analogue of `Reaches`, and what replaces
-the old left/right branch lemmas — with N children there is no left and right, only "some child
-moved". -/
+/-- Reflexive-transitive closure of `stepChilds`: "these children can collectively move to that configuration, nobody having aborted". The children-level analogue of `Reaches`, and what replaces the old left/right branch lemmas — with N children there is no left and right, only "some child moved". -/
 inductive ReachesChilds {αs : List Type} :
     Childs ParM αs → State → Childs ParM αs → State → Prop where
   | refl {cs σ} : ReachesChilds cs σ cs σ

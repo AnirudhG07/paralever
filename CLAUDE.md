@@ -38,6 +38,13 @@ grep -rn "sorry" Paralever/          # the no-sorry gate
 
 Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinned to `v4.34.0`.
 
+## Surface-syntax tokens are global
+
+A `syntax "foo"` reserves `foo` as a token for the *whole project*, so no declaration anywhere can
+then be named `foo`. This has bitten twice: `syntax "r "` broke `Test/NArySpike.lean`, and `mem l`
+made `def mem` impossible — the obvious name for a `Layout`. Memory in `Lang/Notation.lean` is now
+`[l]`, which reserves nothing. Prefer tokens that already exist (`[`, `%`, `*`) over new keywords.
+
 ## Mathlib import policy
 
 Never `import Mathlib`. Import the specific module a lemma lives in
@@ -47,7 +54,10 @@ at all; keep it that way as long as possible so `lean <file>.lean` stays a fast 
 
 ## Dependencies
 
-**iris-lean only**, plus Mathlib. Everything else is ideas, not imports (Velvet, Veil, Loom,
+**iris-lean only**, plus Mathlib. `ProofWidgets` ships with Mathlib and is imported by
+`Search/ExplainHtml.lean` alone — but building it runs `npm clean-install`, so that one module makes
+node/npm a build requirement. `Search/Explain.lean` renders the same report with no dependency; see
+`docs/race-search.md`. Everything else is ideas, not imports (Velvet, Veil, Loom,
 SyDPaCC, lean-smt are read for design, never required).
 
 From iris-lean we take `Iris/BI/*`, `Iris/ProofMode/*`, and `Iris/Algebra/{Heap,GenMap,DFrac}` —
@@ -110,11 +120,29 @@ Paralever/
              Pure (pure↔ParM bridge + faithfulness theorem),
              Render (print a ParM tree — another interpreter, for debugging)
   Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
-  Search/    RaceSearch (race-site scan, schedules, follow_sound, Prog grammar)
+  Lang/      the ParProg DSL: Core (loadAt/storeAt — computed addresses; ifElse + whileAtMost —
+             control flow; footprint over-approximated, see docs/block-ir.md), Kernels, Layout,
+             Cuda, Cost, Exec, Notation (`[l]` memory, `%n` register, `if`, `while … in`),
+             Analysis (dependences, `atoms` — register-closed segments, `autoPar`),
+             AutoParSound (the rewrite preserves the heap — see docs/autopar.md)
+  AutoPar/   the sequential-to-parallel pass: Chain (regrouping lemmas), Plan (the schedule, order
+             preserving by construction), Dag (dependence DAG + critical-path bound), Sound
+             (rewrite_sound: seq = par, no hypothesis), Rewrite (units, the gate, surface round
+             trip) — see docs/autopar-algorithm.md
+  Search/    RaceSearch (race-site scan, schedules, follow_sound, attribution, Prog grammar,
+             findWrongGuided — phase 2 aimed by phase 1's conflict locations),
+             Explain (the interleaving printed), ExplainHtml (the same as an infoview widget)
   Compile/   TaskFacts, Exec (execTask — runs a program on real threads)
+MLIR/        the front end: Ast + Parse (MLIR generic form), Affine (map evaluation),
+             Lower (Mlir.Op → Layout × ParProg, the verdict path, over Int),
+             Eval (the same program over ℚ, the reference for differential execution),
+             Corpus (seven labelled pilots in corpus/*.mlir, as #guard gates)
+             — see docs/mlir.md
 Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo,
-             OpaqueAgents, PureToParM, TwoProcesses, Region, Racy, ExecDemo, *Task
+             OpaqueAgents, PureToParM, TwoProcesses, Region, Racy, Pointers, RaceReport,
+             NeuralNet, Pipeline, LangDemo, Scatter, ControlFlow, ExecDemo, *Task
 Test/        Sanity, AccessSanity, RaceSearch
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
-             opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md, ...)
+             opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md,
+             race-search.md, layout.md, autopar.md, mlir.md, ...)
 ```

@@ -7,6 +7,38 @@ Rationale for `Paralever/Core/{State,Semantics}.lean`.
 `State := Loc → Val`. No `Option`, so no failure threading through every lemma. Out-of-bounds is
 not a semantic error; it becomes a well-formedness predicate on programs if we ever need it.
 
+### What that means for pointers
+
+There is no allocation and no `free`, and `Loc := Nat`, so **there are no dangling pointers** —
+nothing to dangle. `ArrRef.loc a i = a.base + i` puts no bound on `i`, so `A.loc 1000` on a
+ten-element `A` is an ordinary location with an ordinary value. "In bounds" is `ArrRef.InRange`, a
+`Prop` used in proofs, never a check that runs. An index out of range is therefore an out-of-bounds
+*intention*, not an out-of-bounds *access*: no undefined behaviour, no garbage, and the heap does
+not change size, because it has none.
+
+The consequence is worth stating plainly: `par_seq_eq` is **equivalence, not memory safety**. A
+stray write is committed identically by the parallel and the sequential program, so the theorem goes
+on holding over a program that is wrong. `Examples/Pointers.lean` `Stray` is exactly that case —
+`wfB = true`, `ParSeqEq` by `decide`, and a `7` written to a cell the thread does not own.
+
+What *is* caught is the stray pointer that collides with another thread, which is the only kind that
+can break `par = seq`. Then it is an ordinary race: Bernstein fails on the literal address,
+`raceSites` names it, and the search returns a schedule reaching `wrong`
+(`Examples/Pointers.lean`: `Aliasing`, `Underflow`, `ReadWrite`). Two sharp edges that file pins
+down:
+
+* `Loc := Nat`, so `A.base - 1` truncates to `0` and a pointer "before" an array based at zero
+  **is** its first element. The one case C would call undefined behaviour is here a silent alias,
+  silent only until a second thread touches that element.
+* Addresses in `Lang` are metalevel — `store : Loc → AExp` takes a Lean `Nat` for the address and an
+  expression only for the value. There is no runtime pointer arithmetic, which is why `footprintOf`
+  is exact and `wfB` is `decide`-able, and why a deliberately stray pointer cannot be hidden from
+  the analysis: by the time there is a program, there are no addresses left to compute.
+
+Data-dependent addressing (`A[B[i]]`) is what would change this, because the address becomes an
+`AExp` and `footprintOf` stops being syntactic. Out of scope for now; the fallbacks are a bound
+hypothesis or a `FootprintWithin` over-approximation (`Theory/Intervals.lean`).
+
 ## Nondeterministic step, not a schedule datatype
 
 ```lean

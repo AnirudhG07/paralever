@@ -21,6 +21,9 @@ def σ0 : State := fun _ => .int 0
 run takes, so the search cannot miss a race by running out of fuel. -/
 def racesFound (p : Prog) : Bool := (findWrong p.stepBound (.run p.toParM σ0)).isSome
 
+/-- The same, with the search aimed by phase 1's conflict locations. -/
+def racesFoundGuided (p : Prog) : Bool := (findWrongFrom p.stepBound p.toParM σ0).isSome
+
 /-! ### Exhaustive, for small trees
 
 Depth ≤ 2 over two locations. This is the strongest form of the claim: the Bernstein scan accepts
@@ -34,6 +37,16 @@ def enumProgs : Nat → List Prog
 
 -- **The scan accepts exactly the race-free programs.** Both directions, every tree of depth ≤ 2.
 #guard (enumProgs 2).all fun p => wellFormedB p.toParM σ0 == !racesFound p
+
+-- **Aiming the search loses nothing.** `findWrongGuided` reorders the successors `findWrong`
+-- visits, so on every tree of depth ≤ 2 the two agree on whether a race is reachable.
+#guard (enumProgs 2).all fun p => racesFound p == racesFoundGuided p
+
+-- And what it returns is a real schedule, not merely a `some`.
+#guard (enumProgs 2).all fun p =>
+  match findWrongFrom p.stepBound p.toParM σ0 with
+  | none   => true
+  | some s => (follow (.run p.toParM σ0) s).map Conf.isWrong == some true
 
 -- On an accepted program the threaded run agrees with the sequential one everywhere it looks.
 #guard (enumProgs 2).all fun p => !wellFormedB p.toParM σ0 ||
@@ -74,6 +87,9 @@ instance : Shrinkable Prog where
 -- Rejected ⇒ a racing schedule exists. The completeness direction, tested rather than proved.
 #eval Testable.check (∀ p : Prog, wellFormedB p.toParM σ0 = false → racesFound p = true)
   { quiet := true }
+
+-- The aimed search agrees with the blind one on random trees too.
+#eval Testable.check (∀ p : Prog, racesFound p = racesFoundGuided p) { quiet := true }
 
 -- Accepted ⇒ threaded and sequential runs agree.
 #eval Testable.check (∀ p : Prog, wellFormedB p.toParM σ0 = true →

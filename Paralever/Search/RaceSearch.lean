@@ -43,6 +43,73 @@ theorem follow_sound {τ : Type} :
           rw [hg] at h
           exact (Reaches.single (List.mem_of_getElem? hg)).trans (follow_sound s c'' c' h)
 
+/-! ### Reading a step back
+
+`step` on `.par cs k` concatenates the children's successors in order, so an index into that list
+determines which child moved. `attribution` inverts the concatenation. -/
+
+/-- The heap of a configuration; `none` at `wrong`, which has none. -/
+def Conf.heap? {τ : Type} : Conf τ → Option State
+  | .run _ σ => some σ
+  | .wrong   => none
+
+/-! `Label` records a location and read/write and deliberately drops the value, because a race does
+not depend on it (`Core/Semantics.lean`). A *report* does want it: `write [9]` leaves the reader
+guessing where `write [9] ← 2` does not. These two mirror `nextAccs`/`nextAccsChilds` exactly — same
+recursion, same grouping — and keep the value a write would have stored. -/
+
+mutual
+
+/-- The actions `p`'s live threads are each about to perform, with a write's value. -/
+def pendingOf {α : Type} : ParM α → List (Label × Option Val)
+  | .pure _      => []
+  | .read l _    => [(.read l, none)]
+  | .write l v _ => [(.write l, some v)]
+  | .par cs _    => (pendingChilds cs).flatten
+
+/-- One list per child, so the report can range over the pairs the check rejected. -/
+def pendingChilds {αs : List Type} : Childs ParM αs → List (List (Label × Option Val))
+  | .nil       => []
+  | .cons p ps => pendingOf p :: pendingChilds ps
+
+end
+
+/-- What one successor index resolves to: the thread that moved, the memory action it performs,
+and — when the step is a race detection rather than a move — the pending actions of every child of
+the forking node, which is exactly what `racingAll` rejected. -/
+structure Attrib where
+  path   : List Nat
+  action : Option Label
+  abort  : Option (List (List (Label × Option Val)))
+
+mutual
+
+/-- Which thread the `i`-th successor of `step p σ` belongs to, as a path of child indices, together
+with what that step does. A step with no action and no abort is a `par` join. The forking node may
+be nested, so `path` points at the fork that aborted, not only at the root. -/
+def attribution {α : Type} : ParM α → State → Nat → Attrib
+  | .pure _,      _, _ => ⟨[], none, none⟩
+  | .read l _,    _, _ => ⟨[], some (.read l), none⟩
+  | .write l _ _, _, _ => ⟨[], some (.write l), none⟩
+  | .par cs _,    σ, i =>
+      if racingAll (nextAccsChilds cs) then ⟨[], none, some (pendingChilds cs)⟩
+      else match allPure cs with
+        | some _ => ⟨[], none, none⟩
+        | none   => attributionChilds cs σ i 0
+
+/-- Walk the children in the order `stepChilds` lays them out, subtracting each child's width. -/
+def attributionChilds {αs : List Type} :
+    Childs ParM αs → State → Nat → Nat → Attrib
+  | .nil,       _, _, _ => ⟨[], none, none⟩
+  | .cons p ps, σ, i, j =>
+      let w := (step p σ).length
+      if i < w then
+        let r := attribution p σ i
+        ⟨j :: r.path, r.action, r.abort⟩
+      else attributionChilds ps σ (i - w) (j + 1)
+
+end
+
 /-! ### Phase 1 — where the races could be
 
 A walk of the tree collecting every `par` node whose Bernstein check fails, with the locations that
@@ -171,6 +238,46 @@ def findWrong {τ : Type} : Nat → Conf τ → Option Schedule
       | none   => (stepC c).zipIdx.findSome? fun (c', i) =>
                     (findWrong fuel c').map (fun s => i :: s)
 
+/-! ### Phase 2, aimed by phase 1
+
+A step touching a location phase 1 flagged is tried *last*, so each thread runs up to its
+conflicting access and stops there. A reordering, not a restriction: nothing becomes unfindable, and
+the result is still a `Schedule` checked by `follow`. -- ref: docs/race-search.md § Phase 2 -/
+
+/-- The locations phase 1 flagged, without repeats. -/
+def targetsOf (sites : List RaceSite) : List Loc :=
+  (sites.flatMap RaceSite.conflicts).foldl
+    (fun acc l => if acc.contains l then acc else acc ++ [l]) []
+
+/-- Whether successor `i` moves a thread *past* a flagged location. Such a step gives up the
+position the race needs, so it is tried after every alternative. -/
+def consumesTarget {α : Type} (p : ParM α) (σ : State) (targets : List Loc) (i : Nat) : Bool :=
+  match (attribution p σ i).action with
+  | some a => targets.contains a.loc
+  | none   => false
+
+/-- `findWrong`, visiting the same successors in an order aimed by phase 1's conflict locations.
+On the programs where `findWrong` backtracks once per step, this reaches the abort on its first
+descent. -/
+def findWrongGuided {τ : Type} (targets : List Loc) : Nat → Conf τ → Option Schedule
+  | 0,        _ => none
+  | fuel + 1, c =>
+      match (stepC c).findIdx? Conf.isWrong with
+      | some i => some [i]
+      | none   =>
+          let idx := (stepC c).zipIdx
+          let hold : Conf τ × Nat → Bool := match c with
+            | .run p σ => fun x => consumesTarget p σ targets x.2
+            | .wrong   => fun _ => false
+          (idx.filter (fun x => !hold x) ++ idx.filter hold).findSome? fun (c', i) =>
+            (findWrongGuided targets fuel c').map (fun s => i :: s)
+
+/-- Phase 1 then phase 2, aimed: the scan's conflict locations steer the schedule search. -/
+def findWrongFrom {τ : Type} (fuel : Nat) (p : ParM τ) (σ : State) : Option Schedule :=
+  let sites := raceSites p σ
+  if sites.isEmpty then none    -- `raceSites_nil_iff`: no schedule can abort, so do not look
+  else findWrongGuided (targetsOf sites) fuel (.run p σ)
+
 /-- Search for two schedules whose terminal heaps differ at some location in `probes` — the stronger
 counterexample, where both schedules terminate normally and disagree. -/
 def findDivergence {τ : Type} (fuel : Nat) (p : ParM τ) (σ : State) (probes : List Loc) :
@@ -246,6 +353,6 @@ end Prog
 /-- **Phase 1 then phase 2.** The failing `par` nodes, and a schedule realizing one of them. A
 `some` schedule is checkable by `follow`; `none` means the bounded search gave up. -/
 def diagnose (p : Prog) (σ : State) : List RaceSite × Option Schedule :=
-  (raceSites p.toParM σ, findWrong p.stepBound (.run p.toParM σ))
+  (raceSites p.toParM σ, findWrongFrom p.stepBound p.toParM σ)
 
 end Paralever

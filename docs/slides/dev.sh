@@ -30,8 +30,9 @@ command -v npx         >/dev/null || { echo "need node/npx for the live-reload s
 echo "▶ initial build…"
 lake exe slides || echo "  ✗ initial build failed — fix and save to retry"
 
-# live-reload static server: serves $OUT and reloads the browser whenever any
-# file under $OUT changes (which is exactly what a rebuild does).
+# live-reload static server: serves $OUT.  It watches nothing — the rebuild
+# loop below tells it when to reload, so the only inotify watch this script
+# takes is inotifywait's on $SRC.
 # LAN IP others on your Wi-Fi can reach (e.g. 10.x / 192.168.x)
 IP=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \K[0-9.]+')
 [ -z "$IP" ] && IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -41,7 +42,7 @@ echo "    Local:    http://localhost:$PORT"
 echo "    Network:  http://$IP:$PORT   ← open on your phone / share on Wi-Fi"
 npx --yes browser-sync start \
     --server "$OUT" --startPath /index.html \
-    --files "$OUT/**" --no-notify --port "$PORT" &
+    --no-notify --port "$PORT" &
 SERVER_PID=$!
 
 cleanup() { echo; echo "▶ stopping…"; kill "$SERVER_PID" 2>/dev/null; exit 0; }
@@ -49,11 +50,25 @@ trap cleanup INT TERM
 
 echo "▶ watching $SRC — edit a .lean or .css file and save (Ctrl-C to stop)"
 while true; do
-  changed=$(inotifywait -r -q -e close_write,create,moved_to --format '%w%f' "$SRC" 2>/dev/null)
+  if ! changed=$(inotifywait -r -q -e close_write,create,moved_to --format '%w%f' "$SRC"); then
+    echo "  ✗ inotifywait failed — most likely out of file watchers."
+    echo "    sudo sysctl -w fs.inotify.max_user_watches=524288"
+    cleanup
+  fi
   case "$changed" in
-    *.lean|*.css)
-      echo "  ↻ $changed → rebuilding…"
-      lake exe slides && echo "  ✓ rebuilt" || echo "  ✗ build failed — page unchanged; fix and save again"
-      ;;
+    *.lean|*.css) ;;
+    *) continue ;;
   esac
+  echo "  ↻ $changed → rebuilding…"
+  if lake exe slides; then
+    echo "  ✓ rebuilt"
+    # a .css change is injected without losing the current slide; anything else
+    # changed the generated HTML, so the page is reloaded.
+    case "$changed" in
+      *.css) npx --yes browser-sync reload --port "$PORT" --files "$(basename "$changed")" ;;
+      *)     npx --yes browser-sync reload --port "$PORT" ;;
+    esac >/dev/null 2>&1
+  else
+    echo "  ✗ build failed — page unchanged; fix and save again"
+  fi
 done

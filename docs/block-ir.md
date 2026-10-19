@@ -70,6 +70,114 @@ describes.
 
 **Does not** read Lean's own IR. See below.
 
+## Data-dependent addresses
+
+`load`/`store` take a `Loc` — a Lean `Nat`, fixed before the program is data — which is exactly what
+makes `footprintOf` a fold and `wfB` a `decide`. `A[B[i]]` does not fit, so `Lang/Core.lean` adds two
+constructors whose address is an expression:
+
+```lean
+| loadAt  : Reg → ArrRef → AExp → ParProg      -- t := A[e]
+| storeAt : ArrRef → AExp → AExp → ParProg     -- A[e] := e'
+```
+
+The index is separated into a register first, as LLVM separates `getelementptr` from `load`. That
+keeps `AExp` the only address arithmetic and keeps registers thread-private, so `A[%0]` in thread
+*t* touches one cell determined by *t*'s own registers.
+
+### The semantics needed nothing
+
+`State = Loc → Val` is total and `accesses : ParM τ → State → Footprint` takes a heap and
+*simulates*, so `WellFormed` was always able to talk about an address computed at run time. A raw
+`ParM` program can scatter today, and `wellFormedB`/`raceSites` decide it exactly:
+
+```text
+accesses (indirect 100 1) σ  =  { reads := [100], writes := [3] }    -- B[100] = 3
+wellFormedB (parPair …) σ    =  true                                  -- 3 ≠ 7
+wellFormedB (parPair …) σ'   =  false                                 -- both index 5
+```
+
+`par_seq_eq` is untouched. What was missing was only the DSL's *syntactic* layer.
+
+### Three tiers, and why the middle one is enough
+
+| | holds for | decides the obligation? |
+|---|---|---|
+| `footprintOf` — syntactic, a **bound** | every heap | sound, not complete |
+| `accesses p σ` / `wellFormedB p σ` | one heap | sound **and** complete (`raceSites_nil_iff`) |
+| a bound hypothesis (`FootprintWithin`) | every heap | precise, but you prove it |
+
+Static analysis of the *values* is not possible in general, so the syntactic tier reports a bound:
+`footprintOf (.storeAt A e _) = ⟨[], A.cells⟩` — somewhere in `A`. Containment is proved once,
+
+```lean
+theorem execPar_accesses_sub (s : ParProg) (ρ : Regs) (σ : State) :
+    (accesses (execPar s ρ) σ).Sub (footprintOf s)
+```
+
+and that is all the obligation needs, because **`Indep` is antitone componentwise**
+(`Indep.of_sub`, built from `Indep.mono_left`/`mono_right`). So `wfB s = true → WellFormed` holds
+with *no side condition on the addresses*: nothing downstream — `par_seq_eq`, the kernels, the cost
+theorems — changed signature.
+
+Two details make this the right approximation rather than a convenient one:
+
+* **Bernstein has no `R∩R` clause**, so widening a *read* set can never manufacture a conflict.
+  Shared reads survive the approximation, which is what keeps matmul parallel. A single-region
+  bound per thread (`indep_of_footprint_subset`) would have lost them, which is why `Indep.of_sub`
+  is the lemma used and not that one.
+* **The index wraps** (`ArrRef.addr`), so `addr_mem_cells` holds unconditionally and there is no
+  out-of-range case to exclude. An out-of-range index aliases *inside* its array rather than
+  escaping it — deliberately unlike a raw `store l`, which addresses anywhere
+  (`Examples/Pointers.lean`). Indexed access trades exactness for confinement.
+
+The cost is precision, and it is visible: two threads scattering into the same array are rejected
+even when their indices never meet, because the syntax cannot tell them apart.
+
+```text
+wfB (par [scatter 0 1, scatter 1 2])        = false      -- both bounds cover all of A
+wellFormedB (…execPar ρ) σ₀                 = true       -- indices 1 and 3 never meet
+wellFormedB (…execPar ρ) σ₁                 = false      -- both scatter to A[2]
+```
+
+`Examples/Scatter.lean` is that program. The route to an all-heaps proof is the third tier: an
+injectivity hypothesis on the index map (`∀ i j, i ≠ j → B[i] ≠ B[j]`), which is a real obligation
+and not a syntactic check.
+
+`footprintExact` marks the sublanguage where the bound is *exact*, and `execPar_accesses` keeps the
+equality there — so the claim this file opens with still holds for the language as it was.
+
+## Control flow
+
+`ifElse c t e` makes the *path* dynamic while every address stays literal — which is why the
+predicate above is `footprintExact` and not `staticAddrs`. Its footprint is the union of the two
+branches: only one runs, but which is not known statically.
+
+The over-approximation is usually harmless, and that is the difference from a computed address. A
+thread whose two branches both write the thread's own cell has a union naming only that cell, so
+Bernstein still holds on the bounds and `par_seq_eq` applies with one `decide`
+(`Examples/ControlFlow.lean` §1). It bites only when the branches write *different* cells and two
+threads' unions overlap (§3) — then the exact per-heap `wellFormedB` still accepts what the
+syntactic check cannot.
+
+`whileAtMost n c body` is a **derived form, not a constructor**:
+
+```lean
+def whileAtMost : Nat → AExp → ParProg → ParProg
+  | 0,     _, _    => block []
+  | n + 1, c, body => .ifElse c (.seq body (whileAtMost n c body)) (block [])
+```
+
+`ParM` is inductive, so only terminating programs exist and an unbounded `while` is unrepresentable
+— the bound is permanent, not a TODO (`CLAUDE.md`). Given one, the recursion runs at elaboration and
+the result is an ordinary tree of `ifElse`/`seq`, so `footprintOf`, `wfB` and `par_seq_eq` need no
+new cases at all. What separates it from `for` is that the guard is re-read each round, so the loop
+exits on the data rather than always running `n` times.
+
+Surface syntax: `if (c) {…} else {…}` and `while (c) in n {…}`. The condition is parsed at
+`term:max`, so a compound condition needs parentheses; `in` is reused rather than reserving a new
+keyword, for the reason recorded in `CLAUDE.md`.
+
 ## Why not reflect on Lean's `Expr` or LCNF
 
 The tempting next step is to take an existing Lean function over `Array Int`, inspect its elaborated

@@ -142,6 +142,60 @@ the very restriction Bernstein exists to lift). The upshot: "did we prove CSL so
 question to ask about this codebase — soundness here is a *corollary* of `par_seq_eq`, checked once,
 not a second theorem independently re-derived and then found to agree with the first.
 
+### Shared resources, and why the equality stops there
+
+CSL is not only the disjoint rule. It also has resource declarations and critical regions,
+
+```
+resource r in C                    with r when b do C                    R_r
+```
+
+with the **critical-region rule**
+
+```
+        {(P ∗ R_r) ∧ b}  C  {Q ∗ R_r}
+        ─────────────────────────────────
+        {P}  with r when b do C  {Q}
+```
+
+Between regions the invariant `R_r` is owned by *no* thread; entering acquires it, and the body must
+restore it before release. That mechanism is ownership **transfer**, and it is how CSL verifies
+genuinely shared state — the disjoint rule governs what each thread owns privately, `R_r` governs
+what they hand back and forth.
+
+**In that fragment our theorem is not merely unproved — it is false.** Two threads communicating
+through a resource-protected cell:
+
+```text
+C₁ = with r do x := x + 1          C₂ = with r do y := x
+
+   parallel  C₁ ∥ C₂                    sequential  C₁ ; C₂
+       ┌──────┴──────┐
+     x:=x+1       y:=x                     x:=x+1 ──► y:=x
+       └──────┬──────┘
+      y ∈ {pre, post}                      y = post, always
+```
+
+The parallel composition admits two outcomes, the sequential one admits one, so the outcome *sets*
+differ and `ParSeqEq` fails. CSL verifies both programs — each satisfies its triple — because
+soundness never asserts that the two compositions agree.
+
+This is the answer to "why did everyone prove soundness and not equality". For *their* language
+equality is false, so soundness is the strongest statement available. Equality becomes a theorem
+only once ownership transfer is removed, and isolating that fragment was not their goal.
+
+We have the mechanised half of the counterexample: `Examples/Racy.lean`'s
+`DetectedRace.not_parSeqEq` proves `¬ ParSeqEq` the moment two children share a written cell, and
+`OrderDependent.not_parSeqEq` does it with *both* sides terminating normally. So the restriction is
+not a modelling convenience — it marks where the theorem stops holding.
+
+Two further points fix the boundary precisely. First, a critical region is not even expressible
+here: `read` and `write` are separate `step`s, so a test-and-set is two steps on one cell,
+`racingAll` fires, and the program goes to `wrong` — the language has no atomicity from which to
+build a lock. Second, adding an `atomic`/`cas` constructor would make such programs *expressible*
+without making the equality true for them; the domain of `par_seq_eq` is intrinsically the
+no-transfer fragment. -- ref: O'Hearn CONCUR'04 §3 (`docs/papers/`); `Logic/Rules.lean` header
+
 **Q3.** Why can't you just take `P₁ ∧ P₂` (ordinary conjunction) instead of `P₁ ∗ P₂`? Give a
 program where the rule with `∧` would be unsound.
 
@@ -216,7 +270,9 @@ assertion.
 **Piece 2 — join-point decomposition.** Take a real, step-by-step execution of `.par p q k` from
 `σ`. At every point along it, exactly one of three things is true: it's still inside the `par` node
 (one or both branches mid-run), it has passed through the join into `k`'s continuation, or it has
-crashed to `wrong`. `par_dichotomy` proves this trichotomy holds at every step. It pins down *that*
+crashed to `wrong`. `par_dichotomy` proves this trichotomy holds at every step (though since the
+N-ary migration it is no longer on the proof path — uniqueness goes through
+`runSeq_invariant_chain`). It pins down *that*
 a join or a crash happens and rules out anything else — not yet *which* values the join lands on.
 
 **Piece 3 — the single-step canonical invariant.** This is where the real difficulty lives, and

@@ -73,9 +73,12 @@ theorem wellFormed_canonical (p : ParM τ) (σ : State) (h : WellFormed p σ) (r
 Brookes' Parallel Decomposition Lemma mechanized for this operational semantics — is now also
 proved, via the **operational** half described below: relating the real `step`/`Reaches`
 interleaving to the canonical value, not `runSeq` to itself.
-- **Join-point decomposition** — ✅ proved, `par_dichotomy`. Any interleaved run of `.par p q k`
-  is, at every point, either still in `par` form, has passed through the join into `k`'s
-  continuation, or has crashed — nothing else is possible. This pins down *that* a join happens
+- **Join-point decomposition** — ✅ proved, `par_dichotomy`, but **no longer load-bearing**: after
+  the N-ary migration the uniqueness direction routes through `runSeq_invariant_chain` instead, and
+  no Lean declaration references `par_dichotomy` any more. It is kept as a statement of the
+  trichotomy. Any interleaved run of `.par cs k` is, at every point, either still in `par` form,
+  has passed through the join into `k`'s continuation, or has crashed — nothing else is possible.
+  This pins down *that* a join happens
   and that nothing else can; it does **not** yet pin down *which* `(a, b, σ'')` the join lands on.
 - **One-step non-racing from top-level `Indep`** — ✅ proved, `no_race_of_indep` (built on the
   purely structural `nextAccs_subset_accesses`: a program's *immediate* next label is always
@@ -104,7 +107,7 @@ interleaving to the canonical value, not `runSeq` to itself.
   is genuinely proved as one combined statement (`runSeq` invariance + footprint containment
   together), not two separate lemmas proved in sequence.
 - **Preservation and chaining** — ✅ proved. Iterating `step_combined` along a *whole* `Reaches`
-  chain — from the join point `par_dichotomy` finds, back to the start — needs `WellFormed`
+  chain — back to the start — needs `WellFormed`
   re-established at every intermediate step, to invoke `step_combined` again:
   - `step_subset_rw`: the finer, `.reads`/`.writes`-tracked-separately version of
     `step_combined`'s containment conjunct — needed because reconstructing `Indep`'s three

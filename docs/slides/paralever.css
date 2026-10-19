@@ -91,6 +91,40 @@
    paralever-specific components
    =================================================================== */
 
+/* ---- .rule : an inference rule — premises over a bar over the conclusion ---- */
+.reveal .rulewrap { text-align: center; margin: 0.55em 0; }
+.reveal .rule {
+  display: inline-block; text-align: center;
+  font-family: var(--mono); font-size: 0.68em; line-height: 1.5;
+}
+.reveal .rule .prem { padding: 0 0.7em 0.2em; }
+.reveal .rule .bar  { border-top: 2px solid var(--lean-blue); margin: 0; }
+.reveal .rule .conc { padding: 0.2em 0.7em 0; font-weight: 700; }
+.reveal .rule .side {
+  display: block; font-family: var(--sans); font-size: 0.82em;
+  color: var(--muted); margin-top: 0.35em; font-weight: 400;
+}
+
+/* ---- .pullquote : a quotation from a cited paper, with its attribution ---- */
+.reveal .pullquote {
+  border-left: 3px solid var(--lean-teal);
+  background: var(--tint);
+  padding: 0.5em 0.9em; margin: 0.5em auto; max-width: 42em;
+  font-size: 0.62em; line-height: 1.5; text-align: left; font-style: italic;
+}
+.reveal .pullquote .src {
+  display: block; margin-top: 0.4em; font-style: normal;
+  color: var(--muted); font-size: 0.9em;
+}
+
+/* ---- .notation : the key for the symbols a slide uses, as a quiet footer ---- */
+.reveal .notation {
+  font-size: 0.6em; color: var(--muted); margin-top: 0.7em;
+  letter-spacing: 0.01em; text-align: center;
+}
+.reveal .notation code { font-size: 1em; color: var(--ink); }
+.reveal .notation strong { color: var(--ink); }
+
 /* ---- .cite : paper attribution under a borrowed theorem ----
    e.g. "Brookes, A Semantics for CSL, CONCUR'04 §5-7" */
 .reveal .cite {

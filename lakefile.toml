@@ -13,6 +13,14 @@ globs = ["Examples.+"]
 name = "Test"
 globs = ["Test.+"]
 
+# The MLIR front end: a reader for MLIR generic form and the lowering into `ParProg`.
+# A separate lib because it is the only part of the tree that parses text, and because
+# `MLIR.Lower` is the object the footprint-preservation theorem will be about.
+# See docs/mlir.md.
+[[lean_lib]]
+name = "MLIR"
+globs = ["MLIR.+"]
+
 [[lean_exe]]
 name = "paralever"
 root = "Main"
@@ -54,7 +62,12 @@ needs = [
   "@paralever/+Examples.SumArray:highlighted",
   "@paralever/+Examples.Sort:highlighted",
   "@paralever/+Examples.MatMul:highlighted",
-  "@paralever/+Examples.Region:highlighted",
+  "@paralever/+Paralever.Lang.Core:highlighted",
+  "@paralever/+Paralever.Lang.Analysis:highlighted",
+  "@paralever/+Paralever.AutoPar.Plan:highlighted",
+  "@paralever/+Paralever.AutoPar.Dag:highlighted",
+  "@paralever/+Paralever.AutoPar.Sound:highlighted",
+  "@paralever/+Paralever.AutoPar.Rewrite:highlighted",
 ]
 
 [[lean_exe]]

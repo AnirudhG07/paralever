@@ -401,7 +401,10 @@ structured, and worth engaging with honestly in related work.
   - `verse-lab/velvet` (`Velvet/Syntax.lean`) — how to build a Dafny-style DSL in Lean:
     `declare_syntax_cat` for `requires`/`ensures`/`invariant`, `macro_rules` for binders,
     `elab_rules : command` emitting a definition plus its VC theorem.
-  - `verse-lab/veil` — the `#gen_state` / `#gen_spec` / `#check_invariants` command architecture.
+  - `verse-lab/veil` — the `#gen_state` / `#gen_spec` / `#check_invariants` command architecture,
+    and `widget/src/traceDisplay.tsx` for how a trace is shown: cards per state, an injected
+    stylesheet rather than inline styles, `--vscode-*` theme variables, and changed fields picked
+    out. Followed by `Search/ExplainHtml.lean` (`docs/race-search.md`).
   - `verse-lab/splean` — the other Lean 4 separation logic; compare design choices.
   - *Yolo: Lazy Proof Automation for Separation Logic*, ITP 2026 —
     <https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITP.2026.6>. Read before designing any

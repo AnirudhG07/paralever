@@ -1,6 +1,7 @@
 import Paralever.Lib.Compose
 import Paralever.Lib.Cost
 import Paralever.Lib.Notation
+import Paralever.Lang.Imp
 
 /-! # Chunked sum of an array, uneven chunks included
 
@@ -146,5 +147,77 @@ def evenPlan8 : ChunkPlan := [[0, 1], [2, 3], [4, 5], [6, 7]]
 def unevenPlan8 : ChunkPlan := [[0, 1, 2], [3], [4, 5, 6, 7]]
 
 example : (runSeq (sumRangePar unevenPlan8) (arrayState vals8)).1 = [6, 4, 26] := by decide
+
+/-! ## 4. The same program, written in the surface language
+
+The same program in the DSL, where the obligation is decided rather than proved. One difference is
+forced: registers are **thread-private**, so a thread cannot return a value the way
+`sumRange : ParM Int` does — it writes its partial sum to a cell of its own, which is why `reduceK`'s
+write set is one location per thread. -/
+
+namespace Surface
+open Paralever.Lang
+
+/-- Chunk `c` zeroes an accumulator register, adds its `len` cells into it, and stores the partial
+sum at `out + c`. Written in the surface syntax; `reduceK` builds the same thing. -/
+def sumChunks (nchunks len out : Nat) : ParProg :=
+  ParProg.parFor nchunks fun c =>
+    ParProg.block
+      ([ paralever { %0 := 0 } ]
+        ++ (List.range len).map (fun k => paralever {
+              %1 := [c * len + k];
+              %0 := R 0 + R 1 })
+        ++ [ paralever { [out + c] := R 0 } ])
+
+/-! At three chunks of two it is three threads, each reading its own pair and writing its own cell:
+
+```text
+parallel {
+  thread 0 { t0 := 0; t1 := M[0]; t0 := (t0 + t1); t1 := M[1]; t0 := (t0 + t1); M[100] := t0; }
+  thread 1 { t0 := 0; t1 := M[2]; t0 := (t0 + t1); t1 := M[3]; t0 := (t0 + t1); M[101] := t0; }
+  thread 2 { t0 := 0; t1 := M[4]; t0 := (t0 + t1); t1 := M[5]; t0 := (t0 + t1); M[102] := t0; }
+}
+```
+-/
+
+-- #eval IO.println (ParProg.renderProg (sumChunks 3 2 100))
+
+/-- The obligation, decided. -/
+example : ParProg.wfB (sumChunks 3 2 100) = true := by decide
+example : ParProg.wfB (sumChunks 8 4 100) = true := by decide
+
+/-- …and Par = Seq follows with nothing further to supply. -/
+theorem par_seq_eq (ρ : Regs) (σ : State) :
+    ParSeqEq (ParProg.execPar (sumChunks 3 2 100) ρ)
+             (ParProg.execSeq (sumChunks 3 2 100) ρ) σ :=
+  ParProg.par_seq_eq (by decide) ρ σ
+
+/-- **Par ≤ Seq in rounds**, the cost counterpart, from the same `Bool`. §3's `time_lt` is the
+hand-built `ParM` version of this; `ParProg.time_le` proves it once for the whole language. -/
+theorem time_le (ρ : Regs) (σ : State) :
+    time (ParProg.execPar (sumChunks 3 2 100) ρ) σ
+      ≤ time (ParProg.execSeq (sumChunks 3 2 100) ρ) σ :=
+  ParProg.time_le (by decide) ρ σ
+
+/-- The two executions agree — proved, not observed — so a benchmark of `runTask` against
+`runTaskSeq` measures speed and nothing else. -/
+theorem runTask_eq_seq (ρ : Regs) (σ : State) :
+    ParProg.runTask (sumChunks 3 2 100) ρ σ = ParProg.runTaskSeq (sumChunks 3 2 100) ρ σ :=
+  ParProg.runTask_eq_runTaskSeq (by decide) ρ σ
+
+/-- It runs on real threads — one `Task` per chunk — and `runTask_eq` says the threaded run computes
+the sequential answer. On `[1,2,3,4,5,6]` the partial sums are `3, 7, 11`. -/
+def σ6 : State
+  | 0 => .int 1 | 1 => .int 2 | 2 => .int 3 | 3 => .int 4 | 4 => .int 5 | 5 => .int 6
+  | _ => .int 0
+
+-- #eval ParProg.evalTask (sumChunks 3 2 100) σ6 [100, 101, 102]
+
+theorem runTask_eq_runSeq (ρ : Regs) (σ : State) :
+    ParProg.runTask (sumChunks 3 2 100) ρ σ
+      = runSeq (ParProg.execPar (sumChunks 3 2 100) ρ) σ :=
+  ParProg.runTask_eq (by decide) ρ σ
+
+end Surface
 
 end Paralever.Examples.SumArray

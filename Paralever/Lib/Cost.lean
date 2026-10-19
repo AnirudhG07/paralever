@@ -220,10 +220,8 @@ def time {τ : Type} (p : ParM τ) (σ : State) : Nat := ptime (work p σ + 1) p
 
 /-! ### `max` is derived, not assumed — the narrow cases first
 
-Special cases of `time_parPair_eq_max` below, kept because they are checked by `simp` alone and so
-pin the definitions down independently of the general proof. For branches that each take one
-operation, round-counting *yields* `max` on the parallel composition and `+` on the sequential one.
-Neither word appears in `pstep`. -/
+Special cases of `time_parPair_eq_max` below, kept because `simp` alone checks them, pinning the
+definitions down independently of the general proof. -/
 
 /-- Two single writes in parallel take `max 1 1` rounds. Checked by `simp` alone, so it pins the
 definitions down independently of `ptime_parPair_eq_max`. -/
@@ -671,7 +669,7 @@ theorem pstep_none_reaches {τ : Type} :
               stepC (Conf.run (.par (pureChilds _ (runChilds cs σ).1) k) (runChilds cs σ).2) := by
             have hap := allPure_pureChilds _ (runChilds cs σ).1
             have hnr0 := hnr _ _ hRc
-            simp only [stepC, step, hnr0, Bool.false_eq_true, if_false, hap]
+            simp only [stepC, step, hnr0, Bool.false_eq_true, ite_false, hap]
             simp
           have r4 := ihk _ σ (by rw [hσ1] at hwfk; exact hwfk) hk
           have he : runSeq (.par cs k) σ = runSeq (k (runChilds cs σ).1) σ := by
@@ -728,7 +726,7 @@ theorem pstep_reaches_all :
           stepC (Conf.run (.par (pureChilds _ (runChilds cs σ).1) k) (runChilds cs σ).2) := by
         have hap := allPure_pureChilds _ (runChilds cs σ).1
         have hnr0 := hnr _ _ hRc
-        simp only [stepC, step, hnr0, Bool.false_eq_true, if_false, hap]
+        simp only [stepC, step, hnr0, Bool.false_eq_true, ite_false, hap]
         simp
       rw [hσ1] at hRpar hjoin
       have r4 := ihk _ σ (by rw [hσ1] at hwfk; exact hwfk) p' ws hk
@@ -1188,15 +1186,9 @@ theorem ptime_locality {τ : Type} : ∀ (n : Nat) (p : ParM τ) (σ σ' : State
 
 /-! ### The general law: a fork's span is a fold of `max` over its children
 
-`max` is written nowhere in `pstep` or `ptime`. It is forced by round-counting, and the proof needs
-`Indep` at exactly one point: a child's remaining rounds must come out the same whether or not its
-*siblings'* writes from this round have already landed. That is `ptime_locality`, and it fails for
-racing branches — which is why the law is stated under `WellFormed`.
-
-`par` is N-ary, so the law is N-ary: the children's rounds are `List.foldr max 0` of the per-child
-counts (`ptimeChilds`), and the binary `max` is the two-child case, since
-`foldr max 0 [a, b] = max a (max b 0) = max a b`. -- ref: docs/cost.md; Blelloch & Greiner ICFP'96
-(where `max` is stipulated) -/
+`max` appears nowhere in `pstep`; round-counting forces it, via `ptime_locality` — which is why the
+law needs `WellFormed`. N-ary, so `List.foldr max 0` over `ptimeChilds`; binary `max` is the
+two-child case. -- ref: docs/cost.md; Blelloch & Greiner ICFP'96 (where `max` is stipulated) -/
 
 /-- Each child's own round count, measured from the **pre-fork** heap. Nothing is staggered here,
 unlike `workChilds`: children run concurrently, and under `Indep` it makes no difference. -/
@@ -1744,15 +1736,76 @@ theorem time_parAll_pos {τ : Type} (p : ParM τ) (ps : List (ParM τ)) (σ : St
     0 < time (ParM.parAll (p :: ps)) σ := by
   rw [time_parAll_cons p ps σ hwf]; omega
 
+/-! ### Cost of a parallel region inside a sequential program
+
+`par_seq_eq_region_of` (`Theory/Sequentialize.lean`) says substituting a region leaves the outcomes
+alone. These say what it does to the span: nothing before or after the region changes, so the whole
+program's saving is exactly the region's. -/
+
+/-- The span of `pre ; r ; post` splits into its three phases. The phases after `pre` are measured
+from the heap `pre` leaves, as they must be. -/
+theorem time_region_split {α β δ : Type} (pre : ParM α) (r : ParM β) (post : β → ParM δ)
+    (σ : State) (hwf : WellFormed (ParM.bind pre (fun _ => ParM.bind r post)) σ) :
+    time (ParM.bind pre (fun _ => ParM.bind r post)) σ
+      = time pre σ + time r (runSeq pre σ).2
+        + time (post (runSeq r (runSeq pre σ).2).1) (runSeq r (runSeq pre σ).2).2 := by
+  have hreg : WellFormed (ParM.bind r post) (runSeq pre σ).2 :=
+    ((WellFormed_bind pre _ σ).mp hwf).2
+  rw [time_bind_add pre _ σ hwf, time_bind_add r post (runSeq pre σ).2 hreg]
+  omega
+
+/-- **Parallelizing a region is no slower, whatever surrounds it.** The sequential phases contribute
+the same count on both sides, because the two regions have the same canonical run. -/
+theorem time_region_le {α τ' δ : Type} (pre : ParM α) (ps : List (ParM τ'))
+    (post : List τ' → ParM δ) (σ : State)
+    (hwf : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.parAll ps) post)) σ) :
+    time (ParM.bind pre (fun _ => ParM.bind (ParM.parAll ps) post)) σ
+      ≤ time (ParM.bind pre (fun _ => ParM.bind (ParM.seqAll ps) post)) σ := by
+  have hreg : WellFormed (ParM.bind (ParM.parAll ps) post) (runSeq pre σ).2 :=
+    ((WellFormed_bind pre _ σ).mp hwf).2
+  have hwfr : WellFormed (ParM.parAll ps) (runSeq pre σ).2 :=
+    ((WellFormed_bind _ post (runSeq pre σ).2).mp hreg).1
+  have hwfs : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.seqAll ps) post)) σ := by
+    rw [WellFormed_bind]
+    refine ⟨((WellFormed_bind pre _ σ).mp hwf).1, ?_⟩
+    exact wellFormed_bind_congr _ _ post (runSeq pre σ).2
+      (wellFormed_of_seqAll ps (runSeq pre σ).2 hwfr)
+      (runSeq_parAll_eq_seqAll ps (runSeq pre σ).2) hreg
+  rw [time_region_split pre _ post σ hwf, time_region_split pre _ post σ hwfs,
+    runSeq_parAll_eq_seqAll ps (runSeq pre σ).2]
+  have := time_parAll_le_seqAll ps (runSeq pre σ).2 hwfr
+  omega
+
+/-- **Parallelizing a region is strictly faster** when at least two of its iterations have work to
+do, however much sequential code surrounds it. -/
+theorem time_region_lt {α τ' δ : Type} (pre : ParM α) (p : ParM τ') (ps : List (ParM τ'))
+    (post : List τ' → ParM δ) (σ : State)
+    (hwf : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.parAll (p :: ps)) post)) σ)
+    (hp : 0 < time p (runSeq pre σ).2)
+    (hps : 0 < time (ParM.parAll ps) (runSeq pre σ).2) :
+    time (ParM.bind pre (fun _ => ParM.bind (ParM.parAll (p :: ps)) post)) σ
+      < time (ParM.bind pre (fun _ => ParM.bind (ParM.seqAll (p :: ps)) post)) σ := by
+  have hreg : WellFormed (ParM.bind (ParM.parAll (p :: ps)) post) (runSeq pre σ).2 :=
+    ((WellFormed_bind pre _ σ).mp hwf).2
+  have hwfr : WellFormed (ParM.parAll (p :: ps)) (runSeq pre σ).2 :=
+    ((WellFormed_bind _ post (runSeq pre σ).2).mp hreg).1
+  have hwfs : WellFormed (ParM.bind pre (fun _ => ParM.bind (ParM.seqAll (p :: ps)) post)) σ := by
+    rw [WellFormed_bind]
+    refine ⟨((WellFormed_bind pre _ σ).mp hwf).1, ?_⟩
+    exact wellFormed_bind_congr _ _ post (runSeq pre σ).2
+      (wellFormed_of_seqAll (p :: ps) (runSeq pre σ).2 hwfr)
+      (runSeq_parAll_eq_seqAll (p :: ps) (runSeq pre σ).2) hreg
+  obtain ⟨-, -, hwf1, -⟩ := wellFormed_parAll_parts p ps (runSeq pre σ).2 hwfr
+  rw [time_region_split pre _ post σ hwf, time_region_split pre _ post σ hwfs,
+    runSeq_parAll_eq_seqAll (p :: ps) (runSeq pre σ).2]
+  have := time_parAll_lt_seqAll p ps (runSeq pre σ).2 hwfr hp hps
+  omega
+
 /-! ### Anti-vacuity: the law fails for racing branches
 
-Required by `CLAUDE.md`'s standing obligation — the `WellFormed` hypothesis must be doing work, not
-decorating a theorem that would hold anyway.
-
-`racyQ` writes location `0`; `racyP` reads it, one round later, and branches on what it finds. Run
-alone from `σz` it sees `int 0` and stops after two rounds. Run in parallel it sees `racyQ`'s `int 1`
-and takes a third. So `max` is *wrong* here, and `time_parPair_eq_max` correctly refuses to apply:
-`Indep` fails, because `0` is in `racyQ`'s writes and `racyP`'s reads. -/
+`racyQ` writes `0`; `racyP` reads it a round later and branches. Alone it takes two rounds, in
+parallel three — so `max` is wrong here, and `time_parPair_eq_max` refuses to apply because `0` is
+in `racyQ`'s writes and `racyP`'s reads. -/
 
 namespace RacyCost
 

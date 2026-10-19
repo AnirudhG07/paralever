@@ -24,8 +24,8 @@ write/read check (used in both directions since it is stated for every ordered p
 read/read check exists, because `Indep` doesn't need one. This is what lets a loop like matmul
 (disjoint output cells, overlapping input rows/columns) go through at all. -/
 @[simp]
-theorem parAll_wellformed_of_indexed_rw {τ : Type} (idxs : List Nat) (body : Nat → ParM τ)
-    (Pr Pw : Nat → Loc → Prop) (hnodup : idxs.Nodup)
+theorem parAll_wellformed_of_indexed_rw {κ τ : Type} (idxs : List κ) (body : κ → ParM τ)
+    (Pr Pw : κ → Loc → Prop) (hnodup : idxs.Nodup)
     (hwf : ∀ i ∈ idxs, ∀ σ, WellFormed (body i) σ)
     (hbodyR : ∀ i ∈ idxs, ∀ σ, ReadsWithin (accesses (body i) σ) (Pr i))
     (hbodyW : ∀ i ∈ idxs, ∀ σ, WritesWithin (accesses (body i) σ) (Pw i))
@@ -89,8 +89,8 @@ shared reads to worry about, so a single disjointness fact `hdisj` suffices (mat
 `MergeSort.lean`'s shape, e.g. `TouchesOnly`). A specialization of `parAll_wellformed_of_indexed_rw`
 at `Pr = Pw = P`, not a separate induction. -/
 @[simp]
-theorem parAll_wellformed_of_indexed_footprint {τ : Type} (idxs : List Nat) (body : Nat → ParM τ)
-    (P : Nat → Loc → Prop) (hnodup : idxs.Nodup)
+theorem parAll_wellformed_of_indexed_footprint {κ τ : Type} (idxs : List κ) (body : κ → ParM τ)
+    (P : κ → Loc → Prop) (hnodup : idxs.Nodup)
     (hwf : ∀ i ∈ idxs, ∀ σ, WellFormed (body i) σ)
     (hbody : ∀ i ∈ idxs, ∀ σ, FootprintWithin (accesses (body i) σ) (P i))
     (hdisj : ∀ i j, i ∈ idxs → j ∈ idxs → i ≠ j → ∀ l, P i l → P j l → False) :
@@ -104,8 +104,8 @@ theorem parAll_wellformed_of_indexed_footprint {τ : Type} (idxs : List Nat) (bo
 /-- The metatheorem, general form: a loop satisfying the read/write-confinement hypotheses reaches
 exactly the outcomes its sequential counterpart does. -/
 @[simp]
-theorem parAll_par_seq_eq_of_indexed_rw {τ : Type} (idxs : List Nat) (body : Nat → ParM τ)
-    (Pr Pw : Nat → Loc → Prop) (hnodup : idxs.Nodup)
+theorem parAll_par_seq_eq_of_indexed_rw {κ τ : Type} (idxs : List κ) (body : κ → ParM τ)
+    (Pr Pw : κ → Loc → Prop) (hnodup : idxs.Nodup)
     (hwf : ∀ i ∈ idxs, ∀ σ, WellFormed (body i) σ)
     (hbodyR : ∀ i ∈ idxs, ∀ σ, ReadsWithin (accesses (body i) σ) (Pr i))
     (hbodyW : ∀ i ∈ idxs, ∀ σ, WritesWithin (accesses (body i) σ) (Pw i))
@@ -116,8 +116,8 @@ theorem parAll_par_seq_eq_of_indexed_rw {τ : Type} (idxs : List Nat) (body : Na
     (parAll_wellformed_of_indexed_rw idxs body Pr Pw hnodup hwf hbodyR hbodyW hww hwr σ).1
 
 /-- The metatheorem, common-case corollary. -/
-theorem parAll_par_seq_eq_of_indexed_footprint {τ : Type} (idxs : List Nat) (body : Nat → ParM τ)
-    (P : Nat → Loc → Prop) (hnodup : idxs.Nodup)
+theorem parAll_par_seq_eq_of_indexed_footprint {κ τ : Type} (idxs : List κ) (body : κ → ParM τ)
+    (P : κ → Loc → Prop) (hnodup : idxs.Nodup)
     (hwf : ∀ i ∈ idxs, ∀ σ, WellFormed (body i) σ)
     (hbody : ∀ i ∈ idxs, ∀ σ, FootprintWithin (accesses (body i) σ) (P i))
     (hdisj : ∀ i j, i ∈ idxs → j ∈ idxs → i ≠ j → ∀ l, P i l → P j l → False) (σ : State) :
