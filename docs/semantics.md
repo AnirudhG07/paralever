@@ -18,13 +18,13 @@ not change size, because it has none.
 
 The consequence is worth stating plainly: `par_seq_eq` is **equivalence, not memory safety**. A
 stray write is committed identically by the parallel and the sequential program, so the theorem goes
-on holding over a program that is wrong. `Examples/Pointers.lean` `Stray` is exactly that case —
+on holding over a program that is wrong. `Examples/Races/Pointers.lean` `Stray` is exactly that case —
 `wfB = true`, `ParSeqEq` by `decide`, and a `7` written to a cell the thread does not own.
 
 What *is* caught is the stray pointer that collides with another thread, which is the only kind that
 can break `par = seq`. Then it is an ordinary race: Bernstein fails on the literal address,
 `raceSites` names it, and the search returns a schedule reaching `wrong`
-(`Examples/Pointers.lean`: `Aliasing`, `Underflow`, `ReadWrite`). Two sharp edges that file pins
+(`Examples/Races/Pointers.lean`: `Aliasing`, `Underflow`, `ReadWrite`). Two sharp edges that file pins
 down:
 
 * `Loc := Nat`, so `A.base - 1` truncates to `0` and a pointer "before" an array based at zero
@@ -110,7 +110,7 @@ of the project lives. Everything else in the core is bookkeeping.
 
 ## Anti-vacuity witness
 
-`Examples/Racy.lean` refutes `ParSeqEq` outright, so the hypothesis is load-bearing against the
+`Examples/Races/Caught.lean` refutes `ParSeqEq` outright, so the hypothesis is load-bearing against the
 *conclusion* and not merely unprovable. Two cases:
 
 `DetectedRace` — `p = wr l 1`, `q = wr l 2`. Their next actions are `write l` and `write l`, so

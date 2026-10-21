@@ -1,10 +1,10 @@
-import Paralever.Pragma.ArrRef
+import Paralever.Lib.ArrRef
 
 /-! # Location predicates for range-based independence
 
 Generic `InRange lo hi` and `TouchesOnly lo hi N` (data + scratch channel) — location predicates
 that compose with `FootprintWithin`/`indep_of_footprint_within` to discharge Bernstein obligations
-via `omega`. Extracted from `Examples/MergeSort.lean` where `TouchesOnly` was defined locally.
+via `omega`. Extracted from `Examples/Programs/MergeSort.lean` where `TouchesOnly` was defined locally.
 
 Rationale: `docs/theory.md` §9 — footprints confined to predicates. -/
 
@@ -61,7 +61,7 @@ theorem TouchesOnly.mono {lo hi lo' hi' N : Nat} (h1 : lo' ≤ lo) (h2 : hi ≤ 
 /-- **Adjacent halves of a split touch no common location**, scratch channels included. `hi ≤ N` is
 what keeps the data and scratch ranges from colliding, and without it a sufficiently high index would
 land inside the buffer. This single lemma is the independence argument for recursive mergesort — see
-`Examples/MergeSort.lean`. -/
+`Examples/Programs/MergeSort.lean`. -/
 @[simp, grind .]
 theorem TouchesOnly.disjoint {lo mid hi N : Nat} (hhN : hi ≤ N)
     {l : Loc} (h1 : TouchesOnly lo mid N l) (h2 : TouchesOnly mid hi N l) : False := by

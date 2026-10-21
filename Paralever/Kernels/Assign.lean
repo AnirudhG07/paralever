@@ -1,10 +1,10 @@
-import Paralever.Pragma.ParallelFor
+import Paralever.Lib.Loop
 import Paralever.Lib.OpaqueOp
 
 /-! # One task per item: assigning a list to threads
 
 The shape almost every data-parallel program has, and the one the `Nat`-indexed validator in
-`Pragma/ParallelFor.lean` makes you encode by hand: you hold a list — array cells, chunks of a
+`Lib/Loop.lean` makes you encode by hand: you hold a list — array cells, chunks of a
 chunk plan, `(i,j)` grid coordinates — and you want one thread per element, with the same body
 applied to each.
 
@@ -16,10 +16,10 @@ at distinct *items*, not because `i ≠ j`.
 Reads and writes are bounded separately, as everywhere else — tasks may share reads freely
 (`broadcastPar` below is the extreme case, where every task reads the whole input).
 
-Rationale: `docs/access.md`; the key-generic validator is `Pragma/ParallelFor.lean`. -/
+Rationale: `docs/access.md`; the key-generic validator is `Lib/Loop.lean`. -/
 
 namespace Paralever
-open Paralever.Pragma.ParallelFor
+open Paralever.Loop
 
 variable {α β : Type}
 

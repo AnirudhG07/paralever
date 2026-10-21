@@ -1,0 +1,17 @@
+-- Square two inputs in parallel, then add the squares.
+
+buf src[2] = 3, 4
+buf sq[2]
+buf out[1]
+
+
+parallel {
+  %x := src[0]
+  sq[0] := %x * %x
+} | {
+  %x := src[1]
+  sq[1] := %x * %x
+}
+%x := sq[0]
+%y := sq[1]
+out[0] := %x + %y

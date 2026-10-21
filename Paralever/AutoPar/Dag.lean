@@ -1,4 +1,4 @@
-import Paralever.Lang.Analysis
+import Prl.Lang.Analysis
 
 /-! # The dependence DAG, and the bound it gives
 
@@ -8,7 +8,7 @@ critical path is a **lower bound** on the depth of any schedule, so it is what s
 is optimal. -- ref: docs/autopar-algorithm.md § The bound -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-! ## A syntactic cost
 
@@ -97,5 +97,30 @@ def critical (us : List ParProg) : Nat :=
   let a := asap us
   let cs := us.map depth
   ((List.range us.length).map (fun i => a.getD i 0 + cs.getD i 0)).foldl max 0
+
+/-! ### The three kinds of edge, one `#guard` each
+
+`u 0` writes cell `0`; `u 1` reads it; `u 2` writes it again. -/
+
+section Demo
+private def wr (l : Loc) : ParProg := .store l (.lit 1)
+private def rd (r : Reg) (l : Loc) : ParProg := .load r l
+
+-- ANCHOR: site-dag-edges
+-- RAW: a read after a write
+#guard preds [wr 0, rd 0 0] == [[], [0]]
+-- WAW: a write after a write
+#guard preds [wr 0, wr 0] == [[], [0]]
+-- WAR: a write after a read — the clause `∗`-disjointness has no counterpart for
+#guard preds [rd 0 0, wr 0] == [[], [0]]
+-- and no edge at all between disjoint cells, however they are ordered on the page
+#guard preds [wr 0, wr 1, wr 2] == [[], [], []]
+
+-- two independent chains of two: the longest path is 2, not 4
+#guard critical [wr 0, wr 1, rd 0 0, rd 1 1] == 2
+-- one chain of four: nothing to overlap, so the bound is the sequential depth
+#guard critical [wr 0, rd 0 0, wr 0, rd 0 0] == 4
+-- ANCHOR_END: site-dag-edges
+end Demo
 
 end Paralever.AutoPar

@@ -5,7 +5,7 @@ into an execution a reader can inspect: which `par` node failed, which interleav
 failure, and what the sequential counterpart would have produced instead.
 
 Code: `Paralever/Search/RaceSearch.lean` (the search) and `Paralever/Search/Explain.lean` (the
-report). Demo: `Examples/RaceReport.lean`.
+report). Demo: `Examples/Races/Report.lean`.
 
 Two entry points. `explainProg` takes a `Prog` — the first-order grammar the search generates and
 shrinks over. `explainParM fuel p pseq σ ls` takes any `ParM` together with its sequential
@@ -488,6 +488,48 @@ report.
 Building ProofWidgets runs `npm clean-install`, so that module makes node and npm a build
 requirement; the bundled JS is then embedded in the olean by `include_str`. `Explain.lean` has no
 such dependency.
+
+## In tactic position
+
+The same `Report`, read off a goal instead of a program. `Paralever/Tactic.lean` holds two tactics
+and no new search: both of them destructure the goal as a `ParSeqEq p q σ` and hand `p`, `q` and
+`σ` to `reportOf`.
+
+```lean
+example : ParSeqEq (ParProg.execPar race.prog zeroRegs)
+                   (ParProg.execSeq race.prog zeroRegs) race.layout.state := by
+  paralever_race            -- the widget in the infoview, the trace in the message log
+```
+
+`paralever_race` leaves the goal alone — it is `trace_state` for schedules. `paralever_check` is
+the one a proof uses: it tries to *prove* the goal first, one route at a time, and runs the search
+only when none of them discharges the obligation. Then it fails with the interleaving attached as a
+widget (and as text, which is what a terminal and a batch build see).
+
+| route | what it is |
+|---|---|
+| `refine ParProg.par_seq_eq ?_ _ _ <;> grind` | the one-liner, with `grind` on the obligation |
+| the same `<;> simp +decide` | …evaluating it |
+| the same `<;> decide` | …evaluating it in the kernel |
+| `parSeqEq_of_runSeq_eq` from two `wellFormedB_iff`s and `execPar_runSeq_all` | the per-heap route, for a computed address |
+| `par_seq_eq _ _ _ ((wellFormedB_iff _ _).1 ?_)` | the same for a `ParM` written by hand |
+
+**`grind` cannot discharge `wfB s = true`, and the route is kept first anyway.** The obligation is
+a *closed Boolean computation*: `grind` treats `wfB s` as an atom, has nothing to rewrite it with,
+and reports the goal unproved with `wfB s = false` among its asserted facts. The two routes after
+it evaluate the term, which is what the obligation needs. The ladder is ordered this way so that a
+future `wfB` lemma set — the N-ary kernel shapes, where the program is symbolic and there is
+nothing to evaluate — is tried before the evaluating routes that cannot touch it.
+
+Two details that cost an hour each, recorded so they are not rediscovered. A route is accepted only
+when it leaves **no goal**: `simp` counts rewriting `wfB s = true` to `False` as progress, so a
+route that "succeeds" can leave the goal open, and the error then surfaces at the declaration
+rather than at the tactic. And each route runs under `withoutErrToSorry`, because an elaboration
+failure inside one otherwise becomes a hole whose error arrives after the tactic has returned.
+
+A goal that quantifies over its heap or its register file has no values for the search to run on.
+Both are replaced by the zeros a compiled file's run starts from, and each substitution is rendered
+above the trace as a note — a counterexample at one heap is not a counterexample at every heap.
 
 ## Scaling
 

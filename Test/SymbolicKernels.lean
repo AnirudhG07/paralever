@@ -1,4 +1,4 @@
-import Paralever.Lang.Imp
+import Prl.Lang.Imp
 
 /-! # The symbolic route is usable
 
@@ -8,7 +8,7 @@ disjoint-block layout, at every size. Two patterns recur: bound a nonlinear cell
 -- ref: `docs/block-ir.md` -/
 
 namespace Paralever.Test.SymbolicKernels
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-- Output block past the input, at every `n` and window `w`. -/
 theorem stencil_ok (n w inp out : Nat) (h : inp + n + w ≤ out) :

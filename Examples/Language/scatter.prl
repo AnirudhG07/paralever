@@ -1,0 +1,13 @@
+-- A computed address. The index comes from memory, so `dst[%i]` is confined to dst by
+-- construction (ArrRef.addr) but its footprint is every cell of dst — so wfB rejects this even
+-- though the indices are distinct. The price of a footprint computed from syntax alone.
+-- ref: docs/block-ir.md
+
+buf idx[3] = 2, 0, 1
+buf dst[3]
+
+
+parfor t in 3 {
+  %i := idx[t]
+  dst[%i] := 1
+}

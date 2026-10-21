@@ -1,5 +1,5 @@
 import Paralever.AutoPar.Rewrite
-import Paralever.Lang.Exec
+import Prl.Lang.Exec
 
 /-! # The rewrite, on programs
 
@@ -8,7 +8,7 @@ import Paralever.Lang.Exec
 here means the scheduler changed shape. -- ref: docs/autopar-algorithm.md -/
 
 namespace Paralever.Test.AutoParAlgo
-open Paralever Paralever.Lang Paralever.Lang.ParProg Paralever.AutoPar
+open Paralever Paralever.Prl Paralever.Prl.ParProg Paralever.AutoPar
 
 /-- Probe a program both ways: the rewrite on real threads, the original sequentially. -/
 def agrees (p : ParProg) (σ : State) (probes : List Loc) : Bool :=
@@ -20,7 +20,7 @@ The case greedy prefix grouping gets wrong: it stops a group at the first confli
 three stages (depth 5) where one stage of two threads does it in 3. -/
 
 def ex1 : ParProg := paralever {
-  [0] := 1; %0 := [0]; [1] := R 0; [2] := 3; %1 := [2]; [3] := R 1 }
+  [0] := 1; %0 := [0]; [1] := %0; [2] := 3; %1 := [2]; [3] := %1 }
 
 #guard (units ex1).length == 4
 #guard (planOf ex1).length == 1                   -- one stage …
@@ -36,10 +36,10 @@ def ex1 : ParProg := paralever {
 critical path is 7, and 7 is **not** attainable: it needs `a3` concurrent with `a2`, which `wfB`
 rejects. So `optimalB` is `false` here and that is the fork–join shape, not the scheduler. -/
 
-def a1 : ParProg := paralever { %3 := [20]; [0] := R 3; [10] := R 3; [11] := R 3 }
+def a1 : ParProg := paralever { %3 := [20]; [0] := %3; [10] := %3; [11] := %3 }
 def a2 : ParProg := paralever { [1] := 3 }
-def a3 : ParProg := paralever { %0 := [0]; %1 := [1]; [2] := R 0 + R 1 }
-def a4 : ParProg := paralever { %2 := [1]; [3] := R 2; [4] := R 2; [5] := R 2 }
+def a3 : ParProg := paralever { %0 := [0]; %1 := [1]; [2] := %0 + %1 }
+def a4 : ParProg := paralever { %2 := [1]; [3] := %2; [4] := %2; [5] := %2 }
 
 def eN : ParProg := block [a1, a2, a3, a4]
 
@@ -62,13 +62,13 @@ Divide-and-conquer dependence DAGs are series-parallel, so the pass recovers the
 never saw — `atoms` threw it away with the `;`-chain — and attains the bound. -/
 
 def ms4 : ParProg := paralever {
-  %0 := [0]; %1 := [1]; [0] := AExp.min (R 0) (R 1); [1] := AExp.max (R 0) (R 1);
-  %2 := [2]; %3 := [3]; [2] := AExp.min (R 2) (R 3); [3] := AExp.max (R 2) (R 3);
+  %0 := [0]; %1 := [1]; [0] := AExp.min (%0) (%1); [1] := AExp.max (%0) (%1);
+  %2 := [2]; %3 := [3]; [2] := AExp.min (%2) (%3); [3] := AExp.max (%2) (%3);
   %4 := [0]; %5 := [1]; %6 := [2]; %7 := [3];
-  [10] := AExp.min (R 4) (R 6);
-  [11] := AExp.min (AExp.max (R 4) (R 6)) (AExp.min (R 5) (R 7));
-  [12] := AExp.max (AExp.max (R 4) (R 6)) (AExp.min (R 5) (R 7));
-  [13] := AExp.max (R 5) (R 7) }
+  [10] := AExp.min (%4) (%6);
+  [11] := AExp.min (AExp.max (%4) (%6)) (AExp.min (%5) (%7));
+  [12] := AExp.max (AExp.max (%4) (%6)) (AExp.min (%5) (%7));
+  [13] := AExp.max (%5) (%7) }
 
 def input4 : State := fun l =>
   .int (if l = 0 then 3 else if l = 1 then 1 else if l = 2 then 4 else if l = 3 then 1 else 0)
@@ -85,7 +85,7 @@ def input4 : State := fun l =>
 sequential one. The gate is that the pass does not pretend otherwise. -/
 
 def carried : ParProg := paralever {
-  %0 := [0]; [1] := R 0 + 1; %1 := [1]; [2] := R 1 + 1; %2 := [2]; [3] := R 2 + 1 }
+  %0 := [0]; [1] := %0 + 1; %1 := [1]; [2] := %1 + 1; %2 := [2]; [3] := %2 + 1 }
 
 #guard (threads (planOf carried)).length == 1
 #guard (quality carried).1 == (quality carried).2.2
@@ -99,7 +99,7 @@ what would be siblings. `noRegFlow` is on raw read sets, which is stronger than 
 and the parallelism is lost. -- ref: docs/autopar-algorithm.md § What the gate still refuses -/
 
 def reused : ParProg := paralever {
-  [10] := 1; [11] := 2; %0 := [10]; [12] := R 0; %0 := [11]; [13] := R 0 }
+  [10] := 1; [11] := 2; %0 := [10]; [12] := %0; %0 := [11]; [13] := %0 }
 
 #guard agrees reused (fun _ => .int 0) [10,11,12,13]
 

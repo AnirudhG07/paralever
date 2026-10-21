@@ -12,10 +12,12 @@ namespace Paralever
 
 Lists rather than finite sets: every use is a membership or a disjointness check, so duplicates are
 harmless, and concrete footprints stay `decide`-able. -/
+-- ANCHOR: site-footprint
 structure Footprint where
   reads  : List Loc
   writes : List Loc
   deriving Repr
+-- ANCHOR_END: site-footprint
 
 namespace Footprint
 
@@ -144,6 +146,7 @@ mutual
 /-- Run `p` from `σ` under the canonical left-to-right schedule, returning its result and the final
 heap. This is the *reference* execution: `accesses` and `WellFormed` are stated against it, and
 `wellFormed_canonical` proves every real interleaving of a well-formed program agrees with it. -/
+-- ANCHOR: site-runseq
 @[simp, grind .]
 def runSeq {τ : Type} : ParM τ → State → τ × State
   | .pure a,      σ => (a, σ)
@@ -152,6 +155,7 @@ def runSeq {τ : Type} : ParM τ → State → τ × State
   | .par cs k,    σ =>
       let r := runChilds cs σ
       runSeq (k r.1) r.2
+-- ANCHOR_END: site-runseq
 
 /-- The children, left to right, threading the heap. The reference order a fork is measured against. -/
 @[simp, grind .]
@@ -182,10 +186,12 @@ def accesses {τ : Type} : ParM τ → State → Footprint
       Footprint.union (accessesChilds cs σ) (accesses (k r.1) r.2)
 
 /-- The children's combined footprint, each measured from the heap the one before it left. -/
+-- ANCHOR: site-accesses-childs
 @[simp, grind .]
 def accessesChilds {αs : List Type} : Childs ParM αs → State → Footprint
   | .nil,       _ => .empty
   | .cons p ps, σ => Footprint.union (accesses p σ) (accessesChilds ps (runSeq p σ).2)
+-- ANCHOR_END: site-accesses-childs
 
 end
 

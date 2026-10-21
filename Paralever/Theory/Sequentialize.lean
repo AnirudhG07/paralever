@@ -14,8 +14,10 @@ namespace Paralever
 `(result, final-state)` pairs, regardless of which one actually runs. This is what "parallel and
 sequential agree" *means* in this project: every headline theorem below is stated in this
 vocabulary rather than spelling out `Reaches`/`Conf.run`/`ParM.pure` directly. -/
+-- ANCHOR: site-parseqeq
 def ParSeqEq {α : Type} (p q : ParM α) (σ : State) : Prop :=
   ∀ r σ', Reaches (.run p σ) (.run (.pure r) σ') ↔ Reaches (.run q σ) (.run (.pure r) σ')
+-- ANCHOR_END: site-parseqeq
 
 /-! ### `ParSeqEq` is an equivalence relation
 
@@ -50,12 +52,14 @@ schedule, whenever the program is well-formed.
 outermost one — nothing weaker would do, since a branch can race with itself while the two branches'
 total footprints stay disjoint. That obligation is the only thing left for a user to discharge per
 program; everything above it has been proved once, here. -- ref: `docs/decomposition.md` -/
+-- ANCHOR: site-par-seq-eq
 theorem par_seq_eq {α β : Type} (p : ParM α) (q : ParM β) (σ : State)
     (h : WellFormed (ParM.parPair p q) σ) : ParSeqEq (ParM.parPair p q) (ParM.seqPair p q) σ := by
   intro r σ'
   rw [wellFormed_canonical _ σ r σ' h,
       wellFormed_canonical _ σ r σ' (wellFormed_of_seqPair p q σ h),
       runSeq_par_eq_seq]
+-- ANCHOR_END: site-par-seq-eq
 
 /-! ### N-ary form
 

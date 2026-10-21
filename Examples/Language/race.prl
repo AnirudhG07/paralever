@@ -1,0 +1,13 @@
+-- Both threads work, then both write x[0]. wfB rejects it; `prl race` prints the interleaving
+-- that realizes the race, replayed against the semantics.
+
+buf x[1]
+buf log[2]
+
+parallel {
+  log[0] := 1
+  x[0] := 7
+} | {
+  log[1] := 1
+  x[0] := 9
+}

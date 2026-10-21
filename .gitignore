@@ -1,3 +1,8 @@
 /.lake
-# generated slide output (`lake exe slides`)
-/_slides
+
+# `slides/` is NOT ignored: it is the published deck, served at /paralever/slides/.
+# Regenerate it with `lake exe slides` and commit the result.
+
+# `web/build-snippets.sh` writes the module `paralever prove` generates here, builds
+# its highlighted facet and deletes it again. Never a source file.
+/Snippet.lean

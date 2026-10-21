@@ -1,6 +1,6 @@
 # `autoPar`: proposing a parallelisation, and why registers decide its shape
 
-`Lang/Analysis.lean` turns a sequential `ParProg` into a forked one. The analysis is **untrusted** —
+`Prl/Lang/Analysis.lean` turns a sequential `ParProg` into a forked one. The analysis is **untrusted** —
 it proposes, `wfB` checks — which is `Search/RaceSearch.lean`'s architecture. This note records the
 one thing `wfB` cannot check, and the theorem that covers it.
 
@@ -23,7 +23,7 @@ that same file back. Register writes do not survive a join — in **both** readi
 and sequential readings agree and `wfB` sees nothing wrong. What changes is the answer.
 
 ```text
-%0 := [10];  %1 := [11];  [12] := R 0 + R 1
+%0 := [10];  %1 := [11];  [12] := %0 + %1
 ```
 
 Split the two loads into one stage and the store into the next, and the store reads the pre-fork
@@ -43,7 +43,7 @@ forced by a program that breaks without it:
 `cutOK pre post` is then `disjointB (regFootprintsOf pre).writes (liveIn post)`, and `atoms` cuts the
 chain wherever that holds. The resulting segments, not the statements, are what `groups` schedules.
 
-**Why liveness and not just the read set.** A reused register — `%0 := [i]; A[i] := R 0`, repeated —
+**Why liveness and not just the read set.** A reused register — `%0 := [i]; A[i] := %0`, repeated —
 is written before every use, so it is never live across a boundary. Killing is what lets the three
 copies fork; without it `%0` appears live from the first statement to the last and no boundary is
 ever legal.
@@ -52,7 +52,7 @@ ever legal.
 the branches' writes, because either may run. Liveness must kill on what *must* be written:
 
 ```text
-%0 := 5;  if (R 1) { %0 := 1 } else { [7] := 9 };  [8] := R 0
+%0 := 5;  if (%1) { %0 := 1 } else { [7] := 9 };  [8] := %0
 ```
 
 Only the `then` branch assigns `%0`. Killing on the may-write set declares `%0` dead after the
@@ -71,7 +71,7 @@ pairwise notion `dependences` reports with.)
 
 ## The theorem
 
-`Lang/AutoParSound.lean`, built in three steps.
+`Prl/Lang/AutoParSound.lean`, built in three steps.
 
 1. `regs_frame` — a statement changes only the registers in its register write set.
 2. `agree_run_all` — if two files agree on a set `R` covering what the statement reads, it leaves
@@ -143,7 +143,7 @@ of 3 threads at depth 2 — equal to the DAG's lower bound — and `rewriteOk` t
 sequential depth of 6. `noRegFlow` asks that no register written by one thread is read by a later
 one, which is strictly stronger than the liveness `atoms` establishes at each boundary. Weakening it
 means restating `agree_run_all` over a statement list with `liveIn`; removing it means merging the
-children's register files at the join (`Lang/Core.lean`'s `par` case) under Bernstein on registers,
+children's register files at the join (`Prl/Lang/Core.lean`'s `par` case) under Bernstein on registers,
 with per-thread renaming at emission. Registers admit renaming and memory cells do not — a `Loc` is
 reached by a computed address, so the cell *is* its name.
 

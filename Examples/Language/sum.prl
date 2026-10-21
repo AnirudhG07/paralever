@@ -1,0 +1,18 @@
+-- Chunked sum of an array: one thread per chunk, each writing its own cell.
+-- The Lean counterpart is Examples/SumArray.lean § Surface.
+
+const len    = 2
+const chunks = 3
+
+buf A[6] = 1, 2, 3, 4, 5, 6
+buf out[3]
+
+
+parfor c in chunks {
+  %acc := 0
+  for k in len {
+    %v   := A[c * len + k]
+    %acc := %acc + %v
+  }
+  out[c] := %acc
+} :: "chunked sum"

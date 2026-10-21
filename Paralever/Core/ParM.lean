@@ -78,6 +78,7 @@ Each effect node carries its own continuation (the *freer* presentation), so the
 always the next action and no evaluation contexts are needed. `bind` is a defined graft rather than a
 constructor. Being inductive, `ParM` can only express terminating programs.
 Rationale: `docs/program-model.md`. -/
+-- ANCHOR: site-parm
 inductive ParM : Type → Type 1 where
   | pure  {α : Type}     : α → ParM α
   | read  {α : Type}     : Loc → (Val → ParM α) → ParM α
@@ -86,6 +87,7 @@ inductive ParM : Type → Type 1 where
   meaning Lean does not already fix: `run` interprets it by interleaving, which is what makes the
   sequentialization theorem non-vacuous. -/
   | par   {β : Type} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β
+-- ANCHOR_END: site-parm
 
 /-! ### Notation
 

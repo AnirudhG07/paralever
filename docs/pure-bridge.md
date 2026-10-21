@@ -14,7 +14,7 @@ So the conversion is unavoidable. The question is whether it is **trustworthy**:
 
 > If I rewrite my pure algorithm as a `ParM` program, how do I know the rewrite preserves meaning?
 
-`Examples/SumArray.lean` answers this by hand, and that answer is the model for this file:
+`Examples/Programs/SumArray.lean` answers this by hand, and that answer is the model for this file:
 
 ```lean
 def sumRangePure (σ : State) : List Loc → Int        -- the algorithm
@@ -64,7 +64,7 @@ three of them are *generic facts about the shape* and are discharged here once a
 
 `reduceArrayPure_par_seq_eq` therefore asks the caller for **three arithmetic facts and nothing
 else** — where the reads land, that outputs are distinct, that outputs avoid the read region. No
-footprint induction and no `Val` analysis survives at the call site. `Examples/PureToParM.lean` is
+footprint induction and no `Val` analysis survives at the call site. `Examples/Programs/RowSums.lean` is
 the worked instance (row sums), and its two `rfl` checks confirm the generated program computes the
 right values, not merely a well-typed term.
 

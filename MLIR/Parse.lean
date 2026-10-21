@@ -216,7 +216,18 @@ partial def parseType : P MTy := do
     if (← peek) == some ',' then err "memref with a layout map or memory space is not supported"
     let _ ← ch '>'
     pure (.memref dims elt)
+  else if ← lookingAt "tensor" then do
+    let _ ← kw "tensor"
+    let _ ← ch '<'
+    let dims ← parseDims []
+    let elt ← parseType
+    let _ ← ch '>'
+    pure (.tensor dims elt)
   else if ← lookingAt "none" then do let _ ← kw "none"; pure (.other "none")
+  else if (← peek) == some '!' then do
+    bump
+    let s ← ident
+    pure (.other ("!" ++ s))
   else if (← peek) == some '(' then do
     let _ ← ch '('
     let ts ← parseTypeListTail []
@@ -388,6 +399,17 @@ partial def parseDenseElems (acc : List Int) : P (List Int) := do
     if ← tryCh ',' then parseDenseElems (v :: acc)
     else do let _ ← ch ']'; pure (v :: acc).reverse
 
+/-- Signed integers up to `close` — the elements of an `array<i32: …>`. -/
+partial def parseIntsUntil (close : Char) (acc : List Int) : P (List Int) := do
+  skipWs
+  if ← tryCh close then pure acc.reverse
+  else do
+    let n ← numLit
+    let v := match n with | .inl k => k | .inr q => q.num / q.den
+    skipWs
+    if ← tryCh ',' then parseIntsUntil close (v :: acc)
+    else do let _ ← ch close; pure (v :: acc).reverse
+
 mutual
 
 partial def parseAttrValue : P MAttr := do
@@ -408,8 +430,19 @@ partial def parseAttrValue : P MAttr := do
         let v := match n with | .inl k => k | .inr q => q.num / q.den
         pure (MAttr.dense [v] true)
     let _ ← ch '>'
-    let _ ← attempt (do let _ ← ch ':'; let _ ← parseType; pure ())
-    pure a
+    match ← attempt (do let _ ← ch ':'; parseType) with
+    | some t => pure (.ann a t)
+    | none   => pure a
+  else if ← lookingAt "array" then do
+    let _ ← kw "array"
+    let _ ← ch '<'
+    let t ← ident
+    skipWs
+    if ← tryCh '>' then pure (.darr t [])
+    else do
+      let _ ← ch ':'
+      let es ← parseIntsUntil '>' []
+      pure (.darr t es)
   else if ← lookingAt "unit" then do let _ ← kw "unit"; pure .unit
   else if ← lookingAt "true" then do let _ ← kw "true"; pure (.int 1)
   else if ← lookingAt "false" then do let _ ← kw "false"; pure (.int 0)
@@ -431,8 +464,10 @@ partial def parseAttrValue : P MAttr := do
     | some c   =>
         if c.isDigit || c == '-' then do
           let n ← numLit
-          let _ ← attempt (do let _ ← ch ':'; let _ ← parseType; pure ())
-          pure (match n with | .inl k => .int k | .inr q => .flt q)
+          let a := match n with | .inl k => MAttr.int k | .inr q => MAttr.flt q
+          match ← attempt (do let _ ← ch ':'; parseType) with
+          | some t => pure (.ann a t)
+          | none   => pure a
         else do
           let t ← parseType
           pure (.ty t)
@@ -576,6 +611,8 @@ def renderTy : MTy → String
   | .float w      => "f" ++ toString w
   | .memref ds e  => "memref<" ++ String.join (ds.map (fun d => toString d ++ "x"))
                       ++ renderTy e ++ ">"
+  | .tensor ds e  => "tensor<" ++ String.join (ds.map (fun d => toString d ++ "x"))
+                      ++ renderTy e ++ ">"
   | .tuple ts     => "(" ++ ", ".intercalate (ts.map renderTy) ++ ")"
   | .fn ins outs  => "(" ++ ", ".intercalate (ins.map renderTy) ++ ") -> ("
                       ++ ", ".intercalate (outs.map renderTy) ++ ")"
@@ -634,6 +671,9 @@ def renderAttr : MAttr → String
   | .arr xs     => "[" ++ ", ".intercalate (renderAttrs xs) ++ "]"
   | .dict kvs   => "{" ++ ", ".intercalate (renderAttrDict kvs) ++ "}"
   | .unit       => "unit"
+  | .darr t es  => if es.isEmpty then "array<" ++ t ++ ">"
+                   else "array<" ++ t ++ ": " ++ ", ".intercalate (es.map toString) ++ ">"
+  | .ann a t    => renderAttr a ++ " : " ++ renderTy t
 
 def renderAttrs : List MAttr → List String
   | []      => []

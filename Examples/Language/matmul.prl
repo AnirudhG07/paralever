@@ -1,0 +1,22 @@
+-- 2x2 matrix multiply: C[i,j] = sum_k A[i,k] * B[k,j].
+-- Threads write disjoint cells of C and read overlapping rows of A and columns of B — the
+-- pattern *-disjointness rejects and Bernstein admits.
+
+const n = 2
+
+buf A[2, 2] = 1, 2, 3, 4
+buf B[2, 2] = 5, 6, 7, 8
+buf C[2, 2]
+
+
+parfor i in n {
+  for j in n {
+    %acc := 0
+    for k in n {
+      %x := A[i, k]
+      %y := B[k, j]
+      %acc := %acc + %x * %y
+    }
+    C[i, j] := %acc
+  }
+} :: "matmul 2x2"

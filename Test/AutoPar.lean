@@ -1,6 +1,6 @@
-import Paralever.Lang.Notation
-import Paralever.Lang.AutoParSound
-import Paralever.Lang.Exec
+import Prl.Lang.Notation
+import Prl.Lang.AutoParSound
+import Prl.Lang.Exec
 import Paralever.AutoPar.Rewrite
 
 /-! # `autoPar` regression tests
@@ -10,7 +10,7 @@ may not cross a fork boundary. The last section compares the two routes on all t
 -- ref: docs/autopar.md -/
 
 namespace Paralever.Test.AutoPar
-open Paralever Paralever.Lang Paralever.Lang.ParProg Paralever.AutoPar
+open Paralever Paralever.Prl Paralever.Prl.ParProg Paralever.AutoPar
 
 def σ0 : State := fun _ => .int 0
 
@@ -23,8 +23,8 @@ it. -/
 def nShape : ParProg := paralever {
   [10] := 1;
   [11] := 2;
-  %0 := [10]; %1 := [11]; [12] := R 0 + R 1;
-  %2 := [11]; [13] := R 2 * 2
+  %0 := [10]; %1 := [11]; [12] := %0 + %1;
+  %2 := [11]; [13] := %2 * 2
 }
 
 /-- The register-connected statements stay together: four segments, of sizes 1, 1, 3, 2. -/
@@ -44,9 +44,9 @@ and all three segments fork. Without the kill, `%0` would look live from the fir
 last and nothing would ever be separable. -/
 
 def reuse : ParProg := paralever {
-  %0 := [0]; [100] := R 0;
-  %0 := [1]; [101] := R 0;
-  %0 := [2]; [102] := R 0
+  %0 := [0]; [100] := %0;
+  %0 := [1]; [101] := %0;
+  %0 := [2]; [102] := %0
 }
 
 example : (atoms (flatten reuse)).map (fun g => g.length) = [2, 2, 2] := by decide
@@ -65,8 +65,8 @@ must-write, and with it no boundary is offered here at all. -/
 
 def cond : ParProg := paralever {
   %0 := 5;
-  if (R 1) { %0 := 1 } else { [7] := 9 };
-  [8] := R 0
+  if (%1) { %0 := 1 } else { [7] := 9 };
+  [8] := %0
 }
 
 /-- One segment: there is no legal cut, so nothing is forked. -/

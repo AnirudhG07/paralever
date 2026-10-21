@@ -8,7 +8,7 @@ provable with `par_block_heap` alone — a scheduler that moved units past one a
 commutation theorem instead. -- ref: docs/autopar-algorithm.md § The shape of a plan -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-- Stages, each a list of threads, each thread a list of units — all in program order. -/
 abbrev Plan := List (List (List ParProg))
@@ -30,26 +30,45 @@ or forces a new stage — and the three cases are exactly the three ways a depen
 -- ref: docs/autopar-algorithm.md § The pass -/
 
 /-- Does `x` conflict with anything in `ts`, so that no fork may hold them side by side?
--- ref: Paralever/Lang/Analysis.lean `canParSeg` -/
-def hits (ts : List (List ParProg)) (x : ParProg) : Bool :=
+-- ref: Prl/Lang/Analysis.lean `canParSeg` -/
+def mustFollow (ts : List (List ParProg)) (x : ParProg) : Bool :=
   ts.any (fun t => t.any (fun u => !ParProg.canParSeg u x))
 
 /-- The pass. `cur` is the thread being built, `stage` the threads already closed in this stage. -/
 def planGo (cur : List ParProg) (stage : List (List ParProg)) : List ParProg → Plan
   | []      => [stage ++ [cur]]
   | x :: xs =>
-      if hits stage x then
+      if mustFollow stage x then
         -- x must follow a thread that is already a sibling here: only a join can order them
         (stage ++ [cur]) :: planGo [x] [] xs
-      else if hits [cur] x then
-        planGo (cur ++ [x]) stage xs            -- x follows this thread: extend it
+      else if mustFollow [cur] x then
+        planGo (cur ++ [x]) stage xs -- x follows this thread: extend it
       else
-        planGo [x] (stage ++ [cur]) xs          -- independent of everything open: new thread
+        planGo [x] (stage ++ [cur]) xs  -- independent of everything open: new thread
 
 /-- **The schedule.** -/
 def plan : List ParProg → Plan
   | []      => []
   | x :: xs => planGo [x] [] xs
+
+/-! ### The three cases, on three-unit chains
+
+Each `#guard` below is the shape of the plan — one number per stage, counting its threads. -/
+
+section Demo
+private def wr (l : Loc) : ParProg := .store l (.lit 1)
+private def rd (r : Reg) (l : Loc) : ParProg := .load r l
+
+-- all independent: one stage, three threads
+#guard (plan [wr 0, wr 1, wr 2]).map (fun stage => stage.length) == [3]
+-- a chain of dependences: one thread holding all three, which is the sequential program back
+#guard (plan [wr 0, rd 0 0, wr 0]).map (fun stage => stage.length) == [1]
+-- `wr 1` is independent of `wr 0`, so it opens a second thread beside it; `rd 0 0` conflicts with
+-- a *closed sibling*, which only a join can order, so it forces a new stage
+#guard (plan [wr 0, wr 1, rd 0 0]).map (fun stage => stage.length) == [2, 1]
+-- and nothing is ever reordered, whatever the plan: `plan_units` below is this as a theorem
+#guard (planUnits (plan [wr 0, wr 1, rd 0 0])).length == 3
+end Demo
 
 /-! ## Order preservation, structurally
 
@@ -64,12 +83,12 @@ theorem planGo_units : ∀ (xs cur : List ParProg) (stage : List (List ParProg))
   | nil => intro cur stage; simp [planGo, planUnits]
   | cons x rest ih =>
       intro cur stage
-      by_cases h1 : hits stage x = true
+      by_cases h1 : mustFollow stage x = true
       · simp only [planGo, h1, ite_true, planUnits, List.flatten_cons, List.flatten_append]
         rw [show (planGo [x] [] rest).flatten.flatten = planUnits (planGo [x] [] rest) from rfl,
           ih [x] []]
         simp
-      · by_cases h2 : hits [cur] x = true
+      · by_cases h2 : mustFollow [cur] x = true
         · simp only [planGo, h1, h2, ite_true, ite_false, Bool.false_eq_true]
           rw [ih (cur ++ [x]) stage]; simp
         · simp only [planGo, h1, h2, ite_false, Bool.false_eq_true]

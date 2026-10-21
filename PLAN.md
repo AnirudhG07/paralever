@@ -125,7 +125,7 @@ theorem par_eq_seq (p : ParM α) (q : ParM β) (σ : State)
 "Under any schedule, parallel = sequential." Determinism and sequential-equivalence in one
 statement. Then the N-ary `parN` version with pairwise `Indep`, then nesting.
 
-**Anti-vacuity obligation — ✅ discharged** (`Examples/Racy.lean`): two racy pairs with
+**Anti-vacuity obligation — ✅ discharged** (`Examples/Races/Caught.lean`): two racy pairs with
 `¬ ParSeqEq` proved in Lean, so `h` is load-bearing against the conclusion and not merely
 unprovable. See `docs/semantics.md` § Anti-vacuity witness.
 
@@ -279,7 +279,7 @@ Paralever/
     Determinism.lean   -- race-free ⇒ schedule-independent (confluence + Newman, cf. LVars)
   Logic/               -- Tier 2: DCSL-lite for data-dependent footprints (Vafeiadis' method)
   Notation/            -- ∥, A[i], regions, parallel-for
-  Pragma/              -- #parallel, collapse, reduction, private
+  Lib/Loop.lean        -- ✅ #parallel_for, the indexed read/write loop validator
   Compile/ToTask.lean  -- ParM → Task.spawn + Task.mapList; preservation
   Examples/{SumArray, Sort, MatMul, LoopPar}.lean
 ```
@@ -294,7 +294,7 @@ Paralever/
 | 3 | **`par_eq_seq`** — binary, then N-ary, then nested. Plus the anti-vacuity counterexample |
 | 4 | Notation layer (`∥`, `A[i]`, regions, `region_disjoint`) |
 | 5 | Example 1: chunked reduce |
-| 6 | `Pragma/` — `#parallel for`, `collapse`; Example 3a: matmul; the failing-prefix regression test |
+| 6 | `Lib/Loop.lean` — `#parallel_for`, `collapse`; Example 3a: matmul; the failing-prefix regression test |
 | 7 | Tier-2 logic (BI instance + DCSL-lite); Example 2: parallel merge/quicksort |
 | 8 | `Compile/ToTask` + preservation; upstream `Task.mapList_eq` and `mapAsyncChunked f xs = xs.map f` |
 | 9 | `reduction`/`private` clauses; Example 3b: stencil; paper |

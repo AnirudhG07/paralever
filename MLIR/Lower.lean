@@ -1,8 +1,8 @@
 import MLIR.Affine
 import MLIR.Scalar
 import MLIR.Parse
-import Paralever.Lang.Exec
-import Paralever.Lang.Layout
+import Prl.Lang.Exec
+import Prl.Lang.Layout
 import Paralever.Search.RaceSearch
 
 /-! # `Mlir.Op → Layout × ParProg`
@@ -34,7 +34,7 @@ target is footprint preservation — every access the MLIR program performs lies
 produced `ParProg` reports. -- ref: `docs/mlir.md` § Why in Lean -/
 
 namespace Paralever.MLIR
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-! ## Buffers
 
@@ -297,13 +297,64 @@ def nonAffineIndex (o : Op) (nm : String) (idxOps : List String) (st : LSt) :
 
 mutual
 
-/-- Lower a list of operations in order. -/
+/-- Lower a list of operations in order. A run of `async.execute` ops is read as one unit, because
+a fork is a group of ops rather than a single one. -/
 partial def lowerOps (C : LCtx) : List Op → LSt → Except String (List ParProg × LSt)
   | [],      st => .ok ([], st)
-  | o :: os, st => do
-      let (p, st') ← lowerOp C o st
-      let (ps, st'') ← lowerOps C os st'
-      .ok (p ++ ps, st'')
+  | o :: os, st =>
+      if o.name == "async.execute" then
+        lowerFork C (o :: os.takeWhile (fun q => q.name == "async.execute"))
+          (os.dropWhile (fun q => q.name == "async.execute")) st
+      else do
+        let (p, st') ← lowerOp C o st
+        let (ps, st'') ← lowerOps C os st'
+        .ok (p ++ ps, st'')
+
+/-- A maximal run of `async.execute` ops and the `async.await_all` that joins them: one `par` node.
+
+The await must come immediately after the run and name exactly those tokens. A token awaited later
+joins later than `par` does, so the shape is *required* rather than assumed — the alternative is a
+`ParProg` whose threads rejoin earlier than the MLIR program's, which is a different program.
+-- ref: `docs/mlir.md` § A fork is a group of ops -/
+partial def lowerFork (C : LCtx) (group : List Op) (after : List Op) (st : LSt) :
+    Except String (List ParProg × LSt) := do
+  let toks := group.flatMap (fun g => g.results)
+  if toks.length != group.length then
+    .error "async.execute must have exactly one result, its token"
+  if group.any (fun g => !g.operands.isEmpty) then
+    .error "async.execute with operands (a dependency token or a captured value) is not supported: \
+            a thread's inputs are the heap and the registers it forked with"
+  let regions ← group.mapM fun g =>
+    match g.body? with
+    | some r => if r.args.isEmpty then .ok r
+                else .error "async.execute region takes no arguments"
+    | none   => .error "async.execute without a single region"
+  match after with
+  | []      => .error "async.execute with no async.await_all to join it"
+  | j :: tl =>
+      if j.name != "async.await_all" && j.name != "async.await" then
+        .error s!"async.execute joined by '{j.name}': the fork must be closed by the \
+                  async.await_all that immediately follows it"
+      else if j.operands.length != toks.length || !toks.all (fun t => j.operands.contains t) then
+        .error "async.await_all awaits other tokens than the async.execute ops before it"
+      else do
+        let (bs, st') ← lowerForkBodies C regions st
+        let node := ParProg.par bs
+        let p := match j.strAttr? "paralever.label" with
+                 | some nm => ParProg.label nm node
+                 | none    => node
+        let (ps, st'') ← lowerOps C tl st'
+        .ok (p :: ps, st'')
+
+/-- The bodies of a fork, each on its own: an `async.execute` region takes no arguments, so the
+threads differ by what they contain rather than by an index. -/
+partial def lowerForkBodies (C : LCtx) : List Region → LSt →
+    Except String (List ParProg × LSt)
+  | [],      st => .ok ([], st)
+  | r :: rs, st => do
+      let (b, st') ← lowerThread C r [] st
+      let (bs, st'') ← lowerForkBodies C rs st'
+      .ok (b :: bs, st'')
 
 /-- The ops of a region, with its entry-block arguments bound to `binds`. Bindings made inside do
 not escape: the region's scope ends with it. -/
@@ -357,7 +408,14 @@ partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg
           let (ps, st') ← lowerOps C r.ops st0
           .ok (ps, { st' with env := st.env })
       | none => .error "func.func without a single region"
-  | "func.return" | "affine.yield" | "memref.dealloc" | "memref.global" => .ok ([], st)
+  | "func.return" | "affine.yield" | "async.yield" | "memref.dealloc" | "memref.global" =>
+      .ok ([], st)
+  | "async.execute" =>
+      .error "async.execute outside a block of operations: a fork is read as a group, so the \
+              ops it is grouped with have to be its siblings"
+  | "async.await" | "async.await_all" =>
+      .error "async.await_all with no async.execute before it: the tokens it awaits were not \
+              forked here"
   -- buffers
   | "memref.alloc" | "memref.alloca" =>
       match o.results with
@@ -645,7 +703,8 @@ def handledOps : List String :=
     "arith.maxsi", "arith.minsi",
     "arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.maxnumf", "arith.minnumf",
     "arith.index_cast", "arith.index_castui", "arith.extsi", "arith.extui", "arith.trunci",
-    "arith.sitofp", "arith.uitofp", "arith.extf", "arith.truncf", "arith.fptosi", "arith.fptoui" ]
+    "arith.sitofp", "arith.uitofp", "arith.extf", "arith.truncf", "arith.fptosi", "arith.fptoui",
+    "async.execute", "async.await", "async.await_all", "async.yield" ]
 
 /-- Op names in the file that no rule handles. -/
 def unsupportedOps (ops : List Op) : List String :=

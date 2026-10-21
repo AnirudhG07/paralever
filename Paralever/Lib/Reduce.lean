@@ -1,4 +1,4 @@
-import Paralever.Pragma.ParallelFor
+import Paralever.Lib.Loop
 import Paralever.Lib.Notation
 import Paralever.Lib.Cost
 
@@ -9,12 +9,12 @@ accumulating in a **pure value** (not a heap cell), then writes one output. Beca
 is pure, a whole reduction's write set is a single location — so independence is two arithmetic
 facts: `dst` injective, and `dst` outside the read region.
 
-Does for `Σ` what `Pragma/MapArray.lean` does for elementwise map.
+Does for `Σ` what `Kernels/MapArray.lean` does for elementwise map.
 
 Rationale: `docs/reductions.md`. -/
 
 namespace Paralever
-open Paralever.Pragma.ParallelFor
+open Paralever.Loop
 
 -- ref: docs/reductions.md; Blom et al. STTT'21 §3 (iteration contracts encoding data dependences)
 

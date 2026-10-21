@@ -1,17 +1,12 @@
-import Paralever.Lang.Imp
-import Paralever.Lang.Exec
-import Paralever.Lang.Cost
+import Prl.Lang.Imp
+import Prl.Lang.Exec
+import Prl.Lang.Cost
 import Paralever.Search.Explain
 import Paralever.AutoPar.Rewrite
 
-/-! # The code quoted in the blog post
 
-Every Lean block the post shows lives here, so the post cannot drift from the library. The regions
-are named with `ANCHOR` comments and rendered to HTML by `verso-snippets`.
--- ref: docs/race-search.md, docs/cost.md, docs/autopar-algorithm.md -/
-
-namespace BlogSnippets
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+namespace Paralever.Examples.BlogSnippets
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-! ## The hook -/
 
@@ -20,11 +15,11 @@ open Paralever Paralever.Lang Paralever.Lang.ParProg
 def pipeline : ParProg := paralever {
   [0] := 3;
   [1] := 4;
-  parallel { %0 := [0]; [2] := R 0 * R 0 }
-           | { %0 := [1]; [3] := R 0 * R 0 };
+  parallel { %0 := [0]; [2] := %0 * %0 }
+           | { %0 := [1]; [3] := %0 * %0 };
   %0 := [2];
   %1 := [3];
-  [4] := R 0 + R 1
+  [4] := %0 + %1
 }
 
 -- the independence obligation is a Bool, and the kernel evaluates it
@@ -33,7 +28,7 @@ example : wfB pipeline = true := by decide
 /-- The parallel reading and the sequential reading agree, under *every* schedule. -/
 theorem pipeline_ok (ρ : Regs) (σ : State) :
     ParSeqEq (execPar pipeline ρ) (execSeq pipeline ρ) σ :=
-  par_seq_eq (by decide) ρ σ
+  ParProg.par_seq_eq (by decide) ρ σ
 
 -- and it computes 3*3 + 4*4
 example : (runSeq (execPar pipeline (fun _ => 0)) (fun _ => .int 0)).2 4 = .int 25 := by decide
@@ -46,14 +41,14 @@ example : (runSeq (execPar pipeline (fun _ => 0)) (fun _ => .int 0)).2 4 = .int 
 def shared : ParProg := paralever {
   %0 := [0];
   %1 := [1];
-  [2] := R 0 + R 1;
-  parallel { %3 := [2]; [3] := R 3 * 2 }
-    | { %4 := [2]; [4] := R 4 - 1 }
+  [2] := %0 + %1;
+  parallel { %3 := [2]; [3] := %3 * 2 }
+    | { %4 := [2]; [4] := %4 - 1 }
     | { [5] := 7 }
 }
 
 -- the footprint is a fold over the syntax: reads on the left, writes on the right
-example : footprintOf shared = ⟨[0, 1, 2, 2], [2, 3, 4, 5]⟩ := rfl
+example : ParProg.footprintOf shared = ⟨[0, 1, 2, 2], [2, 3, 4, 5]⟩ := rfl
 example : wfB shared = true := by decide
 -- ANCHOR_END: shared
 
@@ -162,4 +157,4 @@ example : wellFormedB late.toParM σ0 = false := by decide
 #eval IO.println (explainProg late σ0)
 -- ANCHOR_END: racy
 
-end BlogSnippets
+end Paralever.Examples.BlogSnippets

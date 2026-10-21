@@ -1,0 +1,21 @@
+-- Lifetimes. `free` ends a buffer's: the name may not be used after it, and when the buffer is the
+-- most recent one placed its cells go back to the allocator — so `out` lands on `tmp`'s. Nothing is
+-- zeroed, so `out` starts out holding what `tmp` left; this is an arena, not a heap. `buf` and
+-- `free` are both erased, so neither changes the program `wfB` is decided on.
+
+buf src[4] = 1, 2, 3, 4
+buf tmp[4]
+
+parfor i in 4 {
+  %v := src[i]
+  tmp[i] := %v * 2
+} :: "double"
+
+free tmp
+
+buf out[4]
+
+parfor i in 4 {
+  %w := out[i]
+  out[i] := %w + 1
+} :: "increment in place"

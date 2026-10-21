@@ -1,12 +1,12 @@
 # Making a sequential program parallel
 
 `Paralever/AutoPar/` turns a `;`-chain into a tree of `parallel` blocks and **proves the rewrite
-preserves the outcome**. `Lang/Analysis.lean`'s `autoPar` is a greedy sketch whose claim is checked
+preserves the outcome**. `Prl/Lang/Analysis.lean`'s `autoPar` is a greedy sketch whose claim is checked
 per program; this is the same job done so the claim is a theorem.
 
 Both routes are live, and this one is not a superset: its gate is stricter, so it refuses chains
 `autoPar` forks. `autopar.md` § *The two routes* has the measured comparison, and this file builds
-on `Lang/Analysis.lean` throughout (`flatten`, `atoms`, `canParSeg`, `regFootprint`) rather than
+on `Prl/Lang/Analysis.lean` throughout (`flatten`, `atoms`, `canParSeg`, `regFootprint`) rather than
 replacing it.
 
 ```text
@@ -32,14 +32,14 @@ read sequentially — for every program. That is possible because `rewrite` *che
 is proved, the architecture of `Search/RaceSearch.lean`.
 
 Heap, not the pair: `execPar` at a `par` node hands the continuation the pre-fork register file
-(`Lang/Core.lean`), so there is nothing to say about registers after a fork.
+(`Prl/Lang/Core.lean`), so there is nothing to say about registers after a fork.
 
 One schedule or all of them: `rewrite_sound` is about `runSeq`. `rewrite_wf` carries `wfB` through
 the rewrite, which feeds `par_seq_eq`, so `rewrite_parSeqEq` gives every schedule.
 
 ## Units
 
-The scheduling unit is a **register-closed segment** (`atoms`, `Lang/Analysis.lean`), not a
+The scheduling unit is a **register-closed segment** (`atoms`, `Prl/Lang/Analysis.lean`), not a
 statement. A load and the store that consumes its register are one unit and are never split across a
 fork, because a register written on one side of a fork boundary and read on the other reads a stale
 value — not a race, so `wfB` cannot see it. `docs/autopar.md` has that counterexample.
@@ -84,7 +84,7 @@ One left-to-right fold. For each unit, the three ways a dependence can fall are 
                     no   ──►  open a new thread beside it
 ```
 
-Worked, on two independent chains written interleaved (`[0]:=1; %0:=[0]; [1]:=R0; [2]:=3; …`):
+Worked, on two independent chains written interleaved (`[0]:=1; %0:=[0]; [1]:=%0; [2]:=3; …`):
 
 ```text
   u₁          new thread            cur=[u₁]
@@ -145,7 +145,7 @@ that writes `%0` and then reads it has `%0` in its raw read set even though the 
 chain that reuses `%0` across segments is declined and returned sequential:
 
 ```text
-  [10] := 1; [11] := 2; %0 := [10]; [12] := R 0; %0 := [11]; [13] := R 0
+  [10] := 1; [11] := 2; %0 := [10]; [12] := %0; %0 := [11]; [13] := %0
   ──► returned unchanged                      rewriteOk = false
 ```
 

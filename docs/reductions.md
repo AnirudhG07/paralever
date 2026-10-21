@@ -4,7 +4,7 @@ Rationale for `Paralever/Lib/Reduce.lean`. Code references this file as `docs/re
 
 ## The pattern, and why it deserves a combinator
 
-`Pragma/MapArray.lean` collapsed the elementwise case — `Out[i] := f(In[i])` — from ~30 proof lines
+`Kernels/MapArray.lean` collapsed the elementwise case — `Out[i] := f(In[i])` — from ~30 proof lines
 to one. The *other* pervasive shape is a reduction:
 
 ```
@@ -15,7 +15,7 @@ for each p in parallel:
 ```
 
 Matmul is this (`C[i,j] = Σ_k A[i,k]·B[k,j]`), as is every dot product, row sum, norm, histogram bucket,
-and `argmin`. Before this file, `Examples/MatMul.lean` spent most of its length on two footprint inductions over
+and `argmin`. Before this file, `Examples/Programs/MatMul.lean` spent most of its length on two footprint inductions over
 the fuel parameter that are *entirely mechanical*: same `Val` case splits, same `ReadsWithin.union` chains, same shape any other
 reduction would reproduce verbatim.
 
@@ -69,7 +69,7 @@ scope, because then `hreads` cannot be a fact about arithmetic. This is the same
 footprint boundary `docs/opaque-ops.md` hits, earmarked for `Logic/` (DCSL-lite).
 
 **One output cell per iteration.** A reduction writing several cells needs `Pw` as a predicate rather
-than a single `dst`; `Pragma/ParallelFor.lean`'s `parAll_par_seq_eq_of_indexed_rw` remains the escape
+than a single `dst`; `Lib/Loop.lean`'s `parAll_par_seq_eq_of_indexed_rw` remains the escape
 hatch for that, and this file is a specialization of it, not a replacement.
 
 **No cross-iteration combination.** This parallelizes `N` *independent* reductions. It does not

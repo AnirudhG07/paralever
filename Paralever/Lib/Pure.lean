@@ -11,7 +11,7 @@ proves the conversion faithful:
     (runSeq (reduceFold (readsCombine locs f) m 0 init) σ).1 = foldPure σ locs f m 0 init
 
 so the `ParM` program provably computes the pure specification. Generalizes
-`Examples/SumArray.lean`'s hand-written `sumRange_eq_sumRangePure`.
+`Examples/Programs/SumArray.lean`'s hand-written `sumRange_eq_sumRangePure`.
 
 Rationale: `docs/pure-bridge.md`. -/
 

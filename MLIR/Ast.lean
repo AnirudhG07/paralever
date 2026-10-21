@@ -62,6 +62,9 @@ inductive MTy where
   /-- `memref<10x20xi32>`: a static shape and an element type. A dynamic dimension (`?`) has no
   `Nat` to put in the shape, so the reader rejects it rather than guessing. -/
   | memref : List Nat → MTy → MTy
+  /-- `tensor<6xi64>` — a static-shaped tensor. Read only because a `memref.global`'s
+  `initial_value` carries its elements as one: `dense<[1, 2]> : tensor<2xi64>`. -/
+  | tensor : List Nat → MTy → MTy
   /-- `(i32, index)` — a parenthesised type list. -/
   | tuple  : List MTy → MTy
   /-- `(memref<8xi32>, index) -> i32` — a function type, which is what a `func.func` carries in its
@@ -90,6 +93,14 @@ inductive MAttr where
   | arr    : List MAttr → MAttr
   | dict   : List (String × MAttr) → MAttr
   | unit   : MAttr
+  /-- `array<i32: 0, 0, 0>` — a dense array attribute. Current MLIR prints `operandSegmentSizes`
+  this way, so an op with variadic operand groups cannot be read without it. The element type is
+  kept as written, because printing it back is what the round trip compares. -/
+  | darr   : String → List Int → MAttr
+  /-- `3 : index`, `dense<0> : tensor<8xi32>` — a value with its type annotation. MLIR *requires*
+  the annotation on `arith.constant`, so dropping it would print files MLIR cannot read back.
+  `Op.attr?` strips it, so no rule has to look through it. -/
+  | ann    : MAttr → MTy → MAttr
   deriving Repr, Inhabited
 
 /-! ## Operations
@@ -122,11 +133,16 @@ structure Region where
 
 end
 
+/-- An attribute with its type annotation removed: what a rule reads. -/
+def MAttr.bare : MAttr → MAttr
+  | .ann a _ => MAttr.bare a
+  | a        => a
+
 namespace Op
 
-/-- The attribute under this key. -/
+/-- The attribute under this key, with any type annotation stripped. -/
 def attr? (o : Op) (k : String) : Option MAttr :=
-  (o.attrs.find? (fun p => p.1 == k)).map Prod.snd
+  ((o.attrs.find? (fun p => p.1 == k)).map Prod.snd).map MAttr.bare
 
 def intAttr? (o : Op) (k : String) : Option Int :=
   match o.attr? k with
@@ -158,9 +174,10 @@ def tyAttr? (o : Op) (k : String) : Option MTy :=
 array, which is how MLIR prints a single-element `steps`. -/
 def intsAttr? (o : Op) (k : String) : Option (List Int) :=
   match o.attr? k with
-  | some (.arr xs) => xs.mapM fun a => match a with | .int n => some n | _ => none
-  | some (.int n)  => some [n]
-  | _              => none
+  | some (.arr xs)   => xs.mapM fun a => match a.bare with | .int n => some n | _ => none
+  | some (.darr _ es) => some es
+  | some (.int n)    => some [n]
+  | _                => none
 
 /-- The op's single region, when it has exactly one. -/
 def body? (o : Op) : Option Region :=

@@ -1,11 +1,11 @@
 # `Layout` — declare buffers, not addresses
 
-Code: `Paralever/Lang/Layout.lean`. Used by `Examples/NeuralNet.lean` (the net's memory) and
-`Examples/RaceReport.lean` §9 (named diagnostics).
+Code: `Prl/Lang/Layout.lean`. Used by `Examples/Language/NeuralNet.lean` (the net's memory) and
+`Examples/Races/Report.lean` §9 (named diagnostics).
 
 ## The problem
 
-Before this, every example assigned base addresses by hand. `Examples/NeuralNet.lean` looked like
+Before this, every example assigned base addresses by hand. `Examples/Language/NeuralNet.lean` looked like
 this:
 
 ```lean
@@ -92,6 +92,7 @@ the rows break.
 |---|---|
 | `buf "w2" [2, 6]` | a declaration: name, shape, and an optional initializer (see above) |
 | `Layout.of bufs` | allocate, in declaration order |
+| `Arena.of ds` | allocate with lifetimes: `.buf b` places, `.free "a"` ends one (below) |
 | `L.at "w2" [i, j]` | the cell's address — row-major, instead of `W2 + i*6 + j` |
 | `L.ref "w2"` | the buffer as an `ArrRef`, for `Theory/Intervals.lean` |
 | `L.state` | the initial heap, from the declarations |
@@ -139,18 +140,56 @@ theorem alloc_pairwise (bs : List Buf) (start : Loc) :
 
 one induction, with `alloc_ge` ("nothing is placed below `start`") as the cons step.
 
+## Lifetimes
+
+`Layout.of` places buffers that all live as long as the program. `Arena.of` takes a list that can
+also *end* a lifetime, which is the `.prl` file's `buf`/`free` as a library function:
+
+```lean
+Arena.of [.buf (buf "a" [4]), .free "a", .buf (buf "b" [4])]
+-- a @0 (4), b @0 (4) — b is placed on a's cells; a is dead
+```
+
+Two things happen on a `free` and nothing else does. The name goes on `dead`, so `Arena.live` drops
+it while `Arena.layout` keeps it — a dead buffer still has an address, which is what lets
+`Layout.nameOf` say whose cells one used to be. And the cursor goes back to the buffer's base when
+it is the most recent one placed (`Placed.release`), so `buf`/`free` is a stack and freeing out of
+order leaves the hole. Nothing is zeroed and no location goes away: `b` above starts out holding
+what `a` left. This is an arena, not a heap — `docs/prl.md` § *Declaring memory* has the rationale,
+including why there is no run-time allocator.
+
+Reuse is the point, so `alloc_pairwise` is not the fact to want: `a` and `b` overlap exactly. What
+holds instead is that two buffers *live at the same time* share no location:
+
+```lean
+theorem Arena.live_disjoint (ds : List LDecl) (start : Loc) {p q : Placed}
+    (hp : p ∈ (Arena.of ds start).live) (hq : q ∈ (Arena.of ds start).live)
+    (hne : p.name ≠ q.name) : ∀ l, p.ref.InRange l → q.ref.InRange l → False
+```
+
+Liveness at the end is enough to state it because `dead` only grows — a buffer live at the end was
+live throughout. The induction carries two invariants: every live buffer's cells lie below the
+cursor, and no cell belongs to two live buffers. `free` is where they interact. Lowering the cursor
+to the freed buffer's base could only strand a live buffer above it, and a live buffer above the new
+cursor and below the old one would be inside the range just freed — which the second invariant has
+already ruled out.
+
+A double `free` is a no-op rather than a second release, for the same reason: the cursor must not
+walk back over cells a later buffer now owns. `Prl.Compile.Lower` rejects that case outright, along
+with any use of a freed name.
+
 ## Out-of-range subscripts are still total
 
 `L.at "W" [2, 0]` on a `[2, 6]` buffer is an address like any other — no clamping, no error. This is
 the same choice as `ArrRef.loc` and for the same reason: `State = Loc → Val` is total, so an index
 out of range is an out-of-bounds *intention*, not an access (`docs/semantics.md`,
-`Examples/Pointers.lean`). What the layout adds is that you can now *see* where it went:
+`Examples/Races/Pointers.lean`). What the layout adds is that you can now *see* where it went:
 
 ```lean
 #eval mem.show (mem.at "W" [2, 0])     -- "Y[0]"
 ```
 
-which is the aliasing diagnosis from `Examples/Pointers.lean` reported directly. `inRange` and
+which is the aliasing diagnosis from `Examples/Races/Pointers.lean` reported directly. `inRange` and
 `covers` are how you say you meant otherwise, and `covers` catches a stray pointer with **no second
 thread needed** — unlike the race check, which only fires when the stray address collides.
 
@@ -164,7 +203,7 @@ def Layout.state (L : Layout) : State :=
   fun l => a.getD l (.int 0)
 ```
 
-`Examples/NeuralNet.lean` records a 40× slowdown from a heap whose reads walked a structure per
+`Examples/Language/NeuralNet.lean` records a 40× slowdown from a heap whose reads walked a structure per
 access (50 training epochs went from over 110 s to 2.7 s once reads were `O(1)`). The `let` binds
 the array outside the closure, so it is built once per call to `Layout.state` — **bind it to a
 `def`**; inlining `L.state` into a loop rebuilds it every iteration, which is the same mistake.
@@ -185,7 +224,7 @@ where it used to say `{37}`.
 
 ## A note on the `mem` keyword
 
-`Lang/Notation.lean` used to spell memory `mem l`, which reserved `mem` as a **global** token: while
+`Prl/Lang/Notation.lean` used to spell memory `mem l`, which reserved `mem` as a **global** token: while
 it did, no declaration anywhere in the project could be named `mem` — including the obvious name for
 a layout. Memory is now written `[l]`, which reserves nothing (`[` and `]` are tokens already) and
 drops the parentheses arithmetic addresses needed:
@@ -193,7 +232,7 @@ drops the parentheses arithmetic addresses needed:
 ```lean
 -- before                          -- after
 %0 := mem (ij.1 * n + k)           %0 := [ij.1 * n + k]
-mem 2 := R 0 + R 1                 [2] := R 0 + R 1
+mem 2 := %0 + %1                 [2] := %0 + %1
 ```
 
 This is the second time a `syntax` keyword has collided with an ordinary identifier (the first was

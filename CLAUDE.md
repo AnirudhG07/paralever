@@ -34,7 +34,12 @@ lean Paralever/Core/ParM.lean        # typecheck one file, fast, no deps needed
 lake build                           # full build (Mathlib + iris — slow, needs disk)
 lake exe cache get                   # fetch Mathlib oleans before a first full build
 grep -rn "sorry" Paralever/          # the no-sorry gate
+lake exe paralever --help            # the command line: check, run, autopar, prove, convert
 ```
+
+`paralever prove FILE -o OUT.lean` writes a Lean module that re-reads `FILE` while it elaborates
+and states what holds of it — `par_seq_eq` when `wfB` accepts, the per-heap equivalence when only
+the exact check does, and the two refusals when there is a race. See `docs/cli.md`.
 
 Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinned to `v4.34.0`.
 
@@ -42,7 +47,7 @@ Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinn
 
 A `syntax "foo"` reserves `foo` as a token for the *whole project*, so no declaration anywhere can
 then be named `foo`. This has bitten twice: `syntax "r "` broke `Test/NArySpike.lean`, and `mem l`
-made `def mem` impossible — the obvious name for a `Layout`. Memory in `Lang/Notation.lean` is now
+made `def mem` impossible — the obvious name for a `Layout`. Memory in `Prl/Lang/Notation.lean` is now
 `[l]`, which reserves nothing. Prefer tokens that already exist (`[`, `%`, `*`) over new keywords.
 
 ## Mathlib import policy
@@ -114,35 +119,79 @@ Paralever/
   Theory/    Decomposition, WellFormedCanonical, Sequentialize (the theorem), Intervals
   Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
   Lib/       Compose (bind lemmas), TypedRead (Storable α), TouchesOnly, Notation, FootprintSimp,
+             ArrRef (array-shaped locations over bare `Loc`, `disjoint_of_range`),
+             Loop (the indexed read/write loop validator, proved once, plus `#parallel_for`),
              Block (straight-line IR — footprints computed, not proved),
              OpaqueOp (declared footprints for bodies we never read),
              Reduce (Σ-shaped loops with a pure accumulator),
              Pure (pure↔ParM bridge + faithfulness theorem),
              Render (print a ParM tree — another interpreter, for debugging)
-  Pragma/    #parallel_for, #parallel[], ParMap, ArrRef, MapArray
-  Lang/      the ParProg DSL: Core (loadAt/storeAt — computed addresses; ifElse + whileAtMost —
-             control flow; footprint over-approximated, see docs/block-ir.md), Kernels, Layout,
-             Cuda, Cost, Exec, Notation (`[l]` memory, `%n` register, `if`, `while … in`),
-             Analysis (dependences, `atoms` — register-closed segments, `autoPar`),
-             AutoParSound (the rewrite preserves the heap — see docs/autopar.md)
+  Kernels/   named parallel shapes, each with its one-shot theorem: Assign (`parEach`,
+             `broadcastPar`), Grid (`gridReducePar`), MapArray (`Out[i] := f(In[i])`),
+             ParMap (pure chunks — no heap access to bound)
   AutoPar/   the sequential-to-parallel pass: Chain (regrouping lemmas), Plan (the schedule, order
              preserving by construction), Dag (dependence DAG + critical-path bound), Sound
              (rewrite_sound: seq = par, no hypothesis), Rewrite (units, the gate, surface round
              trip) — see docs/autopar-algorithm.md
+  Tactic.lean  `paralever_race` (the search on the goal in hand, as the infoview widget) and
+             `paralever_check` (the proof routes first, the counterexample second) — see
+             docs/race-search.md § In tactic position
   Search/    RaceSearch (race-site scan, schedules, follow_sound, attribution, Prog grammar,
              findWrongGuided — phase 2 aimed by phase 1's conflict locations),
              Explain (the interleaving printed), ExplainHtml (the same as an infoview widget)
   Compile/   TaskFacts, Exec (execTask — runs a program on real threads)
-MLIR/        the front end: Ast + Parse (MLIR generic form), Affine (map evaluation),
+Prl/         the ParProg language and the `.prl` file in front of it — see docs/prl.md
+  Lang/      Core (loadAt/storeAt — computed addresses; ifElse + whileAtMost — control flow;
+             footprint over-approximated, see docs/block-ir.md), Layout (buffers, placement,
+             lifetimes — `Arena.of`, `live_disjoint`),
+             Kernels, Cuda, Cost, Exec (real threads), Notation (`[l]` memory, `%n` register,
+             `if`, `while … in`), Analysis (dependences, `atoms` — register-closed segments,
+             `autoPar`), AutoParSound (the rewrite preserves the heap — see docs/autopar.md)
+  Compile/   Ast + Parse (`.prl` text; a newline or `;` separates statements), Lower (names,
+             placement, lifetimes, unrolling → Layout × ParProg), Print (`.prl` back out, the
+             Lean block, ANSI colour)
+  Load.lean    `prl_file` — read and compile a file while Lean elaborates
+  Report.lean  the `#eval` views: check, run, race, autoparallelize
+MLIR/        the other front end: Ast + Parse (MLIR generic form), Affine (map evaluation),
              Lower (Mlir.Op → Layout × ParProg, the verdict path, over Int),
              Eval (the same program over ℚ, the reference for differential execution),
-             Corpus (seven labelled pilots in corpus/*.mlir, as #guard gates)
+             Load (`mlir_prog` — quote the lowered program at elaboration time, as `prl_file` does),
+             Emit (generic form out: a buffer is a memref.global, a fork a group of async.execute
+             ops closed by the await that names their tokens; `emitRoundTrips` compares memory,
+             footprint, verdict and heap, not the tree — registers are not SSA values),
+             Corpus (the seven labelled pilots in Examples/Mlir/*.mlir, as #guard gates, each
+             race-free one carrying its `par_seq_eq` instance)
              — see docs/mlir.md
-Examples/    SumArray, Sort, MatMul, MergeSort, DoubleInto, SharedReads, ParMapDemo,
-             OpaqueAgents, PureToParM, TwoProcesses, Region, Racy, Pointers, RaceReport,
-             NeuralNet, Pipeline, LangDemo, Scatter, ControlFlow, ExecDemo, *Task
-Test/        Sanity, AccessSanity, RaceSearch
+Examples/    every demonstrable thing in one tree, with the .prl and .mlir sources beside the
+             Lean that reads them — see Examples/README.md. No module docstring headers here
+             (deliberate: the README is the map).
+  Tour.lean    the whole project on one program: write, check, prove, break, autoparallelize
+  Programs/    the method on real algorithms — SharedReads, MapArray, SumArray, RowSums,
+               CompareSwap, MergeSort, MatMul, SortBatches, OpaqueAgents, Pipeline
+  Language/    the nine *.prl files, plus Files (all nine read by `prl_file`), Writing,
+               ControlFlow, Scatter, NeuralNet
+  Mlir/        the seven *.mlir pilots, plus Files (one lowered end to end, and the corpus report)
+  AutoPar/     Pass — the parallelizing pass on chain.prl, every step evaluated
+  Races/       Caught (the conclusion fails), Report (reading a counterexample), Pointers
+  Threads/     RealThreads — a ParM tree on real Tasks
+  BlogSnippets.lean  the code the blog post quotes, by ANCHOR region
+Tool/        the `paralever` command line, as a lib (not `Cli`: Mathlib depends on a package of
+             that name) — Run (the commands, the option grammar, reading either front end),
+             Proof (the Lean module `prove` writes, and which of the three theorems it carries)
+             — see docs/cli.md
+Test/        Sanity, AccessSanity, RaceSearch, Prl, Tool, Tactic
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
              opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md,
-             race-search.md, layout.md, autopar.md, mlir.md, ...)
+             race-search.md, layout.md, autopar.md, mlir.md, website.md, ...)
+index.html   the published site's cover; `web/` its pages, `slides/` the deck
+web/         concept, language, autopar, races, mlir, cli, lean + css/site.css,
+             js/site.js, snippets/ (the 22 verso-snippets files) and
+             build-snippets.sh — hand-written static HTML, no generator; the
+             theme is *linked* from anirudhg07.github.io, never copied. site.js
+             renders the top bar (the main site's own, re-linked), the left
+             sidebar and the footer: a new page is one HTML file plus one row in
+             `PAGES`. **Every Lean block is a verso-snippets embed** of an
+             `-- ANCHOR: site-…` region of a real module, never highlighted
+             text. Every figure is HTML or inline SVG (`.dgm`), never monospace
+             art. See docs/website.md
 ```

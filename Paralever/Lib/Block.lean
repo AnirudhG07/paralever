@@ -71,9 +71,6 @@ abbrev Regs := Reg → Int
 /-- `ρ` with register `r` holding `v`. -/
 def Regs.set (ρ : Regs) (r : Reg) (v : Int) : Regs := fun r' => if r' = r then v else ρ r'
 
-/-- `R n` reads as a register operand inside an `AExp`. -/
-abbrev R (n : Reg) : AExp := AExp.reg n
-
 /-- The `Int` an expression denotes under the register file `ρ`. Total, and touches no memory. -/
 @[simp, grind .]
 def AExp.eval (ρ : Regs) : AExp → Int
@@ -92,7 +89,8 @@ instance : Add AExp := ⟨AExp.add⟩
 instance : Sub AExp := ⟨AExp.sub⟩
 /-- `*` on `AExp`. -/
 instance : Mul AExp := ⟨AExp.mul⟩
-/-- A numeric literal elaborates as `AExp.lit`, so `R 0 * 2 + 1` is an `AExp`. -/
+/-- A numeric literal elaborates as `AExp.lit`, so `%0 * 2 + 1` is an `AExp`
+(`%n` is surface syntax, `Prl/Lang/Notation.lean`). -/
 instance : OfNat AExp n := ⟨AExp.lit (Int.ofNat n)⟩
 
 /-! ### Lowering to `ParM`

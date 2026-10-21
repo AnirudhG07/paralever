@@ -55,7 +55,7 @@ private def rule (c : String) (w : Nat) : String :=
   String.join (List.replicate w c)
 
 /-- How a report prints an address. `rawName` is the bare location; a layout supplies `W2[0, 3]`
-(`Lang/Layout.lean`). A function rather than a `Layout` so `Search/` need not know layouts exist. -/
+(`Prl/Lang/Layout.lean`). A function rather than a `Layout` so `Search/` need not know layouts exist. -/
 abbrev LocName := Loc → String
 
 /-- Addresses as plain numbers. -/
@@ -250,14 +250,7 @@ def outcomeOf (nm : LocName) (σ : State) (locs : List Loc) (o : List PendAct) :
   let r := runPending nm σ o
   ", ".intercalate ((locs.map fun l => nm l ++ "↦" ++ showVal (r.1 l)) ++ r.2)
 
-/-- **An ordering that actually disagrees.** The clashing actions are simultaneous and unordered, so
-their listing order is a presentation choice — but not an arbitrary one: child order is what
-`seqPair` runs, so listing them that way reproduces the sequential outcome and makes the race look
-harmless. This picks the first candidate ordering whose *observable* differs from child order, so
-the rows a reader follows top to bottom really do land somewhere else.
-
-Only two orderings are tried, which settles every two-thread race; with more clashing threads both
-candidates can agree, and then child order is reported and the two outcome lines coincide. -/
+/-- Pick an ordering whose observable outcome differs from child order. -/
 def divergingOrder (nm : LocName) (σ : State) (locs : List Loc) (pend : List PendAct) :
     List PendAct :=
   let outSeq := outcomeOf nm σ locs pend

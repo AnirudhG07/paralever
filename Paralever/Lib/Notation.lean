@@ -1,4 +1,4 @@
-import Paralever.Pragma.ArrRef
+import Paralever.Lib.ArrRef
 import Paralever.Lib.Compose
 
 /-! # User-facing notation and vocabulary
@@ -42,7 +42,7 @@ one written by hand, and `∥≡` still lexes as a single token.
 /-! ### `doₚ` — a `do`-shaped block that is literally `ParM.bind`
 
 `do` is `rfl`-equal but desugars to `Bind.bind`, so a lemma about `ParM.bind` never fires — the
-`Monad` instance is in the way, which is why `Examples/SumArray.lean` uses raw constructors. `doₚ`
+`Monad` instance is in the way, which is why `Examples/Programs/SumArray.lean` uses raw constructors. `doₚ`
 expands to `ParM.bind` literally; a block's last line is its result. -/
 
 -- One step of a `doₚ` block: either a binding or a statement whose value is discarded.

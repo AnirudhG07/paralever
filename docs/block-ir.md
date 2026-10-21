@@ -59,7 +59,7 @@ is a computation on two lists, so `by decide` discharges the metatheorem's hypot
 reasoning about states or interleavings.
 
 **Does not** cover control flow. `Block` is *straight-line* only — no branches, no loops. A loop over
-a parameterized block (`Nat → Block`) composes with `Pragma/ParallelFor.lean` for the iteration
+a parameterized block (`Nat → Block`) composes with `Lib/Loop.lean` for the iteration
 dimension, but branching inside a block is unrepresentable. Adding it means `footprintOf` must
 over-approximate by unioning both arms, which is sound and standard but a real extension.
 
@@ -73,7 +73,7 @@ describes.
 ## Data-dependent addresses
 
 `load`/`store` take a `Loc` — a Lean `Nat`, fixed before the program is data — which is exactly what
-makes `footprintOf` a fold and `wfB` a `decide`. `A[B[i]]` does not fit, so `Lang/Core.lean` adds two
+makes `footprintOf` a fold and `wfB` a `decide`. `A[B[i]]` does not fit, so `Prl/Lang/Core.lean` adds two
 constructors whose address is an expression:
 
 ```lean
@@ -129,7 +129,7 @@ Two details make this the right approximation rather than a convenient one:
 * **The index wraps** (`ArrRef.addr`), so `addr_mem_cells` holds unconditionally and there is no
   out-of-range case to exclude. An out-of-range index aliases *inside* its array rather than
   escaping it — deliberately unlike a raw `store l`, which addresses anywhere
-  (`Examples/Pointers.lean`). Indexed access trades exactness for confinement.
+  (`Examples/Races/Pointers.lean`). Indexed access trades exactness for confinement.
 
 The cost is precision, and it is visible: two threads scattering into the same array are rejected
 even when their indices never meet, because the syntax cannot tell them apart.
@@ -140,7 +140,7 @@ wellFormedB (…execPar ρ) σ₀                 = true       -- indices 1 and 
 wellFormedB (…execPar ρ) σ₁                 = false      -- both scatter to A[2]
 ```
 
-`Examples/Scatter.lean` is that program. The route to an all-heaps proof is the third tier: an
+`Examples/Language/Scatter.lean` is that program. The route to an all-heaps proof is the third tier: an
 injectivity hypothesis on the index map (`∀ i j, i ≠ j → B[i] ≠ B[j]`), which is a real obligation
 and not a syntactic check.
 
@@ -156,7 +156,7 @@ branches: only one runs, but which is not known statically.
 The over-approximation is usually harmless, and that is the difference from a computed address. A
 thread whose two branches both write the thread's own cell has a union naming only that cell, so
 Bernstein still holds on the bounds and `par_seq_eq` applies with one `decide`
-(`Examples/ControlFlow.lean` §1). It bites only when the branches write *different* cells and two
+(`Examples/Language/ControlFlow.lean` §1). It bites only when the branches write *different* cells and two
 threads' unions overlap (§3) — then the exact per-heap `wellFormedB` still accepts what the
 syntactic check cannot.
 

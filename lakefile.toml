@@ -1,6 +1,8 @@
 name = "paralever"
 version = "0.1.0"
-defaultTargets = ["paralever"]
+# `Prl` is listed so a plain `lake build` covers the file front end too, which the exe root alone
+# would not reach.
+defaultTargets = ["paralever", "Prl", "Tool"]
 
 [[lean_lib]]
 name = "Paralever"
@@ -21,9 +23,29 @@ globs = ["Test.+"]
 name = "MLIR"
 globs = ["MLIR.+"]
 
+# The ParProg language and its `.prl` file front end. A separate lib for the reason MLIR is one:
+# it parses text, and `Prl.Compile.Lower` is the step a file is believed through. See docs/prl.md.
+[[lean_lib]]
+name = "Prl"
+globs = ["Prl.+"]
+
+# The `paralever` command line. A separate lib so the executable's root stays one line, and
+# because this is the only part of the tree that reads argv and writes files. Not named `Cli`:
+# that is a package Mathlib depends on, and two libs of one name cannot share a `LEAN_PATH`.
+# See docs/cli.md.
+[[lean_lib]]
+name = "Tool"
+globs = ["Tool", "Tool.+"]
+
 [[lean_exe]]
 name = "paralever"
 root = "Main"
+
+# A scratch module for `web/build-snippets.sh`: it writes the file `paralever prove`
+# generates here so Lake can build its `:highlighted` facet, which is what
+# verso-snippets renders. Not checked in — see .gitignore.
+[[lean_lib]]
+name = "Snippet"
 
 [[require]]
 name = "mathlib"
@@ -58,12 +80,13 @@ needs = [
   "@paralever/+Paralever.Core.Semantics:highlighted",
   "@paralever/+Paralever.Core.Access:highlighted",
   "@paralever/+Paralever.Theory.Sequentialize:highlighted",
+  "@paralever/+Paralever.Theory.WellFormedCanonical:highlighted",
   "@paralever/+Paralever.Lib.Block:highlighted",
-  "@paralever/+Examples.SumArray:highlighted",
-  "@paralever/+Examples.Sort:highlighted",
-  "@paralever/+Examples.MatMul:highlighted",
-  "@paralever/+Paralever.Lang.Core:highlighted",
-  "@paralever/+Paralever.Lang.Analysis:highlighted",
+  "@paralever/+Examples.Programs.SumArray:highlighted",
+  "@paralever/+Examples.Programs.CompareSwap:highlighted",
+  "@paralever/+Examples.Programs.MatMul:highlighted",
+  "@paralever/+Prl.Lang.Core:highlighted",
+  "@paralever/+Prl.Lang.Analysis:highlighted",
   "@paralever/+Paralever.AutoPar.Plan:highlighted",
   "@paralever/+Paralever.AutoPar.Dag:highlighted",
   "@paralever/+Paralever.AutoPar.Sound:highlighted",

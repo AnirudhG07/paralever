@@ -6,20 +6,19 @@ import Paralever.Theory.Decomposition
 import Paralever.Theory.WellFormedCanonical
 import Paralever.Theory.Sequentialize
 import Paralever.Theory.Intervals
-import Paralever.Pragma.ParallelFor
-import Paralever.Pragma.ArrRef
-import Paralever.Pragma.ParMap
 import Paralever.Compile.TaskFacts
 import Paralever.Compile.Exec
 import Paralever.Search.RaceSearch
 import Paralever.Search.Explain
 import Paralever.Search.ExplainHtml
+import Paralever.Tactic
 import Paralever.Logic.BIInstance
 import Paralever.Logic.Rules
+import Paralever.Lib.ArrRef
 import Paralever.Lib.Compose
 import Paralever.Lib.TypedRead
 import Paralever.Lib.TouchesOnly
-import Paralever.Pragma.MapArray
+import Paralever.Lib.Loop
 import Paralever.Lib.FootprintSimp
 import Paralever.Lib.Notation
 import Paralever.Lib.OpaqueOp
@@ -30,20 +29,22 @@ import Paralever.Lib.Cost
 import Paralever.Lib.Block
 import Paralever.Kernels.Assign
 import Paralever.Kernels.Grid
-import Paralever.Lang.Core
-import Paralever.Lang.Layout
-import Paralever.Lang.Kernels
-import Paralever.Lang.Cuda
-import Paralever.Lang.Cost
-import Paralever.Lang.Exec
-import Paralever.Lang.Analysis
-import Paralever.Lang.AutoParSound
-import Paralever.Lang.Notation
+import Paralever.Kernels.MapArray
+import Paralever.Kernels.ParMap
+import Prl.Lang.Core
+import Prl.Lang.Layout
+import Prl.Lang.Kernels
+import Prl.Lang.Cuda
+import Prl.Lang.Cost
+import Prl.Lang.Exec
+import Prl.Lang.Analysis
+import Prl.Lang.AutoParSound
+import Prl.Lang.Notation
 import Paralever.AutoPar.Chain
 import Paralever.AutoPar.Plan
 import Paralever.AutoPar.Dag
 import Paralever.AutoPar.Sound
-import Paralever.AutoPar.Rewrite
+import Paralever.AutoPar.Print
 
 /-! # Paralever — parallel programs equal their sequential counterparts
 
@@ -56,9 +57,8 @@ Where things live:
 |---|---|
 | `Core/` | `ParM` (programs as data), the small-step semantics, footprints and `Indep` |
 | `Theory/` | `par_seq_eq` and its machinery (`wellFormed_canonical`, footprint intervals) |
-| `Lib/` | the proof-burden layer: typed access, block IR, reductions, the pure bridge, cost |
-| `Pragma/` | user-facing loop forms — `#parallel_for`, `mapArray`, `parMap`, `ArrRef` |
-| `Kernels/` | one-line data-parallel shapes — `parEach`, `broadcastPar`, `gridReducePar` |
+| `Lib/` | the proof-burden layer: `ArrRef`, the `#parallel_for` loop validator, typed access, block IR, reductions, the pure bridge, cost |
+| `Kernels/` | named parallel shapes with one-shot theorems — `parEach`, `broadcastPar`, `gridReducePar`, `mapArray`, `parMap` |
 | `Lang/` | a first-order imperative language with `parallel` blocks, lowered into `ParM`; `Core` + `Kernels` + `Cuda` + `Cost` + `Exec` + `Analysis` + `Notation` |
 | `Logic/` | Tier-2 Hoare triples and the iris-lean BI instance |
 | `Compile/` | `execTask`, which runs a program on real threads, and the `Task` facts it rests on |

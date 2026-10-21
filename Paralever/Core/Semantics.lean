@@ -133,6 +133,7 @@ mutual
 /-- One small step: every configuration the program could move to from this heap. The list is the
 nondeterminism — a `par` node offers *every* ready child, so all interleavings are covered. Empty
 means terminal; a singleton `[wrong]` means this step detected a race. -/
+-- ANCHOR: site-step
 @[simp, grind .]
 def step {α : Type} : ParM α → State → List (Conf α)
   | .pure _,      _ => []
@@ -146,6 +147,7 @@ def step {α : Type} : ParM α → State → List (Conf α)
             match r with
             | some x => .run (.par x.1 k) x.2
             | none   => .wrong
+-- ANCHOR_END: site-step
 
 /-- Step any one child, rebuilding the spine around it. Type-preserving: `Childs ParM αs` in,
 `Childs ParM αs` out. `none` is that child aborting, which the whole fork inherits. -/

@@ -1,4 +1,5 @@
 import MLIR.Eval
+import MLIR.Load
 
 /-! # The labelled corpus, as build gates
 
@@ -34,13 +35,13 @@ structure Entry where
 antidependence, a missing reduction clause, the same reduction done right, a floating-point
 sliding window, a two-dimensional index space, and an indirect access. -/
 def corpus : List Entry :=
-  [ ⟨"doall-no",            include_str "corpus/doall-no.mlir",            false⟩
-  , ⟨"antidep-yes",         include_str "corpus/antidep-yes.mlir",         true⟩
-  , ⟨"reduction-yes",       include_str "corpus/reduction-yes.mlir",       true⟩
-  , ⟨"reduction-split-no",  include_str "corpus/reduction-split-no.mlir",  false⟩
-  , ⟨"stencil-f64-no",      include_str "corpus/stencil-f64-no.mlir",      false⟩
-  , ⟨"nested-2d-no",        include_str "corpus/nested-2d-no.mlir",        false⟩
-  , ⟨"indirect-yes",        include_str "corpus/indirect-yes.mlir",        true⟩ ]
+  [ ⟨"doall-no",            include_str "../Examples/Mlir/doall-no.mlir",            false⟩
+  , ⟨"antidep-yes",         include_str "../Examples/Mlir/antidep-yes.mlir",         true⟩
+  , ⟨"reduction-yes",       include_str "../Examples/Mlir/reduction-yes.mlir",       true⟩
+  , ⟨"reduction-split-no",  include_str "../Examples/Mlir/reduction-split-no.mlir",  false⟩
+  , ⟨"stencil-f64-no",      include_str "../Examples/Mlir/stencil-f64-no.mlir",      false⟩
+  , ⟨"nested-2d-no",        include_str "../Examples/Mlir/nested-2d-no.mlir",        false⟩
+  , ⟨"indirect-yes",        include_str "../Examples/Mlir/indirect-yes.mlir",        true⟩ ]
 
 /-- Parsed and lowered, keeping the ops so the reference interpreter can be run on them. -/
 def lowered (e : Entry) : Option (List Op × Lowered) :=
@@ -197,6 +198,40 @@ def row (e : Entry) : String :=
         ++ "  fp=" ++ (if r.footprintIsExact then "exact" else "bound")
         ++ "  values=" ++ (if r.exactValues then "Int" else "ℚ only")
         ++ "  agrees=" ++ toString (r.agrees ops)
+
+/-! ## 6. The equivalence, once per race-free pilot
+
+A `#guard` on `verdict` says the obligation was discharged; these say what discharging it buys.
+`mlir_prog` quotes the lowered program, so `decide` sees a `ParProg` literal and `par_seq_eq`
+applies to it with nothing further to supply. -/
+
+def doall : Prl.ParProg           := mlir_prog "../Examples/Mlir/doall-no.mlir"
+def reductionSplit : Prl.ParProg  := mlir_prog "../Examples/Mlir/reduction-split-no.mlir"
+def stencil : Prl.ParProg         := mlir_prog "../Examples/Mlir/stencil-f64-no.mlir"
+def nested2d : Prl.ParProg        := mlir_prog "../Examples/Mlir/nested-2d-no.mlir"
+
+theorem doall_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Prl.ParProg.execPar doall ρ) (Prl.ParProg.execSeq doall ρ) σ :=
+  Prl.ParProg.par_seq_eq (by decide) ρ σ
+
+theorem reductionSplit_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Prl.ParProg.execPar reductionSplit ρ) (Prl.ParProg.execSeq reductionSplit ρ) σ :=
+  Prl.ParProg.par_seq_eq (by decide) ρ σ
+
+/-- The `f64` window. Values are approximated in `Int` (`exactValues = false`); the verdict and
+therefore this theorem are unaffected, because no footprint inspects a `Val`. -/
+theorem stencil_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Prl.ParProg.execPar stencil ρ) (Prl.ParProg.execSeq stencil ρ) σ :=
+  Prl.ParProg.par_seq_eq (by decide) ρ σ
+
+theorem nested2d_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Prl.ParProg.execPar nested2d ρ) (Prl.ParProg.execSeq nested2d ρ) σ :=
+  Prl.ParProg.par_seq_eq (by decide) ρ σ
+
+-- The three racy pilots have no such theorem: `wfB` refuses each of them, which is the `tp = 3`
+-- of the confusion count above.
+#guard ["antidep-yes", "reduction-yes", "indirect-yes"].all
+  (fun nm => (byName nm).all (fun p => !p.2.verdict))
 
 /-- The five numbers, plus a row per benchmark. -/
 def summary : String :=

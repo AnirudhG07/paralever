@@ -78,7 +78,7 @@ def code {τ : Type} : ParM τ → State → Nat → Nat → List String × Nat
   | .pure _,      _, _, c => ([], c)   -- a finished branch adds no line; the block shows the end
   | .read l k,    σ, d, c =>
       let v := σ l
-      let line := indent d ++ pad ("t" ++ toString c ++ " := M[" ++ toString l ++ "]") 28
+      let line := indent d ++ pad ("%" ++ toString c ++ " := M[" ++ toString l ++ "]") 28
                     ++ "// reads " ++ showVal v
       let r := code (k v) σ d (c + 1)
       (line :: r.1, r.2)

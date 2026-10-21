@@ -1,0 +1,14 @@
+-- out[i] = inp[i] + inp[i+1]: neighbouring threads read the same cell, and nothing is written
+-- twice. A shared read is not a race.
+
+const n = 4
+
+buf inp[5] = 1, 2, 3, 4, 5
+buf out[4]
+
+
+parfor i in n {
+  %a := inp[i]
+  %b := inp[i + 1]
+  out[i] := %a + %b
+} :: "stencil"

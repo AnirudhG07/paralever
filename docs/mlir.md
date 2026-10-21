@@ -51,7 +51,7 @@ information the lowering depends on.
 ## An affine map is a footprint function
 
 This is the alignment the whole design rests on. `wfB_parFor_of_lists`
-(`Paralever/Lang/Kernels.lean`) asks for each thread's read and write sets as two lists of `Loc`.
+(`Prl/Lang/Kernels.lean`) asks for each thread's read and write sets as two lists of `Loc`.
 An `affine.store` already carries exactly that:
 
 ```text
@@ -73,7 +73,7 @@ list length, so an over-approximated footprint on a large array is not merely im
 unevaluable.
 
 Unrolling has a ceiling. `by decide` on `wfB (matmul n)` costs 6.6 s at `n = 8` and 19 s at
-`n = 10` (`Examples/MatMul.lean`), and `native_decide` is prohibited (`Test/Sanity.lean`). So
+`n = 10` (`Examples/Programs/MatMul.lean`), and `native_decide` is prohibited (`Test/Sanity.lean`). So
 roughly 100 threads is the limit for the unrolled route, and anything larger has to go through a
 kernel lemma at symbolic `n` instead. All eleven `ParProg` kernels now have one, verified usable in
 `Test/SymbolicKernels.lean`; emitting kernel *shapes* rather than unrolled `.par` lists is the next
@@ -185,7 +185,8 @@ own reader. The scope justifies it — roughly forty op kinds, not general MLIR.
 | `addi`/`subi`/`muli`/`divsi`/`divui`/`maxsi`/`minsi` | `AExp`, folded when both sides are known | |
 | `addf`/`subf`/`mulf`/`divf`/`maxnumf`/`minnumf` | the same, over `Int`; exact over `Rat` in `Eval` | marks `exactValues := false` |
 | `index_cast`, `extsi`, `trunci`, `sitofp`, `fptosi`, … | the value, unchanged or truncated | Paralever has no widths to convert between |
-| `affine.yield`, `func.return`, `memref.dealloc` | nothing | |
+| a run of `async.execute` ops + the `async.await_all` closing it | `.par [...]` | one thread per region; a `paralever.label` on the await becomes `.label` |
+| `affine.yield`, `func.return`, `memref.dealloc`, `async.yield` | nothing | |
 
 `Layout.of` places the buffers in consecutive ranges, so array disjointness is discharged once by
 the allocator (`alloc_pairwise`) rather than once per pair. Every subscript is range-checked against
@@ -211,12 +212,64 @@ a time.
 | hexadecimal float literals | the written decimal value is the thing we read exactly |
 | non-memref function parameters | a scalar parameter has no caller to supply it |
 | a computed subscript on a multi-dimensional memref | would need `i·stride + j` as an `AExp`, and `ArrRef.addr` takes one index |
+| an `async.execute` whose token is not awaited by the operation right after the run | `par` joins where it is written; a token awaited later joins later, so reading one as the other would be a different program |
+| an `async.execute` with operands, or a region with arguments | a dependency token or a captured value; a thread's inputs are the heap and the registers it forked with |
 
-Two smaller limits worth stating. A `memref.global`'s `initial_value` is read into `Buf.init`, which
+One smaller limit worth stating: a `memref.global`'s `initial_value` is read into `Buf.init`, which
 is `List Int`, so **initial data for a floating-point buffer must be integral** — a cell of such a
-buffer starts as an integral rational. And `MLIR.render` drops the type suffix on an integer
-attribute (`42 : i32` prints as `42`), so it is the reader's inverse for round-trip checking, not a
-printer whose output `mlir-opt` would accept.
+buffer starts as an integral rational.
+
+A type annotation on an attribute (`42 : i32`, `dense<[1, 2]> : tensor<2xi64>`) is kept rather than
+dropped, as `MAttr.ann`, and `Op.attr?` strips it so no rule has to look through one. Keeping it is
+what lets `render` print a file MLIR would read back: `arith.constant` is not well-formed without
+its value typed. `array<i32: 0, 0, 0>` is read for the same reason — current MLIR prints an op's
+`operandSegmentSizes` that way, so an op with variadic operand groups cannot be read without it.
+
+## A fork is a group of ops
+
+`affine.parallel` gives one thread per point of an index box: every thread runs the *same* region
+at a different index. An unrolled `ParProg` has no such uniformity — `parallel { A[0] := 1 } | {
+A[1] := 2 }` is two different bodies — so it has no `affine.parallel` spelling at all.
+
+MLIR's own construct for that shape is the `async` dialect, and a fork is a *group* of operations
+rather than one:
+
+```text
+%0 = "async.execute"() ({ …thread 0… "async.yield"() }) : () -> (!async.token)
+%1 = "async.execute"() ({ …thread 1… "async.yield"() }) : () -> (!async.token)
+     "async.await_all"(%0, %1) {paralever.label = "chunked sum"} : (…) -> ()
+```
+
+So `lowerOps` reads a maximal run of `async.execute` ops together with the await that follows it,
+and refuses any other shape. The refusal is the load-bearing part. `par cs k` joins *where it is
+written*: the continuation `k` runs after every child finishes. An `async.execute` whose token is
+awaited three operations later does not, and reading it as a `par` would hand the theorem a
+program with fewer schedules than the file has. One extra decision: a thread's registers are
+private, which is `lowerThread` restoring `env` at the end of a region, so an `async.execute` that
+captured a value or awaited a dependency is refused rather than given a meaning.
+
+## Generic form out
+
+`MLIR/Emit.lean` is the other direction: a `Layout` and a `ParProg` as a module. A buffer becomes a
+`memref.global` with its contents, the body goes in `func.func @main` after one
+`memref.get_global` per buffer, a static address becomes `memref.load`/`memref.store` at
+`arith.constant` indices, a computed one an `arith.index_cast` and the same op, and a fork the
+`async.execute` group above.
+
+Two things change on the way out, and the emitted file says so in its header. Registers are
+assignable and SSA values are not, so a `%r := e` with no memory in it disappears into the
+expressions that read it, and the registers that remain come back renumbered. And a `.prl` computed
+subscript wraps on the buffer's length (`ArrRef.addr_mem_cells`) where MLIR's does not, so the two
+agree on indices in range — which is every index a race-free program uses.
+
+Three constructs have no generic form in the supported op set and are refused rather than
+approximated: `ifElse` (the `scf.if` row above, one level out), a computed subscript into a
+multi-dimensional buffer, and a layout where two buffers share cells — what a `free` that returned
+space leaves behind, which two MLIR globals cannot express because they cannot alias.
+
+The gate is `MLIR.emitRoundTrips` (`Test/Tool.lean`): emitted, read back, and compared on
+everything a theorem would use — the memory, the footprint, the verdict, and the heap a sequential
+run leaves. Not the tree, for the two reasons above.
 
 ## Differential execution
 
@@ -241,7 +294,7 @@ about a read-after-write race leaving the heap unchanged.
 
 ## The corpus
 
-Seven hand-written pilots in `MLIR/corpus/`, with the label in the filename as DataRaceBench carries
+Seven hand-written pilots in `Examples/Mlir/`, with the label in the filename as DataRaceBench carries
 it (`-yes` means a race is expected). Hand-written on purpose: it decouples the reader, the lowering
 and the reference interpreter from any external toolchain, so all three can be gated before
 Polygeist is built. `MLIR/Corpus.lean` holds them as `#guard`s, so a regression fails the build
@@ -268,6 +321,23 @@ over-approx    [indirect-yes]
 round trip     true
 ```
 
+A verdict is not yet a theorem, and `#guard` on `verdict` only says the obligation came back
+`true`. So each race-free pilot also carries the instance of the theorem that the verdict licenses:
+
+```lean
+def doall : Prl.ParProg := mlir_prog "corpus/doall-no.mlir"
+
+theorem doall_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Prl.ParProg.execPar doall ρ) (Prl.ParProg.execSeq doall ρ) σ :=
+  Prl.ParProg.par_seq_eq (by decide) ρ σ
+```
+
+`mlir_prog` is what makes that `decide` possible. It parses and lowers the file while the Lean file
+elaborates and quotes the result, so the declaration holds a `ParProg` literal and `decide` reduces
+`wfB` on the program rather than running the reader inside the kernel. It is the same door
+`prl_file` is for a `.prl` file (`MLIR/Load.lean`, `Prl/Load.lean`; `docs/prl.md`). The three racy
+pilots have no such theorem — `wfB` refuses them, which is the `tp = 3` above.
+
 Two readings. The absence of false negatives is not luck: `raceSites_nil_iff` makes the scan
 *complete* for the obligation, so an empty site list is the race-freedom proof and a false negative
 would be a bug in `raceSites` rather than a tuning matter. And the `stencil-f64-no` row is the
@@ -283,8 +353,10 @@ pays it.
 ## Status, and what is next
 
 Done: the reader (`Ast`, `Parse`, `Affine`), the lowering (`Lower`), the ℚ reference interpreter
-(`Eval`), the labelled corpus with its gates (`Corpus`), and the eleven symbolic kernel obligations
-the lowering will eventually emit against.
+(`Eval`), the labelled corpus with its gates (`Corpus`), the quoting door (`Load`, `mlir_prog`), the
+printer back out (`Emit`), and the eleven symbolic kernel obligations the lowering will eventually
+emit against. `paralever to-prl FILE.mlir` and `paralever to-mlir FILE.prl` are the two directions
+on the command line — `docs/cli.md`.
 
 Next, in order:
 

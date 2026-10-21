@@ -32,8 +32,10 @@ def follow {τ : Type} : Conf τ → Schedule → Option (Conf τ)
 
 /-- **A followed schedule is a run.** This is what makes the search trustworthy: whatever produced
 the schedule, following it successfully yields a `Reaches` proof. -/
+-- ANCHOR: site-follow-sound
 theorem follow_sound {τ : Type} :
     ∀ (s : Schedule) (c c' : Conf τ), follow c s = some c' → Reaches c c'
+-- ANCHOR_END: site-follow-sound
   | [],     c, c', h => by simp only [follow, Option.some.injEq] at h; exact h ▸ Reaches.refl
   | i :: s, c, c', h => by
       simp only [follow] at h
@@ -207,9 +209,11 @@ theorem raceSitesChilds_nil_iff_all :
 /-- **The scan is complete for the obligation.** No sites means well-formed, and a well-formed
 program has no sites — so a non-empty result is a real failure to explain, not a heuristic
 warning. -/
+-- ANCHOR: site-race-sites-iff
 theorem raceSites_nil_iff {τ : Type} (p : ParM τ) (σ : State) :
     raceSites p σ = [] ↔ WellFormed p σ :=
   raceSitesChilds_nil_iff_all.1 p σ
+-- ANCHOR_END: site-race-sites-iff
 
 /-- `WellFormed` as a `Bool`, for a concrete heap: the scan found nothing. -/
 def wellFormedB {τ : Type} (p : ParM τ) (σ : State) : Bool := (raceSites p σ).isEmpty
@@ -354,5 +358,47 @@ end Prog
 `some` schedule is checkable by `follow`; `none` means the bounded search gave up. -/
 def diagnose (p : Prog) (σ : State) : List RaceSite × Option Schedule :=
   (raceSites p.toParM σ, findWrongFrom p.stepBound p.toParM σ)
+
+/-! ### Both phases, evaluated
+
+`clean` forks two threads that write different cells; `racy` forks two that write the same one;
+`shared` forks two that *read* the same cell and write their own, which is the case Bernstein
+admits and `∗`-disjointness does not. -/
+
+section Demo
+private def σ0 : State := fun _ => .int 0
+
+-- ANCHOR: site-race-site-cases
+private def clean  : Prog := .par (.wr 1 1) (.wr 2 2)
+private def racy   : Prog := .par (.wr 5 7) (.wr 5 9)
+private def shared : Prog := .par (.seq (.rd 0) (.wr 1 1)) (.seq (.rd 0) (.wr 2 2))
+
+-- phase 1 finds no site in the clean program, and `raceSites_nil_iff` makes that *the proof* of
+-- well-formedness rather than a warning that nothing was found
+#guard (raceSites clean.toParM σ0).isEmpty
+#guard wellFormedB clean.toParM σ0
+
+-- shared reads are not a site: `Indep` places no condition on reads ∩ reads
+#guard (raceSites shared.toParM σ0).isEmpty
+
+-- the racy program has one site, and it names the cell
+#guard (raceSites racy.toParM σ0).length == 1
+#guard (raceSites racy.toParM σ0).flatMap RaceSite.conflicts == [5]
+
+-- phase 2 then realizes it: a schedule, which `follow` turns back into a `Reaches` proof, so a
+-- found counterexample is checked rather than believed
+#guard (findWrongFrom racy.stepBound racy.toParM σ0).isSome
+#guard (findWrongFrom racy.stepBound racy.toParM σ0).all
+         (fun sch => (follow (.run racy.toParM σ0) sch).all Conf.isWrong)
+
+-- and phase 1 gates phase 2: with no site there is no schedule to look for, so the search is
+-- never entered on a clean program
+#guard (findWrongFrom clean.stepBound clean.toParM σ0).isNone
+
+-- the sequential reading of the racy program terminates, and leaves 9 where the parallel one
+-- cannot terminate at all — the hypothesis is doing work
+#guard (runSeq racy.toSeq σ0).2 5 == Val.int 9
+-- ANCHOR_END: site-race-site-cases
+end Demo
 
 end Paralever

@@ -184,7 +184,7 @@ This is the answer to "why did everyone prove soundness and not equality". For *
 equality is false, so soundness is the strongest statement available. Equality becomes a theorem
 only once ownership transfer is removed, and isolating that fragment was not their goal.
 
-We have the mechanised half of the counterexample: `Examples/Racy.lean`'s
+We have the mechanised half of the counterexample: `Examples/Races/Caught.lean`'s
 `DetectedRace.not_parSeqEq` proves `¬ ParSeqEq` the moment two children share a written cell, and
 `OrderDependent.not_parSeqEq` does it with *both* sides terminating normally. So the restriction is
 not a modelling convenience — it marks where the theorem stops holding.
@@ -404,7 +404,7 @@ Separation logic recovers this with **fractional / read permissions** (`DFrac`):
 permission can be split and shared, a write permission cannot. Same idea, different packaging.
 
 **→ In our code.** `Core/Access.lean` (M2). Already visible in `Label.conflicts`: same location and
-*at least one write* — read/read never conflicts. `Examples/MatMul.lean` is this exact matmul
+*at least one write* — read/read never conflicts. `Examples/Programs/MatMul.lean` is this exact matmul
 mechanized: `Theory/Intervals.lean`'s `indep_of_read_write_confined` takes *separate* read/write
 confinement predicates per side and checks only write/write and write/read cross terms, never
 read/read — so the independence proof for `#parallel_for (n*n), cellCompute` is two `grind` calls on
@@ -508,12 +508,12 @@ combines partials as they finish?
   is why it's a bug factory. Blom et al. (STTT'21) have our architecture — sequential correctness
   plus dependence contracts ⇒ parallel correctness — but no proof assistant.
 
-**→ In our code.** `Pragma/ParallelFor.lean` gives OpenMP-shaped syntax (`#parallel_for n, body`,
+**→ In our code.** `Lib/Loop.lean` gives OpenMP-shaped syntax (`#parallel_for n, body`,
 `#parallel[ p, q, ... ]`) that elaborates to `ParM.parAll` **plus a proof obligation** —
 `parAll_wellformed_of_indexed_rw`, the PolCert-shaped validator: supply a per-iteration footprint
 bound and one pairwise-disjointness fact, get `WellFormed`/`ParSeqEq` for the whole loop, any size,
 with no per-loop induction to write. Same notation as OpenMP, but nothing is trusted — and the loop
-this project's own anti-vacuity discipline requires (`Examples/DoubleInto.lean`'s `incFromPrev`,
+this project's own anti-vacuity discipline requires (`Examples/Programs/MapArray.lean`'s `incFromPrev`,
 `A[i] := A[i-1] + 1`) is checked to genuinely fail the obligation, not just asserted to.
 
 ---
@@ -530,8 +530,8 @@ this project's own anti-vacuity discipline requires (`Examples/DoubleInto.lean`'
 | decomposition lemma | Brookes CONCUR'04 §5–7 | `Theory/WellFormedCanonical.lean` |
 | **the missing corollary** | *nobody* | `Theory/Sequentialize.lean` |
 | generic Bernstein-from-footprints (this project's own layer) | — | `Theory/Intervals.lean` |
-| checked pragmas | Blom STTT'21 (unmechanized) | `Pragma/ParallelFor.lean` |
-| free case: no shared state at all | — | `Pragma/ParMap.lean` |
+| checked pragmas | Blom STTT'21 (unmechanized) | `Lib/Loop.lean` |
+| free case: no shared state at all | — | `Kernels/ParMap.lean` |
 
 The theorem splits in two, mirroring the literature:
 

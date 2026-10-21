@@ -1,6 +1,6 @@
 import Paralever.AutoPar.Sound
 import Paralever.AutoPar.Dag
-import Paralever.Lang.Notation
+import Prl.Lang.Notation
 
 /-! # The rewrite, end to end
 
@@ -9,13 +9,13 @@ closed: `surface` emits what `paralever { … }` parses, so a rewritten program 
 into the language it came from. -- ref: docs/autopar-algorithm.md § Round trip -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Lang Paralever.Lang.ParProg
+open Paralever Paralever.Prl Paralever.Prl.ParProg
 
 /-! ## Units
 
 The scheduling unit is a register-closed segment, not a statement: a load and the store consuming
 its register are one unit and are never split across a fork.
--- ref: Paralever/Lang/Analysis.lean `atoms`, docs/autopar.md -/
+-- ref: Prl/Lang/Analysis.lean `atoms`, docs/autopar.md -/
 
 /-- The chain's units, in order. -/
 def units (p : ParProg) : List ParProg := (atoms (flatten p)).map block
@@ -44,6 +44,7 @@ def rewrite (p : ParProg) : ParProg := if rewriteOk p then emit (planOf p) else 
 /-- **`seq = par` for the rewrite, unconditionally.** The rewritten program, read in parallel,
 leaves exactly the heap the original leaves read sequentially — for every program, with no
 hypothesis, because the gate is checked inside `rewrite`. -/
+-- ANCHOR: site-rewrite-sound
 theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
     (runSeq (execPar (rewrite p) ρ) σ).2 = (runSeq (execSeq p ρ) σ).2 := by
   unfold rewrite
@@ -54,6 +55,7 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
     exact rewrite_heap p (units p) (plan_units (units p)) (units_faithful p) hflow ρ σ
   · simp only [h, ite_false, Bool.false_eq_true]
     exact execPar_runSeq_all.1 p ρ σ ▸ rfl
+-- ANCHOR_END: site-rewrite-sound
 
 /-- **The rewrite stays well-formed.** So `par_seq_eq` applies to the result, lifting
 `rewrite_sound` from one schedule to every schedule. -/
@@ -83,60 +85,41 @@ def quality (p : ParProg) : Nat × Nat × Nat :=
 /-- Whether the plan attains the lower bound. -/
 def optimalB (p : ParProg) : Bool := depth (rewrite p) == critical (units p)
 
-/-! ## Back to the language
+/-! ### The pass, evaluated
 
-`surface` prints what `paralever { … }` parses. `loadAt`/`storeAt` have no surface form, so they
-print as a marker rather than as something that would silently fail to parse. -/
+`quality` reads `(what the pass emits, the bound, the sequential depth)`. -/
 
-/-- An expression as a term the surface syntax accepts. -/
-def sexp : AExp → String
-  | .lit n   => if n < 0 then "AExp.lit (" ++ toString n ++ ")" else toString n
-  | .reg r   => "R " ++ toString r
-  | .add a b => "(" ++ sexp a ++ " + " ++ sexp b ++ ")"
-  | .sub a b => "(" ++ sexp a ++ " - " ++ sexp b ++ ")"
-  | .mul a b => "(" ++ sexp a ++ " * " ++ sexp b ++ ")"
-  | .min a b => "AExp.min (" ++ sexp a ++ ") (" ++ sexp b ++ ")"
-  | .max a b => "AExp.max (" ++ sexp a ++ ") (" ++ sexp b ++ ")"
-  | .div a b => "AExp.div (" ++ sexp a ++ ") (" ++ sexp b ++ ")"
+section Demo
 
-mutual
+/-- Two independent squarings, written one after the other. -/
+private def chain : ParProg := paralever {
+  [0] := 3; [1] := 4;
+  %0 := [0]; [2] := %0 * %0;
+  %1 := [1]; [3] := %1 * %1
+}
 
-/-- The statements of one program, as surface statements. -/
-def sstmts : ParProg → List String
-  | .load r l      => ["%" ++ toString r ++ " := [" ++ toString l ++ "]"]
-  | .store l e     => ["[" ++ toString l ++ "] := " ++ sexp e]
-  | .set r e       => ["%" ++ toString r ++ " := " ++ sexp e]
-  | .seq a b       => sstmts a ++ sstmts b
-  | .par ss        => ["parallel " ++ String.intercalate " | " (sthreads ss)]
-  | .label nm s    => sstmts s ++ ["-- " ++ nm]
-  | .loadAt r a e  => ["/- loadAt %" ++ toString r ++ " A" ++ toString a.base
-                        ++ "[" ++ sexp e ++ "] : no surface form -/"]
-  | .storeAt a e v => ["/- storeAt A" ++ toString a.base ++ "[" ++ sexp e ++ "] := "
-                        ++ sexp v ++ " : no surface form -/"]
-  | .ifElse c t e  => ["if (" ++ sexp c ++ ") { " ++ String.intercalate "; " (sstmts t)
-                        ++ " } else { " ++ String.intercalate "; " (sstmts e) ++ " }"]
+-- six statements become four units, two stages, and depth 3 instead of 6
+#guard (units chain).length == 4
+#guard (planOf chain).length == 2
+#guard quality chain == (3, 3, 6)
+#guard optimalB chain
+#guard rewriteOk chain
+#guard wfB (rewrite chain)
 
-/-- Each thread of a fork, braced. -/
-def sthreads : List ParProg → List String
-  | []      => []
-  | s :: ss => ("{ " ++ String.intercalate "; " (sstmts s) ++ " }") :: sthreads ss
+/-- A loop-carried dependence: every statement needs the one before it. -/
+private def carried : ParProg := paralever {
+  %0 := [0]; [1] := %0 + 1;
+  %1 := [1]; [2] := %1 + 1
+}
 
-end
+-- nothing to find, and the pass reports that rather than inventing a fork
+#guard quality carried == (4, 4, 4)
+#guard optimalB carried
 
-/-- **A program as surface text**, ready to paste back into `paralever { … }`. -/
-def surface (p : ParProg) : String :=
-  "paralever {\n  " ++ String.intercalate ";\n  " (sstmts p) ++ "\n}"
+-- Where the bound is *not* attained, the pass says so rather than claiming otherwise: the
+-- smallest such shape is the **N**, pinned at `quality = (8, 7, 12)` with `optimalB = false` in
+-- `Test/AutoParAlgo.lean`. Fork--join terms are series-parallel and dependence DAGs are not.
 
-/-- **The round trip.** `paralever { … }` in, `paralever { … }` out, with the plan's numbers. -/
-def report (p : ParProg) : String :=
-  let (d, l, s) := quality p
-  surface (rewrite p)
-    ++ "\n-- units      " ++ toString (units p).length
-    ++ "\n-- stages     " ++ toString (planOf p).length
-    ++ "\n-- threads    " ++ toString (threads (planOf p)).length
-    ++ "\n-- depth      " ++ toString d ++ "  (sequential " ++ toString s
-                          ++ ", lower bound " ++ toString l ++ ")"
-    ++ "\n-- optimal    " ++ toString (optimalB p)
-    ++ "\n-- committed  " ++ toString (rewriteOk p)
+end Demo
 
 end Paralever.AutoPar

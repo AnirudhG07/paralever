@@ -1,0 +1,14 @@
+-- Control flow: `while c in n` runs at most n iterations. ParM is inductive, so an unbounded
+-- loop is unrepresentable and the bound is permanent, not a TODO.
+
+buf n[1] = 3
+buf acc[1]
+
+
+%i := n[0]
+%a := 0
+while %i in 8 {
+  %a := %a + %i
+  %i := %i - 1
+  acc[0] := %a
+}
