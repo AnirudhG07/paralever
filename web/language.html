@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="The .prl grammar in full: buffers and lifetimes, registers, computed addresses, control flow, what is accepted and what is rejected, and the same language written as Lean notation." />
+    <meta property="og:title" content="The language — paralever" />
+    <meta property="og:description" content="The .prl grammar in full: buffers and lifetimes, registers, computed addresses, control flow, what is accepted and what is rejected, and the same language written as Lean notation." />
+    <meta property="og:type" content="website" />
+    <title>The language — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="language.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        The language
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        <code>ParProg</code> is a first-order imperative language with one
+        unusual property: a statement's footprint is computable from its syntax,
+        so "may these two run together?" is a <code>Bool</code>. It is written
+        either as Lean notation or as a <code>.prl</code> file.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- 0 the pipeline -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">A file, read while Lean elaborates</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          There is no second compiler and no separate toolchain.
+          <code>prl_file "sum.prl"</code> parses and compiles the file
+          <em>during</em> elaboration of the Lean module that mentions it, and the
+          declaration it defines holds the resulting program as a literal. So
+          <code>by decide</code> sees a program, never the reader.
+        </p>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 700 330" role="img"
+             aria-label="A .prl file is parsed to an AST, lowered to a Layout and a ParProg, and from there the existing library computes its footprint, decides wfB, and runs it.">
+          <defs>
+            <marker id="lg-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="275" y="8" width="150" height="32" rx="8" />
+          <text x="350" y="29" text-anchor="middle">sum.prl</text>
+
+          <path class="edge" d="M350,40 V76" marker-end="url(#lg-arw)" />
+          <text class="t-sm" x="366" y="56">Prl.Compile.Parse</text>
+          <text class="t-note" x="366" y="71">text → a syntax tree</text>
+
+          <rect class="box" x="240" y="76" width="220" height="32" rx="8" />
+          <text x="350" y="97" text-anchor="middle">a syntax tree</text>
+
+          <path class="edge" d="M350,108 V150" marker-end="url(#lg-arw)" />
+          <text class="t-sm" x="366" y="125">Prl.Compile.Lower</text>
+          <text class="t-note" x="366" y="140">names, constant folding, loop unrolling</text>
+
+          <rect class="box-acc" x="250" y="150" width="200" height="32" rx="8" />
+          <text class="t-acc" x="350" y="171" text-anchor="middle">a Paralever program</text>
+
+          <line class="brace" x1="0" y1="200" x2="700" y2="200" />
+          <text class="t-lab" x="0" y="216">THE EXISTING LIBRARY, FROM HERE DOWN</text>
+
+          <path class="edge" d="M350,182 V232 H105 V254" marker-end="url(#lg-arw)" />
+          <path class="edge" d="M350,182 V254" marker-end="url(#lg-arw)" />
+          <path class="edge" d="M350,182 V232 H595 V254" marker-end="url(#lg-arw)" />
+
+          <rect class="box" x="25" y="254" width="160" height="32" rx="8" />
+          <text x="105" y="275" text-anchor="middle">footprintOf</text>
+          <rect class="box" x="295" y="254" width="110" height="32" rx="8" />
+          <text x="350" y="275" text-anchor="middle">wfB</text>
+          <rect class="box" x="490" y="254" width="210" height="32" rx="8" />
+          <text x="595" y="275" text-anchor="middle">execPar / execTask</text>
+        </svg>
+        <figcaption>
+          Nothing below the dashed line is <code>.prl</code>-specific. A compiled
+          file is the same <code>ParProg</code> a <code>paralever { … }</code> block
+          elaborates to, so <code>footprintOf</code>, <code>wfB</code>,
+          <code>par_seq_eq</code>, <code>AutoPar.rewrite</code> and
+          <code>runTask</code> all apply to it unchanged.
+        </figcaption>
+      </figure>
+
+        <p class="text-stone-600 leading-relaxed">
+          The file exists because a <code>ParProg</code> is first-order and can
+          therefore be printed. <code>Prl.print</code> emits <code>.prl</code> text
+          and <code>prl_file</code> reads it back, so a program can leave the
+          repository — into a bug report, a paper appendix, another tool's output —
+          and come back as the same program. <code>Prl.roundTrips src</code> is the
+          gate on the reader, and it runs on every example in the build.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 1 grammar -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The grammar</h2>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">grammar</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-bnf">file    ::= stmt* | "paralever" "{" stmt* "}"
+stmt    ::= "buf" name ( "[" exp ("," exp)* "]" )? ("at" exp)? ("=" init)?
+          | "const" name "=" exp
+          | "reg" name ("," name)* ("=" number)?    -- optional: pins an index
+          | "free" name
+          | "%" reg ":=" addr                       -- load
+          | addr ":=" exp                           -- store
+          | "%" reg ":=" exp                        -- register assignment
+          | "parallel" thread ("|" thread)* label?
+          | "parfor" name "in" exp thread label?
+          | "for" name "in" exp thread
+          | "if" exp thread ("else" thread)?
+          | "while" exp "in" exp thread
+init    ::= "zeros" | "ones" | "eye" | "arange" | "full" exp
+          | ("[")? exp ("," exp)* ("]")?
+thread  ::= "{" stmt* "}"
+label   ::= "::" string
+addr    ::= "[" exp "]" | name ( "[" exp ("," exp)* "]" )?
+exp     ::= exp ("+"|"-"|"*"|"/"|"%") exp | "-"? number | name | "%" reg
+          | "min" "(" exp "," exp ")" | "max" "(" exp "," exp ")" | "(" exp ")"
+reg     ::= number | name</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Comments run from <code>--</code> to end of line. Statements are
+          separated by a line break, by <code>;</code>, or by both. The optional
+          <code>paralever { … }</code> wrapper means a program pasted out of a Lean
+          file is already a valid <code>.prl</code> file.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          Declarations are statements because <code>free</code> is one: a buffer
+          has a lifetime in the program <em>text</em>. They are allowed only at
+          the top level, where the whole program sees them — a <code>buf</code> or
+          a <code>free</code> inside one thread of a <code>parallel</code> would be
+          visible to that thread alone, and is rejected.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 2 memory -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Memory is declared, not allocated</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>State</code> is <code>Loc → Val</code> and total: every location
+          exists and holds <code>0</code> until written. A program cannot create or
+          destroy a location, because there is nothing to create. What a
+          <code>.prl</code> file does is <em>declare</em> ranges and end their
+          lifetimes, which is what a <code>Layout</code> plus a cursor is.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">buf A[6] = 1, 2, 3, 4, 5, 6   -- the allocator places it
+buf C[2, 3] = ones
+buf S[4] at 100               -- placed by hand
+const n = 2
+free C                        -- C's lifetime ends here</code></pre>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A buffer with no <code>at</code> begins where the previous one ended, so
+          no two <em>live</em> buffers can overlap. A buffer with an
+          <code>at</code> was placed by the author, so the compiler checks it
+          against every live buffer and names both on failure.
+        </p>
+
+        <p class="text-stone-600 leading-relaxed mb-3">
+          <code>free A</code> ends <code>A</code>'s lifetime. Two things follow,
+          and nothing else does.
+        </p>
+        <ul class="list-none space-y-3 mb-6">
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">The name is gone.</strong> Any later
+              mention of <code>A</code> is a compile error — which is the useful
+              half, since it is how a file states that nothing below this line may
+              touch that memory.
+            </p>
+          </li>
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">The space comes back</strong> when
+              <code>A</code> is the most recent buffer placed, so
+              <code>buf</code>/<code>free</code> is a stack and the next
+              declaration lands on <code>A</code>'s cells. Freeing out of order
+              ends the name's scope and leaves the hole, because the cursor only
+              moves back from the top.
+            </p>
+          </li>
+        </ul>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Nothing is zeroed and no location goes away: a buffer declared on a freed
+          range begins holding whatever the previous occupant left. This is an
+          arena, not a heap.
+        </p>
+
+        <div class="bg-white/55 border border-stone-200 rounded-2xl p-6 mb-6">
+          <p class="text-stone-900 font-bold mb-2">There is deliberately no run-time <code>alloc</code>.</p>
+          <p class="text-stone-600 leading-relaxed text-[0.95rem]">
+            Adding one would cost the main theorem twice over.
+            <code>alloc</code> has to choose an address; two schedules choose
+            differently, so the final heaps differ and <code>par_seq_eq</code> — an
+            equality of heaps — becomes false for reasons that have nothing to do
+            with races. A run-time <code>free</code> is worse: Bernstein's
+            conditions are about reads and writes of locations, so two threads
+            freeing one block, or one freeing while another reads, is a race that
+            <code>w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅</code> cannot see. The
+            <code>free</code> above avoids both because it happens at compile time
+            and leaves no trace in the program.
+          </p>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>Both <code>buf</code> and <code>free</code> are erased.</strong>
+          Neither emits a node, so the compiled program of
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">prl</span>
+          </div>
+          <pre><code class="language-prl">buf A[2]
+A[0] := 1
+free A</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          is <code>[0] := 1</code> on the nose, and the build pins that equality.
+          Consequently no theorem about a program can depend on either declaration:
+          <code>wfB</code>, <code>footprintOf</code>, <code>par_seq_eq</code>,
+          <code>time_le</code> and <code>runTask_eq</code> are statements about the
+          <code>ParProg</code>, proved exactly as they are for a program written in
+          Lean. What a declaration <em>does</em> decide is which addresses the
+          program names and what the initial heap is. The theorems are parametric
+          in the heap, so a different layout changes the numbers in a
+          <code>#guard</code>, never a proof obligation.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 3 registers -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Registers are thread-private</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A register needs no declaration. Every <code>%name</code> in the file is
+          collected before anything is compiled and given the lowest index no
+          numbered register uses, in order of first appearance — so
+          <code>%acc</code> is a register wherever it occurs and <code>%0</code> is
+          register <code>0</code> as always. <code>reg acc = 3</code> pins a name
+          to an index when that matters.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>parallel</code> block hands each thread the pre-fork register
+          file and discards what the threads leave. Two threads using
+          <code>%acc</code> therefore do not interfere, <strong>and that is why
+          independence is about memory alone</strong>. It also means a register
+          written on one side of a fork boundary and read on the other reads a
+          stale value — not a race, so <code>wfB</code> cannot see it, which is
+          why the
+          <a href="autopar.html" class="prose-link">autoparallelizer</a> places
+          its boundaries where no register is live across them.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 4 addresses -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Addresses, values, and the two readings of <code>%</code></h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          An address is a compile-time number. The lowering folds it: literals,
+          <code>const</code>s, enclosing loop variables, and
+          <code>+ - * / %</code>. A buffer subscript <code>A[i, j]</code> becomes
+          <code>Layout.at "A" [i, j]</code>, and the subscript is range-checked
+          then and there — <code>A[9]</code> on <code>buf A[6]</code> is a compile
+          error, not a stray write.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A value is an arithmetic expression over registers and folded constants.
+          It has no modulo, so <code>%</code> in a <em>value</em> position is
+          rejected rather than approximated. <code>%</code> therefore reads two
+          ways, decided by position: in operand position <code>%0</code> and
+          <code>%acc</code> are registers, and in operator position
+          <code>n % 4</code> is modulo.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A subscript that mentions a register cannot be folded and compiles to the
+          data-dependent form, which is confined to its array by construction. It
+          must be the only subscript, and it indexes the buffer flat, wrapping on
+          its size. A <em>bare</em> address that mentions a register
+          (<code>[%0] := 1</code>) is rejected: there is no array to confine it to,
+          so its footprint would be the whole heap.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl p-6">
+          <p class="text-stone-900 font-bold mb-2">The price of a computed address is precision, not soundness.</p>
+          <p class="text-stone-600 leading-relaxed text-[0.95rem]">
+            The footprint of <code>dst[%i] := 1</code> is every cell of
+            <code>dst</code>, so <code>scatter.prl</code> is
+            <span class="verdict verdict-heap">this heap only</span> although its
+            three threads write three distinct cells. The reports say so in those
+            words, because the exact per-heap check finds nothing.
+          </p>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 5 control flow -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Loops are unrolled; <code>while</code> is bounded</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>for</code> and <code>parfor</code> take a compile-time bound and
+          are unrolled, so the program a theorem is about has no loop in it.
+          <code>while c in n</code> runs at most <code>n</code> iterations and
+          compiles to nested conditionals. The bound is not a limitation of the
+          implementation: <code>ParM</code> is inductive and Lean 4 has no native
+          coinductive types, so an unbounded loop is unrepresentable.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">control.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">buf n[1] = 3
+buf acc[1]
+
+%i := n[0]
+%a := 0
+while %i in 8 {
+  %a := %a + %i
+  %i := %i - 1
+  acc[0] := %a
+}</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          A conditional's footprint is the union of its branches, so
+          <code>whileAtMost</code> reports every cell any iteration could touch.
+          Conservative, never unsound — and it is the reason a loop whose
+          iterations are in fact independent can still look dependent to the
+          scheduler.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 6 the examples -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Nine files, each for one reason</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          <code>Examples/Language/</code> is a build gate. Each file compiles,
+          prints back as itself, carries the verdict its header claims, and — for
+          the seven <code>wfB</code> accepts — proves its instance of
+          <code>par_seq_eq</code>.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>File</th><th>What it is there for</th><th>Verdict</th></tr></thead>
+            <tbody>
+              <tr><td><code>sum.prl</code></td><td><code>parfor</code> with a nested <code>for</code>; one thread per chunk, each writing its own cell</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>matmul.prl</code></td><td>disjoint writes over overlapping reads — the case <code>∗</code>-disjointness rejects</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>stencil.prl</code></td><td>neighbouring threads reading the same cell</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>pipeline.prl</code></td><td>a fork, then a join that reads what both threads wrote</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>control.prl</code></td><td><code>while c in n</code>, bounded because <code>ParM</code> is inductive</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>chain.prl</code></td><td>written sequentially, for the rewrite to regroup</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>arena.prl</code></td><td><code>free</code>, and the next buffer placed on the freed cells</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>scatter.prl</code></td><td>a computed address, rejected by over-approximation rather than by a race</td><td><span class="verdict verdict-heap">this heap only</span></td></tr>
+              <tr><td><code>race.prl</code></td><td>two threads, one cell: <code>wfB</code> false, and a counterexample</td><td><span class="verdict verdict-race">race</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">A worked file</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>sum.prl</code> uses everything at once: constants, two buffers with
+          initial data, an unrolled <code>parfor</code> over chunks with a nested
+          <code>for</code> inside each thread, a private accumulator, and a label.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">sum.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">const len    = 2
+const chunks = 3
+
+buf A[6] = 1, 2, 3, 4, 5, 6
+buf out[3]
+
+parfor c in chunks {
+  %acc := 0
+  for k in len {
+    %v   := A[c * len + k]
+    %acc := %acc + %v
+  }
+  out[c] := %acc
+} :: "chunked sum"</code></pre>
+        </div>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever check</span>
+          </div>
+          <pre><code class="language-console">Examples/Language/sum.prl
+  memory    A[6] @0, out[3] @6  (9 cells)
+  reads     {A[0], A[1], A[2], A[3], A[4], A[5]}
+  writes    {out[0], out[1], out[2]}
+  threads   3
+  rounds    3 parallel, 9 sequential
+  verdict   independent — par = seq under every schedule (wfB = true)</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Each thread reads its own slice of <code>A</code> and writes its own cell
+          of <code>out</code>, so the three footprints are pairwise independent and
+          the <code>parfor</code> collapses nine sequential memory operations into
+          three parallel rounds.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 7 rejections -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What is rejected, and why</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Each of these is a compile error with a <code>line:column</code>, and
+          each is pinned as a test. The boundary is as much the specification as
+          the grammar is.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Rejected</th><th>Because</th></tr></thead>
+            <tbody>
+              <tr><td><code>[%0] := 1</code></td><td>a register in a bare address: no array to confine it to, so the footprint would be the whole heap</td></tr>
+              <tr><td><code>buf A[4]</code> then <code>A[9] := 1</code></td><td>a subscript outside its buffer</td></tr>
+              <tr><td><code>buf A[4]</code> then <code>A[1, 2] := 1</code></td><td>two subscripts on a one-dimensional buffer</td></tr>
+              <tr><td><code>buf A[2,2]</code> then <code>A[1, %i] := 1</code></td><td>a computed subscript beside a static one</td></tr>
+              <tr><td><code>buf B[4] at 2</code> over <code>buf A[4]</code></td><td><code>at</code> placing one buffer on top of a live one</td></tr>
+              <tr><td><code>A[0] := 1</code> with no <code>buf A</code></td><td>an undeclared buffer</td></tr>
+              <tr><td><code>free A</code> then <code>A[0] := 1</code></td><td>a buffer used after its lifetime ended</td></tr>
+              <tr><td><code>free A</code> twice, or <code>free</code> of a non-buffer</td><td>nothing live by that name</td></tr>
+              <tr><td><code>parallel { free A } | { … }</code></td><td>a declaration inside a thread, where only part of the program would see it</td></tr>
+              <tr><td><code>buf A[4]</code> twice</td><td>a name declared twice</td></tr>
+              <tr><td><code>%i := 7 % 2</code></td><td><code>%</code> as a value operator: the expression language has no modulo</td></tr>
+              <tr><td><code>%x := A[0] + 1</code></td><td>a load inside an expression; a load is its own statement</td></tr>
+              <tr><td><code>buf A[2] = 1, 2, 3</code></td><td>more initial values than cells</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-3">And the accepted forms those rejections are the boundary of:</p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">[0] := %acc                     -- a register needs no declaration
+buf A[4]
+%i := 0
+A[%i] := 1                      -- a computed subscript, alone, into one buffer
+const n = 2
+buf M[n, n]
+M[1, 1] := 1                    -- const-folded, range-checked
+buf S[4] at 100                 -- hand placement, clear of everything live
+[0] := 3; [1] := 4              -- `;` or a line break, either way</code></pre>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 8 lean notation -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The same language, as Lean notation</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>paralever { … }</code> block takes Lean <em>terms</em> for its
+          addresses and values, so any Lean expression of the right type works:
+          <code>[n * 2 + 1]</code>, an address computed by a Lean function, or a
+          combinator spliced in. A <code>.prl</code> file has none of that, because
+          the reader cannot call the elaborator. The closed expression language,
+          <code>const</code>, and <code>for</code>/<code>parfor</code> unrolling are
+          what it has instead.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Language/Writing.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="a program in the surface language"
+                    src="snippets/writing.html"></iframe>
+          </div>
+          <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Language/Writing.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="its footprint, and its verdict"
+                    src="snippets/writing-theorem.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          All three threads read <code>[2]</code> and each writes a cell of its
+          own — the shared-read case. <code>footprintOf</code> is a fold over the
+          syntax, so the footprint is <code>rfl</code> and the Bernstein check is
+          <code>decide</code>; nothing in those two lines mentions a heap.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Memory in the Lean notation is written <code>[l]</code> and a register
+          <code>%n</code>. That is not a style choice: a
+          <code>syntax "foo"</code> declaration reserves <code>foo</code> as a
+          token for the whole project, so no declaration anywhere could then be
+          named <code>foo</code>. Writing memory as <code>mem l</code> made
+          <code>def mem</code> impossible — the obvious name for a
+          <code>Layout</code> — so the notation uses brackets, which reserve
+          nothing.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          Reading a file from Lean is three lines, and the theorem is the fourth:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Language/Files.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="prl_file — read while Lean elaborates"
+                    src="snippets/prl-file.html"></iframe>
+          </div>
+          <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Language/Files.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="one theorem per accepted file"
+                    src="snippets/file-theorem.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          A file that does not compile is an elaboration error at the
+          <code>prl_file</code> term, carrying the position the reader reported.
+          <code>prl_prog</code> and <code>prl_layout</code> give the two halves
+          alone, and <code>Prl.load</code> is the same compiler behind
+          <code>IO</code> for reading a path at run time.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="autopar.html"><h3>Autoparallelization →</h3><p>Write the chain, let the pass find the forks, and get a rewrite theorem with no hypothesis.</p></a>
+          <a class="card" href="races.html"><h3>Finding races →</h3><p><code>race.prl</code>, step by step, replayed against the semantics.</p></a>
+          <a class="card" href="cli.html"><h3>The command line →</h3><p>Check, run, convert, and write the Lean module that proves it.</p></a>
+          <a class="card" href="mlir.html"><h3>From MLIR →</h3><p>Reading MLIR instead, and compiling it to the same Paralever program.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

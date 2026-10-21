@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A complete scan for conflict sites, a search aimed by it, and a found schedule replayed against the real step relation — with the interleaving printed." />
+    <meta property="og:title" content="Finding races — paralever" />
+    <meta property="og:description" content="A complete scan for conflict sites, a search aimed by it, and a found schedule replayed against the real step relation — with the interleaving printed." />
+    <meta property="og:type" content="website" />
+    <title>Finding races — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="races.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        Finding races
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        When the check refuses, the question changes from "is it safe?" to "show
+        me". Two phases: a scan that is <em>exactly</em> the proof obligation, and
+        a search aimed by what the scan found. The schedule it returns is replayed
+        against the real semantics before it is believed.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- the two phases -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two phases, and what joins them</h2>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 760 350" role="img"
+             aria-label="The scan either comes back empty, which is itself the well-formedness proof, or names the conflicting locations, which aim the search; the schedule it returns is replayed to a Reaches derivation.">
+          <defs>
+            <marker id="rs-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+            <marker id="rs-arw-bad" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#dc2626" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="295" y="10" width="170" height="32" rx="8" />
+          <text x="380" y="31" text-anchor="middle">ParM × State</text>
+
+          <path class="edge" d="M380,42 V64" marker-end="url(#rs-arw)" />
+
+          <rect class="box-acc" x="265" y="64" width="230" height="50" rx="8" />
+          <text class="t-acc" x="380" y="87" text-anchor="middle">phase 1 · the scan</text>
+          <text class="t-sm t-acc" x="380" y="105" text-anchor="middle">raceSites</text>
+
+          <path class="edge" d="M380,114 V140 H170 V162" marker-end="url(#rs-arw)" />
+          <path class="edge" d="M380,114 V140 H580 V162" marker-end="url(#rs-arw)" />
+          <text class="t-note t-ok" x="296" y="134" text-anchor="end">empty</text>
+          <text class="t-note t-bad" x="398" y="134">non-empty — and it names which cells conflict</text>
+
+          <rect class="box-ok" x="20" y="162" width="300" height="68" rx="8" />
+          <text class="t-ok" x="170" y="185" text-anchor="middle">WellFormed holds</text>
+          <text class="t-sm t-ok" x="170" y="204" text-anchor="middle">raceSites_nil_iff</text>
+          <text class="t-note t-ok" x="170" y="222" text-anchor="middle">nothing left to search for</text>
+
+          <rect class="box-acc" x="460" y="162" width="240" height="50" rx="8" />
+          <text class="t-acc" x="580" y="185" text-anchor="middle">phase 2 · the search</text>
+          <text class="t-sm t-acc" x="580" y="203" text-anchor="middle">findWrongGuided</text>
+
+          <path class="edge" d="M580,212 V240" marker-end="url(#rs-arw)" />
+          <text class="t-note" x="592" y="231">Schedule</text>
+
+          <rect class="box" x="480" y="240" width="200" height="32" rx="8" />
+          <text x="580" y="261" text-anchor="middle">follow_sound</text>
+
+          <path class="edge-bad" d="M580,272 V300" marker-end="url(#rs-arw-bad)" />
+
+          <rect class="box-bad" x="465" y="300" width="230" height="32" rx="8" />
+          <text class="t-bad" x="580" y="321" text-anchor="middle">Reaches c wrong</text>
+        </svg>
+        <figcaption>
+          The split is Sen's RaceFuzzer: a cheap scan proposes candidate racing
+          pairs, then a search tries to realize one. The difference here is that the
+          scan <em>is</em> the obligation — an empty site list is a term of type
+          <code>WellFormed p σ</code>, not a report that none was found. Phase 1's
+          output is therefore not a yes or no: it names the locations, and phase 2
+          uses them.
+        </figcaption>
+      </figure>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Phase 1's output is not a yes or no. It names the locations, and phase 2
+          uses them — which is the difference between a linear walk and an
+          exponential one.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- phase 1 -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Phase 1: an empty site list <em>is</em> the proof</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>raceSites p σ</code> walks the term along its reference run and
+          collects, at every fork, every pair of children whose footprints
+          conflict, together with the offending locations. It is a list, not a
+          verdict, and its emptiness is equivalent to well-formedness — proved,
+          both directions:
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Search/RaceSearch.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="raceSites_nil_iff — the scan is complete"
+                    src="snippets/race-sites-iff.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          That equivalence is what makes the tool more than a linter. A linter
+          reports "no races found" and you believe it or you do not. Here, a clean
+          scan is a <em>term</em> of type <code>WellFormed p σ</code>, which is
+          precisely the hypothesis <code>par_seq_eq</code> wants. Zero false
+          negatives is a theorem, not a tuning result.
+        </p>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The scan is complete because <code>step</code> checks for a conflict
+          <em>before</em> letting anyone move, so detection is instantaneous rather
+          than retrospective. Note the absence of a read/read clause:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">the conflict test</span>
+          </div>
+          <pre><code class="language-pseudo">conflict(a, b)  =  loc(a) == loc(b)  &amp;&amp;  (isWrite(a) || isWrite(b))
+
+nextAccs(pure _)      = []                 # the actions a thread could do NEXT
+nextAccs(read l _)    = [read l]
+nextAccs(write l _ _) = [write l]
+nextAccs(par cs _)    = concat(nextAccs(c) for c in cs)   # through nested forks
+
+step(par cs k, σ) =
+    groups = [ nextAccs(c) for c in cs ]                  # one group per child
+    if any two distinct groups contain a conflicting pair:  [wrong]
+    else …</code></pre>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed">
+          A few tests pin the boundary, including the one that matters most — a
+          shared read is not a site:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Search/RaceSearch.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="what the scan finds, as #guards"
+                    src="snippets/race-site-cases.html"></iframe>
+          </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- phase 2 -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Phase 2: left-to-right is the worst possible order</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A race needs two threads poised at conflicting accesses <em>at the same
+          instant</em>. The one move that destroys that position is letting a
+          thread execute its conflicting access and run on — which is exactly what
+          a naive depth-first search does first. It drives child 0 through its
+          access, finds nothing, and then backs up one step at a time until the two
+          sides happen to line up.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Phase 1 already says which locations conflict, so the fix is to try those
+          moves <strong>last</strong>:
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">findWrongGuided</span>
+          </div>
+          <pre><code class="language-pseudo">targetsOf(sites) = dedup(concat(s.conflicts for s in sites))   # what phase 1 flagged
+
+consumesTarget(p, σ, targets, i) =          # does successor i give up the position?
+    match attribution(p, σ, i).action:
+      some a -> a.loc in targets
+      none   -> false                       # a join consumes nothing
+
+findWrongGuided(targets, fuel, c):
+    if fuel == 0: return NONE
+    succs = stepC(c)
+    if some i has succs[i] == wrong: return [i]
+    hold = [ i for i in indices(succs) if consumesTarget(..., i) ]
+    …try the others first, then `hold`</code></pre>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Each thread now advances freely until its next action is a flagged one
+          and stops there. Once two threads are stopped, <code>step</code> reports
+          the race itself and a one-step lookahead returns it. This is a
+          <strong>reordering, not a restriction</strong> — every successor is still
+          visited, so nothing becomes unfindable. The build checks that the blind
+          and aimed searches agree on every tree of depth ≤ 2 and on random trees,
+          and that every schedule the aimed search returns really reaches
+          <code>wrong</code>.
+        </p>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3">What the aiming is worth</h3>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-4">
+          <table class="opts-table">
+            <thead><tr><th>Program</th><th>Steps</th><th>Blind</th><th>Aimed</th></tr></thead>
+            <tbody>
+              <tr><td><code>lateRace 200</code></td><td>405</td><td>257 ms</td><td>82 ms</td></tr>
+              <tr><td><code>lateRace 500</code></td><td>1005</td><td>3.5 s</td><td>494 ms</td></tr>
+              <tr><td><code>three 8</code></td><td>31</td><td>2.7 s</td><td><strong>2 ms</strong></td></tr>
+              <tr><td><code>three 20</code></td><td>67</td><td>—</td><td>5 ms</td></tr>
+              <tr><td><code>three 60</code></td><td>187</td><td>—</td><td>34 ms</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          <code>three</code> forks three threads where the middle one is innocent,
+          and it is the case that matters. Blind, the innocent thread multiplies
+          the backtracking and the cost grows about 14× per two writes added to
+          each side: 2.7 s at eight writes, hopeless at twenty. Aimed, it is 34 ms
+          at sixty, because there is no backtracking left to multiply — the
+          innocent thread's moves are never flagged, so it runs whenever it is
+          reached, and the two guilty threads stop at their conflicting writes.
+        </p>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3">The scan, and the cost of not having one</h3>
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden">
+            <table class="opts-table">
+              <thead><tr><th><code>m</code></th><th>Steps</th><th>Phase 1</th></tr></thead>
+              <tbody>
+                <tr><td>50</td><td>105</td><td>2 ms</td></tr>
+                <tr><td>100</td><td>205</td><td>9 ms</td></tr>
+                <tr><td>200</td><td>405</td><td>35 ms</td></tr>
+                <tr><td>500</td><td>1005</td><td>216 ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden">
+            <table class="opts-table">
+              <thead><tr><th><code>m</code></th><th>Steps</th><th>Phase 2 alone</th></tr></thead>
+              <tbody>
+                <tr><td>10</td><td>23</td><td>5.6 s</td></tr>
+                <tr><td>11</td><td>25</td><td>21 s</td></tr>
+                <tr><td>12</td><td>27</td><td>&gt; 60 s</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          The right-hand table is a <em>clean</em> program, where every path must
+          fail before "no counterexample" comes back — <code>C(2m, m)</code>
+          interleavings. Guidance cannot help, because there are no conflict
+          locations to aim at. It is also never paid: the search returns
+          immediately on an empty scan, and <code>raceSites_nil_iff</code>
+          justifies that rather than merely excusing it. Phase 1's quadratic term
+          is the footprint representation — <code>Footprint</code> holds
+          <code>List Loc</code> and membership is <code>List.contains</code> —
+          which is deliberate, since every other use of a footprint is a
+          <code>decide</code>-able membership or disjointness check.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- follow_sound -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The schedule is replayed, not trusted</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>Schedule</code> is a list of successor indices — at each
+          configuration, which of the available moves to take. The search produces
+          one; <code>follow</code> walks it against the real <code>step</code>
+          relation, and <code>follow_sound</code> says that a successful walk
+          <em>is</em> a <code>Reaches</code> derivation.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Search/RaceSearch.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="follow_sound — a schedule is a run"
+                    src="snippets/follow-sound.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          So the printed interleaving is not a plausible story about what might
+          happen. It is a proof object: the heuristic that found it could be
+          arbitrarily wrong without endangering anything, because what is believed
+          is the replay.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the report -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What it prints</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>race.prl</code> is two threads that each log their arrival and then
+          both write <code>x[0]</code>.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">race.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">buf x[1]
+buf log[2]
+
+parallel {
+  log[0] := 1
+  x[0] := 7
+} | {
+  log[1] := 1
+  x[0] := 9
+}</code></pre>
+        </div>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever race Examples/Language/race.prl</span>
+          </div>
+          <pre><code class="language-console">step:thread  action              state
+0:T0         write [log[0]] ← 1  log[0]↦1, x[0]↦0, log[1]↦0
+1:T1         write [log[1]] ← 1  log[0]↦1, x[0]↦0, log[1]↦1
+2:T1         write [x[0]] ← 9    pending
+2:T0         write [x[0]] ← 7    pending
+Parallel aborts at Step 2. Reason: T0, T1 write to: {x[0]}.
+Parallel: x[0]↦7
+Sequential: x[0]↦9</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Both actions at step 2 are marked <em>pending</em>: neither ran, because
+          the fork aborted when it saw them. That is the shape of the report
+          throughout — a pending step <em>is</em> an ordinary step that happens not
+          to have run, carrying the heap as it stands at that instant with no cell
+          marked as changed.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl p-6 mb-6">
+          <p class="text-stone-900 font-bold mb-2">The difference is not a heap diff, and cannot be.</p>
+          <p class="text-stone-600 leading-relaxed text-[0.95rem]">
+            <code>wrong</code> is terminal and absorbing, so the parallel program
+            has <em>no</em> final heap, while the sequential one leaves
+            <code>x[0] ↦ 9</code>. Racy programs are excluded, not given a
+            behaviour. Printing the sequential heap beside the abort is there to
+            show what was lost, not to suggest the two can be compared.
+          </p>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A clean program has nothing to show, and says so:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">output</span>
+          </div>
+          <pre><code class="language-console">No counterexample: no par node fails Bernstein.
+Sequential: 0↦0, 1↦1, 2↦2</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          A thousand-step trace is a thousand rows and the information is at the
+          end, so the report keeps the first five steps and the last fourteen and
+          collapses the middle into a count with its per-thread split. Location
+          sets, the state column and the schedule all clip the same way. The model
+          behind the text is <em>structured</em> — a step knows its thread, its
+          action and its cells, and a cell knows whether that step changed it — so
+          the same report renders as text in a terminal and as an infoview widget,
+          in the editor's own theme colours.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- in tactic position -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">In tactic position</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Two tactics, for a goal you are writing by hand rather than a file you
+          are checking. <code>paralever_race</code> leaves the goal alone — it is
+          <code>trace_state</code> for schedules. <code>paralever_check</code> is
+          the one a proof uses: it tries to <em>prove</em> the goal first, one route
+          at a time, and runs the search only when none of them discharges the
+          obligation. Then it fails with the interleaving attached.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Route</th><th>What it is</th></tr></thead>
+            <tbody>
+              <tr><td><code>refine par_seq_eq ?_ _ _ &lt;;&gt; grind</code></td><td>the one-liner, with <code>grind</code> on the obligation</td></tr>
+              <tr><td>the same <code>&lt;;&gt; simp +decide</code></td><td>…evaluating it</td></tr>
+              <tr><td>the same <code>&lt;;&gt; decide</code></td><td>…evaluating it in the kernel</td></tr>
+              <tr><td><code>parSeqEq_of_runSeq_eq</code> from two <code>wellFormedB_iff</code>s</td><td>the per-heap route, for a computed address</td></tr>
+              <tr><td><code>par_seq_eq _ _ _ ((wellFormedB_iff _ _).1 ?_)</code></td><td>the same for a <code>ParM</code> written by hand</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The first route cannot in fact discharge <code>wfB s = true</code>, and
+          is kept first anyway. The obligation is a closed Boolean computation:
+          <code>grind</code> treats <code>wfB s</code> as an atom and has nothing
+          to rewrite it with. The routes after it evaluate the term, which is what
+          this obligation needs. The ladder is ordered so that a future
+          <code>wfB</code> lemma set — for the N-ary kernel shapes, where the
+          program is symbolic and there is nothing to evaluate — is tried before
+          the evaluating routes that could not touch it.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          A goal that quantifies over its heap or its register file has no values
+          for the search to run on. Both are replaced by the zeros a compiled
+          file's run starts from, and each substitution is rendered above the trace
+          as a note — a counterexample at one heap is not a counterexample at every
+          heap.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="concept.html"><h3>The theorem →</h3><p>Why <code>wrong</code> is absorbing, and what <code>WellFormed</code> is the hypothesis of.</p></a>
+          <a class="card" href="cli.html"><h3>The command line →</h3><p><code>paralever race</code>, and the module <code>prove</code> writes for a racy program.</p></a>
+          <a class="card" href="mlir.html"><h3>From MLIR →</h3><p>The same scan, over a labelled corpus: three racy, four race-free, no false negatives.</p></a>
+          <a class="card" href="autopar.html"><h3>Autoparallelization →</h3><p>The same architecture — untrusted analysis, proved gate.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

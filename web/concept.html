@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ParM, the interleaving machine, footprints, Bernstein independence, canonical outcomes, and the proof that par equals seq under every schedule." />
+    <meta property="og:title" content="The theorem — paralever" />
+    <meta property="og:description" content="ParM, the interleaving machine, footprints, Bernstein independence, canonical outcomes, and the proof that par equals seq under every schedule." />
+    <meta property="og:type" content="website" />
+    <title>The theorem — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="concept.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        The theorem
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        Six definitions and one proof. The definitions say what a parallel program
+        is, how it runs, and when a fork is safe; the proof says that a safe fork
+        can be read sequentially without changing any outcome.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- 1 ParM -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">A program is data</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>ParM α</code> is an inductive type with four constructors: return a
+          value, read a location and continue with what was there, write a location
+          and continue, or fork a list of children and continue with all their
+          results. Nothing in the type mentions threads, time, or Lean's runtime.
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Core/ParM.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="ParM — a program as data"
+                    src="snippets/parm.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Three consequences follow from the shape, and all three are permanent.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Because</th><th>Therefore</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>par</code> is a constructor, not a function</td>
+                <td>Its meaning is whatever <code>run</code> says it is. Lean proves
+                nothing about it for free, which is exactly why there is a theorem
+                to state.</td>
+              </tr>
+              <tr>
+                <td><code>ParM</code> is inductive, with no coinductive dual in Lean 4</td>
+                <td>Only terminating programs are representable.
+                <code>while true</code> cannot be written. This is a fixed boundary,
+                not a to-do.</td>
+              </tr>
+              <tr>
+                <td>The children carry a type-indexed spine, <code>Childs ParM αs</code></td>
+                <td>The fork is N-ary and heterogeneous. <code>List (ParM α)</code>
+                with a constructor-local <code>α</code> is rejected by the kernel,
+                so the spine is what keeps each child's result type static — and
+                the price is that Lean's <code>induction</code> tactic refuses
+                <code>ParM</code>. Every proof goes through
+                <code>ParM.inductionOn</code> or <code>ParM.mutualInduction</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 2 the machine -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two readings of the same term</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>State</code> is <code>Loc → Val</code> and total: every location
+          exists and holds <code>0</code> until written, so no program can create
+          or destroy memory. Against that heap there are two readings of a term.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>runSeq</code> is the <em>reference</em> reading. It is a function,
+          total and deterministic: at a fork it runs the children left to right,
+          threading the heap from one into the next.
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Core/Access.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="runSeq — the sequential reading"
+                    src="snippets/runseq.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>step</code> is the <em>parallel</em> reading, and it is a relation
+          in disguise: it returns the <strong>list</strong> of configurations one
+          atomic move can land in. At a fork, any child may move, so the list has
+          one entry per child that can step. A fork whose next accesses conflict
+          steps to a single <code>wrong</code>.
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Core/Semantics.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="step — every schedule at once"
+                    src="snippets/step.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>Reaches</code> is the reflexive-transitive closure, so
+          <em>every</em> claim about all interleavings is a claim about this one
+          relation. <code>wrong</code> has no successors: a race is absorbing.
+          That choice is Reynolds' grainless semantics, and it is what makes the
+          size of an atomic step irrelevant — a program whose correctness depended
+          on the grain contains a conflicting pair, and a conflicting pair goes to
+          <code>wrong</code>.
+        </p>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 760 480" role="img"
+             aria-label="A fork's two schedules diverge and reconverge on one terminal configuration; a conflicting fork steps instead to an absorbing wrong.">
+          <defs>
+            <marker id="cn-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+            <marker id="cn-arw-bad" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#dc2626" />
+            </marker>
+          </defs>
+
+          <text class="t-lab" x="0" y="14">INDEPENDENT BRANCHES</text>
+
+          <rect class="box" x="275" y="30" width="210" height="34" rx="8" />
+          <text x="380" y="52" text-anchor="middle">.run (par [p, q] k) σ</text>
+
+          <path class="edge" d="M380,64 V86 H170 V108" marker-end="url(#cn-arw)" />
+          <path class="edge" d="M380,64 V86 H590 V108" marker-end="url(#cn-arw)" />
+          <text class="t-note" x="258" y="82" text-anchor="end">p moves</text>
+          <text class="t-note" x="502" y="82">q moves</text>
+
+          <rect class="box" x="30" y="108" width="280" height="34" rx="8" />
+          <text x="170" y="130" text-anchor="middle">.run (par [p', q] k) σ'</text>
+          <rect class="box" x="450" y="108" width="280" height="34" rx="8" />
+          <text x="590" y="130" text-anchor="middle">.run (par [p, q'] k) σ''</text>
+
+          <path class="edge" d="M170,142 V176 H380 V198" marker-end="url(#cn-arw)" />
+          <path class="edge" d="M590,142 V176 H380 V198" />
+
+          <rect class="box" x="300" y="198" width="160" height="34" rx="8" />
+          <text x="380" y="220" text-anchor="middle">both pure</text>
+
+          <path class="edge" d="M380,232 V266" marker-end="url(#cn-arw)" />
+
+          <rect class="box-ok" x="275" y="266" width="210" height="34" rx="8" />
+          <text x="380" y="288" text-anchor="middle">.run (k ⟨a, b⟩) τ</text>
+          <text class="t-note t-ok" x="500" y="288">one terminal outcome</text>
+
+          <line class="brace" x1="0" y1="334" x2="760" y2="334" />
+
+          <text class="t-lab t-bad" x="0" y="364">…AND IF p's NEXT ACCESS CONFLICTS WITH q's</text>
+
+          <rect class="box" x="275" y="380" width="210" height="34" rx="8" />
+          <text x="380" y="402" text-anchor="middle">.run (par [p, q] k) σ</text>
+
+          <path class="edge-bad" d="M380,414 V440" marker-end="url(#cn-arw-bad)" />
+
+          <rect class="box-bad" x="320" y="440" width="120" height="34" rx="8" />
+          <text class="t-bad" x="380" y="462" text-anchor="middle">.wrong</text>
+          <text class="t-note t-bad" x="456" y="462">no successors</text>
+        </svg>
+        <figcaption>
+          Every path down the upper tree is a schedule. The theorem says that when
+          the branches are independent, all of those paths end at the same terminal
+          configuration — the one <code>runSeq</code> computes. A conflicting fork
+          takes the lower edge instead, and <code>wrong</code> has no successors at
+          all, so the program has no terminal outcome to compare.
+        </figcaption>
+      </figure>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 3 footprints and Bernstein -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Independence is Bernstein's, not <code>∗</code></h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>Footprint</code> is a pair of location lists: what a program
+          reads and what it writes. <code>accesses p σ</code> measures it along
+          <code>p</code>'s reference run from <code>σ</code> — a read's footprint
+          includes the cell it read, and the continuation is measured at the heap
+          the read saw, so the measurement is exact for the run it describes rather
+          than a syntactic over-estimate.
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Core/Access.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="Footprint — what a computation touches"
+                    src="snippets/footprint.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Three clauses, and the fourth possible pair is deliberately absent:
+          <code>r₁ ∩ r₂</code> may be anything at all. A shared read is not a
+          race, and admitting it is not a convenience — it is what decides whether
+          the method reaches real programs.
+        </p>
+
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th></th><th>Separation logic's <code>∗</code></th><th>Bernstein</th></tr></thead>
+            <tbody>
+              <tr><td>Both write <code>x</code></td><td>rejected</td><td>rejected</td></tr>
+              <tr><td>One writes <code>x</code>, the other reads it</td><td>rejected</td><td>rejected</td></tr>
+              <tr><td>Both read <code>x</code>, neither writes</td><td><strong>rejected</strong> — the heap must split</td><td><strong>allowed</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The third row is <code>matmul</code>. Thread <code>i</code> writes row
+          <code>i</code> of <code>C</code> and reads all of <code>B</code>;
+          thread <code>j</code> writes row <code>j</code> and reads all of
+          <code>B</code> too. Under <code>∗</code> the two threads cannot both own
+          <code>B</code>, so the ordinary fork rule does not apply without a
+          fractional-permission or read-sharing extension. Under Bernstein the
+          program is simply independent.
+        </p>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 760 400" role="img"
+             aria-label="Well-formedness splits into canonical outcomes on the left and a computation on the right; together they give the equivalence.">
+          <defs>
+            <marker id="cn2-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="280" y="18" width="200" height="34" rx="8" />
+          <text x="380" y="40" text-anchor="middle">WellFormed p σ</text>
+
+          <path class="edge" d="M380,52 V74 H185 V96" marker-end="url(#cn2-arw)" />
+          <path class="edge" d="M380,52 V74 H575 V96" marker-end="url(#cn2-arw)" />
+
+          <rect class="box-acc" x="25" y="96" width="320" height="38" rx="8" />
+          <text class="t-acc" x="185" y="120" text-anchor="middle">every step preserves runSeq</text>
+
+          <rect class="box" x="415" y="96" width="320" height="38" rx="8" />
+          <text x="575" y="120" text-anchor="middle">seqPair is well-formed</text>
+
+          <path class="edge" d="M185,134 V164" marker-end="url(#cn2-arw)" />
+          <path class="edge" d="M575,134 V164" marker-end="url(#cn2-arw)" />
+
+          <rect class="box-acc" x="25" y="164" width="320" height="56" rx="8" />
+          <text class="t-acc" x="185" y="186" text-anchor="middle">Reaches (run p σ) (pure r, σ')</text>
+          <text class="t-acc" x="185" y="206" text-anchor="middle">↔ (r, σ') = runSeq p σ</text>
+
+          <rect class="box" x="415" y="164" width="320" height="56" rx="8" />
+          <text x="575" y="186" text-anchor="middle">runSeq (parPair p q)</text>
+          <text x="575" y="206" text-anchor="middle">= runSeq (seqPair p q)</text>
+
+          <path class="edge" d="M185,220 V256 H380 V286" marker-end="url(#cn2-arw)" />
+          <path class="edge" d="M575,220 V256 H380 V286" />
+
+          <rect class="box-ok" x="170" y="286" width="420" height="34" rx="8" />
+          <text class="t-ok" x="380" y="308" text-anchor="middle">ParSeqEq (parPair p q) (seqPair p q) σ</text>
+
+          <text class="t-note t-acc" x="25" y="352">the left column is the only place independence is used;</text>
+          <text class="t-note" x="25" y="370">the right column is a computation.</text>
+        </svg>
+        <figcaption>
+          The two halves of <code>par_seq_eq</code>. Canonical outcomes is what
+          makes <code>runSeq</code> name <em>the</em> answer rather than one of
+          several; the right-hand equation is then just the observation that a
+          fork's reference reading <em>is</em> sequential composition.
+        </figcaption>
+      </figure>
+
+        <p class="text-stone-600 leading-relaxed">
+          <code>WellFormed p σ</code> lifts <code>Indep</code> to a whole term:
+          at every <code>par</code> node, the children's footprints are pairwise
+          independent, each child is itself well-formed, and so is the
+          continuation. Checking the outermost fork alone would not do — a branch
+          can race with itself while the two branches' total footprints stay
+          disjoint.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 4 staggered measurement -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Where the children are measured</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          One detail in <code>accessesChilds</code> carries the proof, and reading
+          past it makes the main lemma look impossible. Each child's footprint is
+          measured from the heap the <em>previous</em> child left:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Core/Access.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="accessesChilds — staggered measurement"
+                    src="snippets/accesses-childs.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          The machine, meanwhile, lets the tail step <em>at</em> <code>σ</code>,
+          because that is where the machine is. So in the one case of the proof
+          with real content — a non-leftmost child moves — the machine's heap and
+          the reference measurement's heap disagree, and the step has to be shown
+          to see the same values anyway. It does, and the reason is the only place
+          <code>Indep</code> is actually used: the locations the tail reads are not
+          among the locations the head writes, so the head's writes left them
+          alone. Concretely, with <code>p = write 5 1</code> and
+          <code>q = read 7 (fun v => write 8 v)</code>, the two runs agree exactly
+          when <code>σ₁ 7 = σ₀ 7</code>, and that holds because
+          <code>7 ∉ W(accesses p σ₀) = {5}</code>.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 5 the proof -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Canonical outcomes, then the equality</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The proof is in two steps, and the first does all the work.
+        </p>
+
+        <div class="space-y-5 mb-8">
+          <div class="flex gap-4 items-start">
+            <div class="step-num">1</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1">Canonical outcomes.</p>
+              <p class="text-stone-600 leading-relaxed">
+                If <code>p</code> is well-formed at <code>σ</code>, then
+                <code>Reaches (.run p σ) (.run (.pure r) σ')</code> holds if and
+                only if <code>(r, σ') = runSeq p σ</code>. A well-formed program
+                has exactly one terminal outcome, and <code>runSeq</code> names it.
+                The argument is that <code>runSeq</code> is a <em>conserved
+                quantity</em>: every single step of the machine leaves
+                <code>runSeq</code> of the configuration unchanged, so the value it
+                had at the start is the value it has at the end — and at the end
+                the program is <code>pure r</code>, whose <code>runSeq</code> is
+                <code>(r, σ')</code>.
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">2</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1">Both sides are canonical.</p>
+              <p class="text-stone-600 leading-relaxed">
+                <code>seqPair p q</code> is well-formed whenever
+                <code>parPair p q</code> is, and the two have the same
+                <code>runSeq</code> — the fork's reference reading <em>is</em> the
+                sequential composition. Rewriting both sides of the
+                <code>Iff</code> by step 1 turns the equivalence into that
+                equation.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Theory/Sequentialize.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="par_seq_eq — the metatheorem"
+                    src="snippets/par-seq-eq.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The N-ary form is proved by induction on the children list, where the
+          <code>cons</code> case is the two-to-N step. A region form —
+          <code>par_seq_eq_region</code> — parallelizes one fork inside a larger
+          program, which is what lets a pipeline be sequentialized one region at a
+          time, since <code>ParSeqEq</code> is an equivalence relation and
+          composes by <code>trans</code>.
+        </p>
+
+        <figure class="dgm">
+        <div class="grid md:grid-cols-2 gap-5">
+          <div>
+            <p class="t-col-head">Writes — disjoint</p>
+            <table class="fp-table">
+              <tr><td class="fp-th">thread 0</td><td><code>C[0,0]</code> <code>C[0,1]</code></td></tr>
+              <tr><td class="fp-th">thread 1</td><td><code>C[1,0]</code> <code>C[1,1]</code></td></tr>
+            </table>
+            <p class="fp-note fp-note-ok">no cell in common — <code>w₁ ∩ w₂ = ∅</code></p>
+          </div>
+          <div>
+            <p class="t-col-head">Reads — overlapping</p>
+            <table class="fp-table">
+              <tr><td class="fp-th">thread 0</td><td><code>A[0,·]</code> <span class="fp-shared"><code>B[·,0]</code> <code>B[·,1]</code></span></td></tr>
+              <tr><td class="fp-th">thread 1</td><td><code>A[1,·]</code> <span class="fp-shared"><code>B[·,0]</code> <code>B[·,1]</code></span></td></tr>
+            </table>
+            <p class="fp-note fp-note-acc">all of <code>B</code> in common — <code>r₁ ∩ r₂</code> unconstrained</p>
+          </div>
+        </div>
+        <div class="fp-clauses">
+          <span class="fp-clause"><code>w₁ ∩ w₂ = ∅</code></span>
+          <span class="fp-clause"><code>w₁ ∩ r₂ = ∅</code></span>
+          <span class="fp-clause"><code>w₂ ∩ r₁ = ∅</code></span>
+          <span class="fp-clause fp-clause-free"><code>r₁ ∩ r₂</code> — no clause</span>
+        </div>
+        <figcaption>
+          <code>Examples/Language/matmul.prl</code>, measured:
+          <code>writes {C[0,0], C[0,1], C[1,0], C[1,1]}</code> and <code>reads</code>
+          all of <code>A</code> and <code>B</code>. Verdict <em>independent</em>.
+          The fourth box is the one Bernstein leaves empty and <code>∗</code> does not.
+        </figcaption>
+      </figure>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 6 from ParM to the surface -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">From the term to a <code>Bool</code></h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>WellFormed</code> quantifies over a heap and so is not decidable
+          as written. The surface language <code>ParProg</code> is first-order:
+          addresses are numbers, values are closed arithmetic over registers, and
+          a statement's footprint is computed from the syntax by
+          <code>footprintOf</code>. That makes the obligation a <code>Bool</code>:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Prl/Lang/Core.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="par_seq_eq — one Bool, then the theorem"
+                    src="snippets/wfb-par-seq-eq.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>wfB</code> is sound and <em>not</em> complete, and the gap is
+          deliberate. A computed address <code>dst[%i]</code> has a footprint of
+          every cell of <code>dst</code>, because the index is not known from the
+          syntax — so three threads writing three distinct cells are refused.
+          When that matters, <code>wellFormedB</code> measures the accesses along
+          the canonical run instead; it is both sound and complete, and it buys the
+          equivalence at one heap. Both routes are offered, and
+          <a href="cli.html" class="prose-link"><code>paralever prove</code></a>
+          picks whichever the program earns.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Where to read further</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="language.html"><h3>The language →</h3><p>How a program is written, and what <code>footprintOf</code> computes from it.</p></a>
+          <a class="card" href="races.html"><h3>Finding races →</h3><p>What happens when <code>wfB</code> says no: the scan, the search, and the printed interleaving.</p></a>
+          <a class="card" href="autopar.html"><h3>Autoparallelization →</h3><p>The theorem with no hypothesis, and how a chain becomes a tree of forks.</p></a>
+          <a class="card" href="lean.html"><h3>The Lean library →</h3><p>Module layout, the induction principles, and the design notes in <code>docs/</code>.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

@@ -1,0 +1,754 @@
+/* paralever — site styles.
+   The palette, fonts and base layout come from the main site's /src/css/theme.css,
+   which every page links directly; this file holds only what is paralever's own. */
+
+/* Inline code — only outside pre */
+:not(pre) > code {
+  color: #a16207;
+  background: #fef9c3;
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+  font-size: 0.88em;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+}
+
+/* Code block wrapper */
+.code-wrap {
+  border-radius: 0.6rem;
+  overflow: hidden;
+  border: 1px solid #292524;
+  box-shadow: 0 2px 8px -2px rgba(28, 25, 23, 0.12);
+  margin: 2rem 0;
+}
+.code-wrap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.9rem;
+  background: #1c1917;
+  border-bottom: 1px solid #292524;
+}
+.code-wrap-lang {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #78716c;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Inter", sans-serif;
+}
+.code-wrap-lang::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #a16207;
+}
+.code-wrap pre {
+  background: #1c1917;
+  margin: 0;
+  padding: 1.5rem 1.75rem;
+  overflow-x: auto;
+}
+.code-wrap pre code {
+  color: #e7e5e4;
+  background: transparent;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+}
+.copy-btn {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #78716c;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* ── Diagrams ─────────────────────────────────────────────────────────────────
+   Every diagram is HTML or inline SVG. Trees grow downward from a root at top. */
+
+.dgm {
+  margin: 2rem 0;
+  padding: 1.6rem 1.4rem 1.1rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #e7e5e4;
+  border-radius: 0.6rem;
+  overflow-x: auto;
+}
+.dgm figcaption {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid #f0efec;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #78716c;
+  font-style: italic;
+}
+
+/* inline SVG: scales to the column, never taller than it needs */
+.dgm svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+.dgm svg text {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 12.5px;
+  fill: #2d2a26;
+}
+.dgm svg .t-lab {
+  font-family: "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  fill: #78716c;
+}
+.dgm svg .t-note {
+  font-family: "Inter", sans-serif;
+  font-size: 11.5px;
+  font-style: italic;
+  fill: #78716c;
+}
+.dgm svg .t-sm { font-size: 11px; fill: #78716c; }
+.dgm svg .t-acc { fill: #a16207; }
+.dgm svg .t-bad { fill: #b91c1c; }
+.dgm svg .t-ok  { fill: #15803d; }
+
+.dgm svg .box      { fill: #ffffff; stroke: #d6d3d1; stroke-width: 1; }
+.dgm svg .box-acc  { fill: #fefce8; stroke: #fde047; stroke-width: 1; }
+.dgm svg .box-bad  { fill: #fef2f2; stroke: #fecaca; stroke-width: 1; }
+.dgm svg .box-ok   { fill: #f0fdf4; stroke: #bbf7d0; stroke-width: 1; }
+.dgm svg .box-dark { fill: #1c1917; stroke: #292524; stroke-width: 1; }
+.dgm svg .box-dash { fill: #f9f8f6; stroke: #d6d3d1; stroke-width: 1; stroke-dasharray: 4 3; }
+
+.dgm svg .edge     { stroke: #a8a29e; stroke-width: 1.4; fill: none; }
+.dgm svg .edge-acc { stroke: #a16207; stroke-width: 1.6; fill: none; }
+.dgm svg .edge-bad { stroke: #dc2626; stroke-width: 1.6; fill: none; }
+.dgm svg .brace    { stroke: #a16207; stroke-width: 1.2; fill: none; stroke-dasharray: 4 3; }
+
+/* a horizontal pipeline of stages, in HTML */
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.flow-node {
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid #d6d3d1;
+  background: #fff;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2d2a26;
+  line-height: 1.35;
+}
+.flow-node.is-acc { background: #fefce8; border-color: #fde047; color: #a16207; }
+.flow-node.is-dim { background: #f9f8f6; border-style: dashed; color: #78716c; font-weight: 400; }
+.flow-node small {
+  display: block;
+  font-family: "Inter", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: #78716c;
+  margin-top: 0.2rem;
+}
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  color: #a16207;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0 0.1rem;
+}
+
+/* a decision, as nested HTML: each branch is a labelled row */
+.branch { list-style: none; margin: 0; padding: 0; }
+.branch > li { margin: 0.55rem 0; }
+.branch .branch { margin-left: 1.6rem; padding-left: 1rem; border-left: 2px solid #e7e5e4; }
+.yn {
+  display: inline-block;
+  min-width: 2.6rem;
+  text-align: center;
+  padding: 0.1rem 0.5rem;
+  margin-right: 0.6rem;
+  border-radius: 99px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.yn-y { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.yn-n { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.branch .q { font-weight: 600; color: #1c1917; }
+.branch .act { font-family: Menlo, Monaco, "Courier New", monospace; font-size: 0.85rem; }
+.branch .why { color: #78716c; font-size: 0.85rem; font-style: italic; }
+
+/* a directory tree, as nested lists */
+.ftree, .ftree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.75;
+}
+.ftree ul { margin-left: 1.1rem; padding-left: 0.9rem; border-left: 1px solid #e7e5e4; }
+.ftree b { font-weight: 700; color: #1c1917; }
+.ftree i { font-style: normal; color: #78716c; font-family: "Inter", sans-serif; font-size: 0.8rem; }
+.ftree code { white-space: normal; }
+
+/* steps of a proof, numbered, with the lemma each one cites */
+.plist { list-style: none; counter-reset: plist; margin: 0; padding: 0; }
+.plist > li {
+  counter-increment: plist;
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  gap: 0.5rem 0.9rem;
+  align-items: baseline;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #e7e5e4;
+}
+.plist > li:last-child { border-bottom: none; }
+.plist > li::before {
+  content: counter(plist) ".";
+  font-weight: 700;
+  color: #a16207;
+  font-size: 0.85rem;
+}
+.plist .cite {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 0.76rem;
+  color: #78716c;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .plist > li { grid-template-columns: 1.6rem 1fr; }
+  .plist .cite { grid-column: 2; text-align: left; }
+}
+
+/* Tables */
+/* A table is an exhibit, like a figure or a code block, so it gets the same
+   frame rather than floating between two paragraphs as loose rows. */
+.opts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2rem 0;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #e7e5e4;
+  border-radius: 0.6rem;
+  overflow: hidden;
+}
+.opts-table th,
+.opts-table td {
+  padding: 0.7rem 0.95rem;
+  text-align: left;
+  border-bottom: 1px solid #e7e5e4;
+  font-size: 0.9rem;
+  vertical-align: top;
+}
+.opts-table th {
+  font-weight: 700;
+  color: #78716c;
+  background: #faf9f7;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.opts-table tbody tr:nth-child(even) td {
+  background: rgba(250, 249, 247, 0.6);
+}
+.opts-table tr:last-child td {
+  border-bottom: none;
+}
+.opts-table tr:hover td {
+  background: #fefce8;
+}
+.opts-table code {
+  white-space: nowrap;
+}
+
+/* Tag pill */
+.tag-pill {
+  background: #fefce8;
+  color: #a16207;
+  padding: 0.3rem 0.8rem;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid #fef9c3;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Verdict badges — the three things a check can say */
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.verdict::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.verdict-ok {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.verdict-heap {
+  background: #fefce8;
+  color: #a16207;
+  border: 1px solid #fef08a;
+}
+.verdict-race {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* Section divider */
+.divider {
+  border: none;
+  border-top: 1px solid rgba(161, 98, 7, 0.2);
+  margin: 4rem 0;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #78716c;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: color 0.2s;
+}
+.breadcrumb:hover {
+  color: #a16207;
+}
+
+/* Step number */
+.step-num {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #fefce8;
+  border: 1px solid #fde047;
+  color: #a16207;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+a {
+  transition: color 0.2s;
+}
+.prose-link {
+  color: #a16207;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: #fde047;
+  text-underline-offset: 4px;
+}
+.prose-link:hover {
+  color: #1c1917;
+}
+
+/* ── the docs sidebar, injected by site.js ──────────────────────────────────
+   The top bar is `fixed`, so the page needs clearance below it, and the
+   sidebar is a fixed column on a wide screen and a plain block above the
+   content on a narrow one. The page body is pushed right, not re-wrapped,
+   so every page keeps its own centred `max-w-*` container. */
+
+:root {
+  --bar: 61px;      /* the fixed top bar: p-4 round text-xl, plus its border */
+  --side: 16rem;    /* the sidebar column */
+}
+
+body {
+  padding-top: calc(var(--bar) + 2.5rem);
+}
+
+#prl-side {
+  padding: 0 1.5rem 1rem;
+}
+
+.side-nav {
+  border-bottom: 1px solid #e7e5e4;
+  padding-bottom: 1rem;
+}
+
+.side-brand {
+  display: block;
+  font-family: Lora, Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: -0.01em;
+  color: #1c1917;
+  text-decoration: none;
+}
+.side-brand:hover {
+  color: #a16207;
+}
+
+.side-tag {
+  margin: 0.15rem 0 1.4rem;
+  font-size: 0.72rem;
+  font-weight: 300;
+  color: #a8a29e;
+}
+
+.side-head {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+.side-head:first-of-type {
+  margin-top: 0;
+}
+
+.side-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.side-list a {
+  display: block;
+  padding: 0.4rem 0.7rem;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  text-decoration: none;
+}
+.side-list a:hover {
+  background: #fefce8;
+}
+.side-list a[aria-current="page"] {
+  border-left-color: #a16207;
+  background: #fefce8;
+}
+
+.side-name {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: #44403c;
+  line-height: 1.35;
+}
+.side-list a:hover .side-name,
+.side-list a[aria-current="page"] .side-name {
+  color: #1c1917;
+}
+.side-list a[aria-current="page"] .side-name {
+  font-weight: 700;
+}
+
+.side-note {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 300;
+  color: #a8a29e;
+  line-height: 1.4;
+}
+
+@media (min-width: 1024px) {
+  body {
+    padding-left: var(--side);
+  }
+  #prl-side {
+    position: fixed;
+    top: var(--bar);
+    left: 0;
+    width: var(--side);
+    height: calc(100vh - var(--bar));
+    overflow-y: auto;
+    padding: 2rem 1.25rem 2rem 1.75rem;
+    border-right: 1px solid #e7e5e4;
+    background: rgba(255, 255, 255, 0.4);
+  }
+  .side-nav {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+/* ── the footer, injected by site.js ─────────────────────────────────────── */
+
+#prl-footer {
+  margin-top: 5rem;
+  border-top: 1px solid rgba(161, 98, 7, 0.2);
+  background: rgba(255, 255, 255, 0.4);
+}
+.foot-inner {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 3.5rem;
+}
+.foot-claim {
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.75;
+  color: #57534e;
+}
+.foot-claim strong {
+  font-weight: 700;
+  color: #1c1917;
+}
+.foot-links {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+}
+.foot-links a {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #57534e;
+  text-decoration: none;
+}
+.foot-links a:hover {
+  color: #a16207;
+}
+.foot-fine {
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: #a8a29e;
+}
+.foot-fine a {
+  color: #78716c;
+  text-decoration: underline;
+  text-decoration-color: #fde047;
+  text-underline-offset: 3px;
+}
+.foot-fine code {
+  font-size: 0.72rem;
+}
+
+/* A card in the "what is here" grid */
+.card {
+  display: block;
+  padding: 1.6rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #e7e5e4;
+  border-radius: 1rem;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.card:hover {
+  border-color: #fde047;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-2px);
+}
+.card h3 {
+  font-family: "Lora", serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #1c1917;
+  margin-bottom: 0.4rem;
+}
+.card p {
+  font-size: 0.9rem;
+  color: #57534e;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* footprint comparison (concept.html) */
+.t-col-head {
+  font-family: "Inter", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #78716c;
+  margin: 0 0 0.6rem;
+}
+.fp-table { border-collapse: collapse; width: 100%; }
+.fp-table td { padding: 0.4rem 0.5rem 0.4rem 0; vertical-align: baseline; }
+.fp-th {
+  font-family: "Inter", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #57534e;
+  white-space: nowrap;
+  padding-right: 0.9rem !important;
+}
+.fp-shared {
+  background: #fefce8;
+  border-bottom: 2px solid #fde047;
+  border-radius: 4px;
+  padding: 0.05rem 0.2rem;
+}
+.fp-note {
+  font-size: 0.78rem;
+  margin: 0.7rem 0 0;
+  font-family: "Inter", sans-serif;
+}
+.fp-note-ok { color: #15803d; }
+.fp-note-acc { color: #a16207; }
+.fp-clauses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e7e5e4;
+}
+.fp-clause {
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.5rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  font-size: 0.8rem;
+  color: #15803d;
+}
+.fp-clause code { background: transparent; color: inherit; padding: 0; }
+.fp-clause-free { background: #fefce8; border-color: #fde047; color: #a16207; }
+
+/* ── a verso-snippets embed ──────────────────────────────────────────────────
+   Every Lean block on the site is an iframe holding one self-contained snippet
+   from `web/snippets/`, built by `web/build-snippets.sh`. The frame is styled
+   exactly as on anirudhg07.github.io/src/projects/verso-snippets.html; the
+   snippet brings its own header, Copy, Try-it and View switcher. */
+
+.lean-embed {
+  margin: 2rem 0;
+  background-color: #1c1917;
+  border: 1px solid #292524;
+  border-radius: 0.6rem;
+  box-shadow: 0 2px 8px -2px rgba(28, 25, 23, 0.12);
+}
+/* Two embeds in a row are one exhibit in two parts, so they sit closer together
+   than either sits to the prose. */
+.lean-embed + .lean-embed {
+  margin-top: -0.5rem;
+}
+.lean-embed-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  background-color: #1c1917;
+  border-bottom: 1px solid #292524;
+  border-radius: calc(0.6rem - 1px) calc(0.6rem - 1px) 0 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #78716c;
+  font-family: "Inter", sans-serif;
+}
+.lean-embed-label::before {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background-color: #a16207;
+  flex-shrink: 0;
+}
+.lean-embed iframe {
+  display: block;
+  width: 100%;
+  border: none;
+  min-height: 220px;
+  background: #fff;
+  border-radius: 0 0 calc(0.6rem - 1px) calc(0.6rem - 1px);
+}
+
+/* Code is wider than prose. The embed cancels the section's own gutters so it
+   spans the full column, which is also what puts it over the 560px the snippet
+   needs to seat its infoview panel beside the code instead of under it. The
+   gutters are Tailwind's `px-6 md:px-12 lg:px-24`, less a margin so the frame
+   never touches the viewport edge. */
+@media (min-width: 768px) {
+  .lean-embed {
+    margin-left: -2rem;
+    margin-right: -2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .lean-embed {
+    margin-left: -6rem;
+    margin-right: -6rem;
+  }
+}
+
+/* ── page rhythm ─────────────────────────────────────────────────────────────
+   Nothing below adds an element; it changes the spacing and weight of the
+   markup already on the pages, which all carry Tailwind's own classes. The
+   problem being fixed is that every section had the same shape and the same
+   spacing, so a page gave the eye nothing to rank. */
+
+/* A section heading separates two sections, so most of its space belongs above
+   it. Tailwind's `mb-5` keeps the gap to the paragraph that follows. */
+main h2.serif {
+  margin-top: 4.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+main > section:first-of-type > h2.serif {
+  margin-top: 0;
+}
+main h3 {
+  margin-top: 2.5rem;
+}
+
+/* The first paragraph of the first section is the page's lead: set it larger and
+   lighter so a reader sees what the page is for before reading the page. */
+main > section:first-of-type > p:first-of-type {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  font-weight: 300;
+  color: #44403c;
+}
+

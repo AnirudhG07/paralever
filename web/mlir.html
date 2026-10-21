@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="MLIR generic form in, a race verdict out, validated by differential execution against an exact rational reference interpreter." />
+    <meta property="og:title" content="From MLIR — paralever" />
+    <meta property="og:description" content="MLIR generic form in, a race verdict out, validated by differential execution against an exact rational reference interpreter." />
+    <meta property="og:type" content="website" />
+    <title>From MLIR — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="mlir.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        From MLIR
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        Hand-translating a benchmark is the dominant threat to validity for any
+        claim measured on one, because the translation is part of what is being
+        measured and is itself unverified. Reading MLIR removes that threat by
+        making the translation mechanical and auditable.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- interface -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two stages, and only the second is ours</h2>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 830 230" role="img"
+             aria-label="Four producers all emit MLIR generic form, which one reader lowers to a Layout and a ParProg.">
+          <defs>
+            <marker id="ml-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="0" y="10" width="170" height="30" rx="8" />
+          <text class="t-sm" x="85" y="31" text-anchor="middle">C / C++</text>
+          <text class="t-note" x="182" y="31">cgeist</text>
+          <path class="edge" d="M292,27 H315" />
+          <rect class="box" x="0" y="50" width="170" height="30" rx="8" />
+          <text class="t-sm" x="85" y="71" text-anchor="middle">Fortran</text>
+          <text class="t-note" x="182" y="71">flang</text>
+          <path class="edge" d="M292,67 H315" />
+          <rect class="box" x="0" y="90" width="170" height="30" rx="8" />
+          <text class="t-sm" x="85" y="111" text-anchor="middle">a .mlir by hand</text>
+          <text class="t-note" x="182" y="111">by hand</text>
+          <path class="edge" d="M292,107 H315" />
+          <rect class="box" x="0" y="130" width="170" height="30" rx="8" />
+          <text class="t-sm" x="85" y="151" text-anchor="middle">SCF→Affine pass</text>
+          <text class="t-note" x="182" y="151">an MLIR pass</text>
+          <path class="edge" d="M292,147 H315" />
+
+          <path class="edge" d="M315,27 V147" />
+          <path class="edge" d="M315,85 H356" marker-end="url(#ml-arw)" />
+
+          <rect class="box" x="356" y="66" width="200" height="38" rx="8" />
+          <text x="456" y="90" text-anchor="middle">MLIR generic form</text>
+
+          <path class="edge-acc" d="M556,85 H616" marker-end="url(#ml-arw)" />
+
+          <rect class="box-acc" x="616" y="66" width="200" height="38" rx="8" />
+          <text class="t-acc" x="716" y="90" text-anchor="middle">a Paralever program</text>
+
+          <line class="brace" x1="588" y1="0" x2="588" y2="160" />
+
+          <text class="t-lab" x="0" y="186">STAGE 1 — NOT OURS</text>
+          <text class="t-note" x="0" y="205">off-the-shelf, and a text format:</text>
+          <text class="t-note" x="0" y="221">replaceable without touching anything downstream</text>
+
+          <text class="t-lab t-acc" x="616" y="186">STAGE 2 — MLIR/</text>
+          <text class="t-note" x="616" y="205">one artifact, in Lean,</text>
+          <text class="t-note" x="616" y="221">so it is the only thing to test</text>
+        </svg>
+        <figcaption>
+          N languages against one converter, instead of one front end per language.
+          Hand-translating a benchmark is the dominant threat to validity for any
+          claim measured on one, because the translation is part of what is being
+          measured and is itself unverified; this removes that threat by making the
+          translation mechanical and auditable.
+        </figcaption>
+      </figure>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>Generic form, not each dialect's own assembly.</strong>
+          <code>--mlir-print-op-generic</code> prints every operation the same way,
+          so one reader covers <code>affine</code>, <code>memref</code>,
+          <code>arith</code> and <code>func</code>. The custom form
+          (<code>affine.for %i = 0 to 8 { … }</code>) needs a parser per dialect,
+          which is what would make "one converter" false. Affine maps are the only
+          piece with their own grammar.
+        </p>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>Not LLVM IR.</strong> It sits below the level that can be
+          consumed here, for two independent reasons.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th></th><th>LLVM IR</th><th>MLIR affine/scf/memref</th></tr></thead>
+            <tbody>
+              <tr><td>Control flow</td><td>unstructured <code>br</code>, phi nodes</td><td>structured regions</td></tr>
+              <tr><td>Representable in <code>ParM</code>?</td><td>no — <code>ParM</code> is inductive, so arbitrary jumps have no encoding at all</td><td>yes</td></tr>
+              <tr><td>Affine maps</td><td>gone; a loop is a CFG</td><td>present, and they are what is needed</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          So consuming LLVM IR would mean writing a loop structurizer first, and
+          going through one <em>destroys</em> the information the lowering depends
+          on.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the alignment -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">An affine map is a footprint function</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          This is the alignment the design rests on. The N-ary fork lemma asks for
+          each thread's read and write sets as two lists of locations. An
+          <code>affine.store</code> already carries exactly that:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">mlir</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-mlir">"affine.store"(%v, %A, %i, %j) {map = affine_map&lt;(d0, d1) -> (d0, d1)&gt;}</code></pre>
+        </div>
+        <figure class="dgm">
+          <div class="flow">
+            <div class="flow-node">the map<small>at the index point <code>(i, j)</code></small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">a subscript<small><code>A[i, j]</code></small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node is-acc">one <code>Loc</code><small>a literal, not a bound</small></div>
+          </div>
+        </figure>
+        <p class="text-stone-600 leading-relaxed">
+          The map is evaluated at each point of the index box, so the footprint
+          stays <em>exact</em> — a literal location per access, not a bound on an
+          array. That is what keeps <code>wfB</code> able to accept the program at
+          all. A <code>memref.load</code> with a <em>computed</em> index gets the
+          data-dependent form instead, whose footprint is the whole array, and the
+          lowering records that in the module's notes rather than hiding it.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- what the lowering does -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What the lowering does</h2>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>MLIR</th><th>Paralever</th><th>Note</th></tr></thead>
+            <tbody>
+              <tr><td><code>affine.for</code>, constant bounds</td><td><code>block [...]</code></td><td>unrolled; <code>step</code> honoured</td></tr>
+              <tr><td><code>affine.parallel</code>, constant bounds</td><td><code>.par [...]</code></td><td>one thread per point of the index box, row-major</td></tr>
+              <tr><td><code>affine.load</code> / <code>affine.store</code> + <code>map</code></td><td><code>.load</code> / <code>.store</code></td><td>the map evaluates to a literal location</td></tr>
+              <tr><td><code>memref.load</code> / <code>store</code>, computed index</td><td><code>.loadAt</code> / <code>.storeAt</code></td><td>footprint is the whole array; recorded in the notes</td></tr>
+              <tr><td><code>memref.global</code>, <code>alloc</code>, <code>alloca</code></td><td>a buffer in the <code>Layout</code></td><td>shape from the memref type</td></tr>
+              <tr><td>a function's memref block arguments</td><td>a buffer each</td><td>these are the arrays the benchmark was handed</td></tr>
+              <tr><td><code>addi</code>, <code>muli</code>, <code>divsi</code>, <code>maxsi</code>, …</td><td>an arithmetic expression, folded when both sides are known</td><td></td></tr>
+              <tr><td><code>addf</code>, <code>mulf</code>, <code>divf</code>, …</td><td>the same over <code>Int</code>; exact over <code>ℚ</code> in the reference interpreter</td><td>marks the values inexact</td></tr>
+              <tr><td>a run of <code>async.execute</code> + the <code>await_all</code> closing it</td><td><code>.par [...]</code></td><td>one thread per region</td></tr>
+              <tr><td><code>affine.yield</code>, <code>func.return</code>, <code>memref.dealloc</code></td><td>nothing</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Buffers are placed in consecutive ranges, so array disjointness is
+          discharged once by the allocator rather than once per pair, and every
+          subscript is range-checked against its own buffer — without the check, an
+          out-of-range subscript would silently name a cell of the next buffer.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- a worked file -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">A worked file</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>doall-no.mlir</code> is <code>C[i] := A[i] + B[i]</code> over eight
+          points, every iteration independent.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">doall-no.mlir</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-mlir">"builtin.module"() ({
+  "memref.global"() {sym_name = "A", type = memref&lt;8xi32&gt;,
+                     initial_value = dense&lt;[1, 2, 3, 4, 5, 6, 7, 8]&gt;} : () -> ()
+  "memref.global"() {sym_name = "B", type = memref&lt;8xi32&gt;,
+                     initial_value = dense&lt;[10, 20, 30, 40, 50, 60, 70, 80]&gt;} : () -> ()
+  "func.func"() ({
+    %A = "memref.get_global"() {name = @A} : () -> memref&lt;8xi32&gt;
+    %B = "memref.get_global"() {name = @B} : () -> memref&lt;8xi32&gt;
+    %C = "memref.alloc"() : () -> memref&lt;8xi32&gt;
+    "affine.parallel"() ({
+    ^bb0(%i: index):
+      %0 = "affine.load"(%A, %i) {map = affine_map&lt;(d0) -> (d0)&gt;} : (memref&lt;8xi32&gt;, index) -> i32
+      %1 = "affine.load"(%B, %i) {map = affine_map&lt;(d0) -> (d0)&gt;} : (memref&lt;8xi32&gt;, index) -> i32
+      %2 = "arith.addi"(%0, %1) : (i32, i32) -> i32
+      "affine.store"(%2, %C, %i) {map = affine_map&lt;(d0) -> (d0)&gt;} : (i32, memref&lt;8xi32&gt;, index) -> ()
+      "affine.yield"() : () -> ()
+    }) {lowerBoundsMap = affine_map&lt;() -> (0)&gt;, steps = [1],
+        upperBoundsMap = affine_map&lt;() -> (8)&gt;} : () -> ()
+    "func.return"() : () -> ()
+  }) {function_type = () -> (), sym_name = "doall"} : () -> ()
+}) : () -> ()</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The <code>affine.parallel</code> unrolls to eight threads, each reading
+          its own cell of <code>A</code> and <code>B</code> and writing its own
+          cell of <code>C</code>. Read from Lean, the whole file is a program the
+          theorem applies to with nothing further to supply:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Mlir/Files.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="an MLIR file, lowered at elaboration time"
+                    src="snippets/mlir-doall.html"></iframe>
+          </div>
+          <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Examples/Mlir/Files.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="and the theorem that follows"
+                    src="snippets/mlir-theorem.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>mlir_prog</code> quotes the lowered program into the term at
+          elaboration time, exactly as <code>prl_file</code> does, so
+          <code>decide</code> sees a literal and never runs the reader.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the corpus -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Seven labelled pilots</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Each file is named for its ground truth in DataRaceBench's convention —
+          <code>-yes</code> has a race, <code>-no</code> does not — and the labels
+          are in the file headers, written before the verdicts were run. Every row
+          is a <code>#guard</code> in the build.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>File</th><th>Pattern</th><th>Label</th><th><code>wfB</code></th><th>Sites</th><th>Verdict</th></tr></thead>
+            <tbody>
+              <tr><td><code>doall-no</code></td><td>independent iterations</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>reduction-split-no</code></td><td>per-thread partials, then a join</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>nested-2d-no</code></td><td>a two-dimensional index box</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>stencil-f64-no</code></td><td>shared reads, floating point</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>antidep-yes</code></td><td>write-after-read across threads</td><td>racy</td><td>false</td><td>6</td><td><span class="verdict verdict-race">race</span></td></tr>
+              <tr><td><code>reduction-yes</code></td><td>a reduction with no reduction clause</td><td>racy</td><td>false</td><td>7</td><td><span class="verdict verdict-race">race</span></td></tr>
+              <tr><td><code>indirect-yes</code></td><td>an indirect write, <code>A[B[i]]</code></td><td>racy</td><td>false</td><td>3</td><td><span class="verdict verdict-race">race</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">#eval MLIR.Corpus.summary</span>
+          </div>
+          <pre><code class="language-console">expressible    7/7
+unsupported    []
+confusion      tp=3 fp=0 fn=0 tn=4
+precision gap  []
+over-approx    [indirect-yes]
+round trip     true</code></pre>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>Zero false negatives is not a tuning result.</strong> A false
+          negative would be a program the scan calls race-free that has a race, and
+          <code>raceSites_nil_iff</code> says the scan's emptiness is
+          <em>equivalent</em> to well-formedness. The <code>fn=0</code> cell is the
+          theorem showing up in a measurement, not evidence for it.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>over-approx [indirect-yes]</code> is the honest entry.
+          <code>A[B[i]]</code> has a footprint of all of <code>A</code>, so that
+          file is refused for its shape as much as for its race — it would be
+          refused even if the indices never met, which is the same
+          <a href="language.html" class="prose-link">precision cost</a> that
+          <code>scatter.prl</code> pays.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl p-6">
+          <p class="text-stone-900 font-bold mb-2">The corpus is hand-written.</p>
+          <p class="text-stone-600 leading-relaxed text-[0.95rem]">
+            Seven files, written against DataRaceBench's naming convention to
+            exercise the reader and the verdict path. Feeding it
+            Polygeist-emitted input from the real benchmark sources is the next
+            step and is not done. What the seven do establish is that the
+            interface is the right one: <code>expressible 7/7</code> with
+            <code>unsupported []</code> means no operation in any of them fell
+            outside the reader's rules.
+          </p>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- differential execution -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Differential execution</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          There is no preservation theorem for the lowering yet — the claim that
+          the <code>ParProg</code> means what the MLIR module means. Until there
+          is, the translation is validated by running the program twice: once as a
+          lowered <code>ParProg</code> over <code>Int</code>, and once through a
+          separate reference interpreter that evaluates the <em>same</em> module
+          over <code>ℚ</code>, exactly. The two heaps are compared cell by cell.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Program</th><th>The two runs</th><th>What a disagreement means</th></tr></thead>
+            <tbody>
+              <tr><td>race-free, integral</td><td>must agree</td><td>a lowering bug</td></tr>
+              <tr><td>race-free, floating point</td><td>disagree by the <code>Int</code> truncation</td><td>the divergence the notes already named</td></tr>
+              <tr><td>racy</td><td>may disagree</td><td>a second, independent witness of the race</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The last row is the anti-vacuity obligation discharged through MLIR. On
+          <code>reduction-yes</code> the reference run takes the canonical schedule
+          and reaches <code>sum = 36</code>; the threaded run reaches something
+          else. The program the verdict rejects really does depend on its schedule.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          The converse case is on the same corpus, and matters just as much:
+          <code>antidep-yes</code> is racy and <em>both</em> runs give
+          <code>A = [1, 1, 1, 1, 1, 1, 1, 0]</code>, because at this heap every
+          schedule reads a <code>0</code> and writes a <code>1</code>. Agreement is
+          therefore not evidence of race-freedom. The verdict comes from the scan;
+          the differential run only ever tests the translation.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- what it refuses -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What it refuses</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Each of these produces a named error rather than a plausible-looking
+          lowering, and the list of unhandled operation names a file contains is
+          itself an output — so what is missing gets <em>counted</em> rather than
+          discovered one benchmark at a time.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Refused</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td>multi-block regions, successor lists</td><td>unstructured control flow, which an inductive <code>ParM</code> cannot encode</td></tr>
+              <tr><td><code>scf.if</code>, <code>affine.if</code></td><td>the conditional tests a value against zero, and the expression language has no comparison operator, so a condition from <code>arith.cmpi</code> has nowhere to go</td></tr>
+              <tr><td><code>omp.parallel</code>, <code>omp.wsloop</code></td><td>not read yet; <code>affine.parallel</code> is the marker the lowering uses</td></tr>
+              <tr><td><code>func.call</code></td><td>no interprocedural handling — also why a module with several functions and no <code>main</code> is refused rather than guessed at</td></tr>
+              <tr><td>dynamic memref dimensions</td><td>no shape to place a buffer from</td></tr>
+              <tr><td>layout maps, memory spaces</td><td>strides other than row-major are not modelled</td></tr>
+              <tr><td>a computed subscript on a multi-dimensional memref</td><td>would need <code>i·stride + j</code> as an expression, and the array-reference form takes one index</td></tr>
+              <tr><td>an <code>async.execute</code> whose token is awaited later than the next operation</td><td><code>par</code> joins <em>where it is written</em>; a token awaited later joins later, so reading one as the other would be a different program</td></tr>
+              <tr><td>an <code>async.execute</code> with operands, or a region with arguments</td><td>a dependency token or a captured value; a thread's inputs are the heap and the registers it forked with</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          The <code>async.execute</code> refusal is the load-bearing one, and it is
+          worth stating why. <code>affine.parallel</code> gives one thread per
+          point of an index box, every thread running the <em>same</em> region at a
+          different index. An unrolled program has no such uniformity —
+          <code>parallel { A[0] := 1 } | { A[1] := 2 }</code> is two different
+          bodies — so it has no <code>affine.parallel</code> spelling at all, and
+          the <code>async</code> dialect is MLIR's own construct for that shape.
+          There, a fork is a <em>group</em> of operations closed by the await that
+          names their tokens, and only that exact shape is read.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- emit -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Generic form out</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The other direction: a layout and a program as a module. A buffer becomes
+          a <code>memref.global</code> with its contents, the body goes in
+          <code>func.func @main</code> after one <code>memref.get_global</code> per
+          buffer, and a fork becomes the <code>async.execute</code> group above.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">a fork, emitted</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-mlir">%0 = "async.execute"() ({ …thread 0… "async.yield"() }) : () -> (!async.token)
+%1 = "async.execute"() ({ …thread 1… "async.yield"() }) : () -> (!async.token)
+     "async.await_all"(%0, %1) {paralever.label = "chunked sum"} : (…) -> ()</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Two things change on the way out, and the emitted file says so in its
+          header. Registers are assignable and SSA values are not, so a register
+          assignment with no memory in it disappears into whatever reads it, and
+          the registers that remain come back renumbered. And a computed subscript
+          wraps on the buffer's length where MLIR's does not, so the two agree on
+          every index in range — which is every index a race-free program uses.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          The gate is therefore not a tree comparison. The module is emitted, read
+          back, and compared on everything a theorem would use: the memory, the
+          footprint, the verdict, and the heap a sequential run leaves. Comparing
+          trees would fail on the renumbering and tell you nothing.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="cli.html"><h3>The command line →</h3><p>Every command takes a <code>.prl</code> file or a <code>.mlir</code> module; <code>to-prl</code> and <code>to-mlir</code> convert between them.</p></a>
+          <a class="card" href="races.html"><h3>Finding races →</h3><p>The scan whose completeness is what <code>fn=0</code> reports.</p></a>
+          <a class="card" href="language.html"><h3>The language →</h3><p>Writing the program directly, in Paralever's own language.</p></a>
+          <a class="card" href="lean.html"><h3>The Lean library →</h3><p><code>MLIR/</code> module by module.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

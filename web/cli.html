@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="check, run, race, autopar, prove, and the two conversions — one file in, and either a verdict or a Lean module that proves it." />
+    <meta property="og:title" content="The command line — paralever" />
+    <meta property="og:description" content="check, run, race, autopar, prove, and the two conversions — one file in, and either a verdict or a Lean module that proves it." />
+    <meta property="og:type" content="website" />
+    <title>The command line — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="cli.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        The command line
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        One file in, and one of four things out: a verdict, a run, a
+        parallelization, or a Lean file that proves the program's parallel reading
+        equals its sequential one. The last is the point of the tool.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <section>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          A checker that prints <em>race-free</em> is a linter, and you believe it
+          or you do not. A tool that writes a module which Lean then checks is
+          different in kind, because the claim leaves with its proof attached.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">lake build paralever                      # ./.lake/build/bin/paralever
+
+paralever check   Examples/Language/sum.prl
+paralever prove   Examples/Language/sum.prl -o Proofs/Sum.lean --check
+paralever to-mlir Examples/Language/sum.prl -o sum.mlir
+paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- both front ends -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Both front ends, one program</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Every command takes a <code>.prl</code> file or a <code>.mlir</code>
+          module in generic form, because both compile to the same pair — a
+          <code>Layout</code> saying where the buffers are, and an unrolled
+          <code>ParProg</code>.
+        </p>
+        <figure class="dgm">
+        <svg viewBox="0 0 830 270" role="img"
+             aria-label="Both front ends compile to one Layout and ParProg, and every command is written once against that pair.">
+          <defs>
+            <marker id="cl-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="0" y="86" width="160" height="30" rx="8" />
+          <text class="t-sm" x="80" y="106" text-anchor="middle">sum.prl</text>
+          <text class="t-note" x="172" y="106">Prl.Compile</text>
+          <path class="edge" d="M268,101 H300" />
+
+          <rect class="box" x="0" y="132" width="160" height="30" rx="8" />
+          <text class="t-sm" x="80" y="152" text-anchor="middle">doall-no.mlir</text>
+          <text class="t-note" x="172" y="152">MLIR.Lower</text>
+          <path class="edge" d="M268,147 H300" />
+
+          <path class="edge" d="M300,101 V147" />
+          <path class="edge" d="M300,124 H326" marker-end="url(#cl-arw)" />
+
+          <rect class="box-acc" x="330" y="105" width="200" height="38" rx="8" />
+          <text class="t-acc" x="430" y="129" text-anchor="middle">a Paralever program</text>
+
+          <path class="edge-acc" d="M530,124 H560" />
+          <path class="edge" d="M560,22 V230" />
+
+          <path class="edge" d="M560,22 H586" marker-end="url(#cl-arw)" />
+          <rect class="box" x="590" y="0" width="240" height="44" rx="8" />
+          <text class="t-sm" x="710" y="22" text-anchor="middle">check</text>
+          <text class="t-note" x="710" y="39" text-anchor="middle">the verdict</text>
+          <path class="edge" d="M560,74 H586" marker-end="url(#cl-arw)" />
+          <rect class="box" x="590" y="52" width="240" height="44" rx="8" />
+          <text class="t-sm" x="710" y="74" text-anchor="middle">run</text>
+          <text class="t-note" x="710" y="91" text-anchor="middle">the heap it leaves</text>
+          <path class="edge" d="M560,126 H586" marker-end="url(#cl-arw)" />
+          <rect class="box" x="590" y="104" width="240" height="44" rx="8" />
+          <text class="t-sm" x="710" y="126" text-anchor="middle">autopar</text>
+          <text class="t-note" x="710" y="143" text-anchor="middle">the parallelized .prl</text>
+          <path class="edge" d="M560,178 H586" marker-end="url(#cl-arw)" />
+          <rect class="box" x="590" y="156" width="240" height="44" rx="8" />
+          <text class="t-sm" x="710" y="178" text-anchor="middle">prove</text>
+          <text class="t-note" x="710" y="195" text-anchor="middle">a .lean file</text>
+          <path class="edge" d="M560,230 H586" marker-end="url(#cl-arw)" />
+          <rect class="box" x="590" y="208" width="240" height="44" rx="8" />
+          <text class="t-sm" x="710" y="230" text-anchor="middle">to-prl / to-mlir / to-lean</text>
+          <text class="t-note" x="710" y="247" text-anchor="middle">the program, converted</text>
+        </svg>
+        <figcaption>
+          Which front end the file came through matters in exactly one place: the
+          generated proof module has to read the source again, so it names it with
+          <code>prl_file</code> or with <code>mlir_prog</code>. Everything else is
+          written once.
+        </figcaption>
+      </figure>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the commands -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The commands</h2>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Command</th><th>What it prints</th></tr></thead>
+            <tbody>
+              <tr><td><code>check FILE</code></td><td>memory, reads, writes, thread count, rounds, verdict</td></tr>
+              <tr><td><code>run FILE [--threads]</code></td><td>the heap after a run, buffer by buffer</td></tr>
+              <tr><td><code>race FILE</code></td><td>the interleaving that reaches <code>wrong</code>, step by step</td></tr>
+              <tr><td><code>autopar FILE</code></td><td>the parallelized program as <code>.prl</code>, with the plan's numbers</td></tr>
+              <tr><td><code>prove FILE</code></td><td>a Lean module stating what holds of the program</td></tr>
+              <tr><td><code>to-prl FILE</code></td><td>the program as <code>.prl</code></td></tr>
+              <tr><td><code>to-mlir FILE</code></td><td>the program as MLIR generic form</td></tr>
+              <tr><td><code>to-lean FILE</code></td><td>a <code>Layout</code> and a <code>paralever { … }</code> block</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Option</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>-o PATH</code></td><td>write there instead of to standard output</td></tr>
+              <tr><td><code>--threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
+              <tr><td><code>--autopar</code></td><td>make <code>prove</code>, <code>to-mlir</code> and <code>to-lean</code> take the parallelized program as their subject</td></tr>
+              <tr><td><code>--check</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
+              <tr><td><code>--colour</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>check</code> exits 1 when the program has a race, so a build can
+          gate on it:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">for f in Examples/Language/*.prl; do paralever check "$f" || echo "$f is racy"; done</code></pre>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- prove -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>prove</code> writes</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Three cases, and no choice about which one applies. The program decides,
+          by which check it passes.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-8">
+          <table class="opts-table">
+            <thead><tr><th>The program</th><th>The theorem</th><th>How</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>wfB = true</code></td>
+                <td><code>ParSeqEq</code> at <strong>every</strong> heap and register file</td>
+                <td><code>ParProg.par_seq_eq (by decide) ρ σ</code></td>
+              </tr>
+              <tr>
+                <td><code>wfB = false</code>, but the exact check accepts at the declared heap</td>
+                <td><code>ParSeqEq</code> at <strong>that</strong> heap</td>
+                <td><code>parSeqEq_of_runSeq_eq</code> from the exact check</td>
+              </tr>
+              <tr>
+                <td>both refuse</td>
+                <td>no theorem; both refusals, proved</td>
+                <td><code>by decide</code> on each</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3">The first case, which is what the library is for</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>wfB</code> decides Bernstein's condition at every <code>par</code>
+          node by reading the syntax, so it holds at every heap — and that is
+          exactly <code>par_seq_eq</code>'s hypothesis.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
+            <iframe class="lean-demo" loading="lazy" title="prove sum.prl — the wfB route"
+                    src="snippets/proof-sum.html"></iframe>
+          </div>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">The second case: a computed address</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>dst[%i]</code> has a footprint of <em>all</em> of
+          <code>dst</code>, because the index is not known from the syntax, so two
+          threads that write distinct cells still look like they collide and
+          <code>wfB</code> refuses. The per-heap check measures the accesses along
+          the canonical run instead, and accepts — which buys the equivalence at
+          the heap the file declares, and nowhere else.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
+            <iframe class="lean-demo" loading="lazy" title="prove scatter.prl — the per-heap route"
+                    src="snippets/proof-scatter.html"></iframe>
+          </div>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">The third case: a real race</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The generated file says so and proves both refusals. No theorem of this
+          shape exists for such a program: its parallel reading reaches
+          <code>wrong</code>, which is no terminating outcome, while its sequential
+          reading terminates. <code>paralever race FILE</code> prints the
+          interleaving that does it.
+        </p>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">With <code>--autopar</code>, one more theorem — and the strongest</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Here is the module the tool wrote for <code>chain.prl</code>, verbatim.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · written by paralever prove --autopar</div>
+            <iframe class="lean-demo" loading="lazy" title="prove --autopar chain.prl"
+                    src="snippets/proof-chain.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          And what <code>--check</code> reports on it:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+          </div>
+          <pre><code class="language-console">$ paralever prove Examples/Language/chain.prl --autopar -o /tmp/Chain.lean --check
+written to /tmp/Chain.lean
+lake env lean /tmp/Chain.lean
+/tmp/Chain.lean: Lean accepts it</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Three details of the generated module. It reads the source through
+          <code>prl_file</code> or <code>mlir_prog</code>, which compile the file
+          <em>while the module elaborates</em>, so <code>by decide</code> sees a
+          program literal and never runs the reader. The path it names is relative
+          to the module's own directory when the two live in one tree, and absolute
+          otherwise. And <code>--check</code> shells out to
+          <code>lake env lean</code>, so the tool reports Lean's verdict rather
+          than its own.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the reports -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The four reports, also inside Lean</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The executable is a thin wrapper. The same four views are
+          <code>#eval</code>s over a program read at elaboration time, so a file
+          can be the subject of a theorem without a build step in between.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-8">
+          <table class="opts-table">
+            <thead><tr><th>View</th><th>What it prints</th></tr></thead>
+            <tbody>
+              <tr><td><code>checkReport</code></td><td>declared memory, footprint by name, thread count, rounds, verdict</td></tr>
+              <tr><td><code>runReport</code></td><td>the buffers after a run, sequential or on real threads</td></tr>
+              <tr><td><code>raceReport</code></td><td>the interleaving that realizes a race, replayed against <code>step</code></td></tr>
+              <tr><td><code>parReport</code></td><td>the rewrite's output as <code>.prl</code>, with the plan's numbers</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever run Examples/Language/sum.prl</span>
+          </div>
+          <pre><code class="language-console">A [6] @0  [1, 2, 3, 4, 5, 6]
+out [3] @6  [3, 7, 11]</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          With <code>--threads</code> the same program runs one <code>Task</code>
+          per thread of every fork, and prints the same table. That is not luck:
+          <code>runTask_eq</code> proves the threaded run leaves the heap the
+          canonical order leaves, for every program <code>wfB</code> accepts.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- conversions -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The two conversions</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>to-prl</code> on a <code>.mlir</code> file and
+          <code>to-mlir</code> on a <code>.prl</code> file are the same program
+          printed by the other front end's printer, with the reader's
+          approximations as comments at the top. Here is
+          <code>doall-no.mlir</code> coming back as <code>.prl</code>, its
+          <code>affine.parallel</code> unrolled into eight threads:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever to-prl Examples/Mlir/doall-no.mlir</span>
+          </div>
+          <pre><code class="language-prl">buf A[8] = 1, 2, 3, 4, 5, 6, 7, 8
+buf B[8] = 10, 20, 30, 40, 50, 60, 70, 80
+buf C[8]
+
+parallel {
+  %0 := A[0]
+  %1 := B[0]
+  C[0] := (%0 + %1)
+} | {
+  %0 := A[1]
+  %1 := B[1]
+  C[1] := (%0 + %1)
+} | {
+  …six more threads…
+}</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A full cycle changes one thing: MLIR globals must carry an initial value,
+          so a buffer the <code>.prl</code> file left implicit comes back as
+          <code>buf out[4] = 0, 0, 0, 0</code>.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          What <code>to-mlir</code> cannot do is refuse quietly. Three programs
+          have no generic form in the supported operation set, and each gets a
+          named error: a file with a conditional or a loop, a computed subscript
+          into a multi-dimensional buffer, and a layout where a <code>free</code>
+          returned space so two buffers share cells — two MLIR globals cannot
+          alias.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- limits -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Limits</h2>
+        <ul class="list-none space-y-4">
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900"><code>prove</code> writes; Lean checks.</strong>
+              Without <code>--check</code> the tool does not run Lean, so a module
+              it writes for a large program can still be slow to check or exceed
+              the recursion bound — <code>decide</code> reduces the program against
+              a heap. The generated module raises the bound and says why.
+            </p>
+          </li>
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900"><code>--check</code> needs the repository.</strong>
+              It shells out to <code>lake env lean</code>, so it has to run from a
+              directory where <code>lake</code> resolves this package.
+            </p>
+          </li>
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">One function per module.</strong>
+              An MLIR file with several functions and none called
+              <code>main</code> is refused rather than guessed at, because
+              interprocedural calls are not supported.
+            </p>
+          </li>
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">The subject is the whole program.</strong>
+              There is no option to name an entry region; a labelled region is
+              reachable from Lean with <code>ParProg.findLabel</code>.
+            </p>
+          </li>
+          <li class="flex gap-3 items-start">
+            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">Registers come back renumbered through MLIR.</strong>
+              SSA values are not assignable, so a register assignment with no
+              memory in it is inlined into whatever reads it. The program's memory,
+              footprint, verdict and heap are unchanged, which is what the
+              round-trip gate compares.
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="language.html"><h3>The language →</h3><p>What a <code>.prl</code> file can say, and what it cannot.</p></a>
+          <a class="card" href="autopar.html"><h3>Autoparallelization →</h3><p>Where <code>--autopar</code>'s extra theorem comes from.</p></a>
+          <a class="card" href="races.html"><h3>Finding races →</h3><p>What <code>race</code> prints, and the two tactics that do the same job on a goal.</p></a>
+          <a class="card" href="lean.html"><h3>The Lean library →</h3><p>Building it, and where each piece lives.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

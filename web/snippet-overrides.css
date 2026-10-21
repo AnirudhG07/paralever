@@ -1,0 +1,67 @@
+/* Appended to every file `web/build-snippets.sh` renders, after the snippet's own
+   style element, so these rules win by the cascade. Three things are wrong by default
+   when a snippet is embedded in an iframe rather than opened as a page:
+
+   1. verso-snippets stacks the infoview panel BELOW the code under 720px, and an
+      iframe inside a prose column is narrower than that, so the panel never sat
+      beside the code. The stack point moves to 560px — a phone, which is what it
+      was for.
+   2. Long lines scrolled horizontally inside the box. A scrollbar inside a frame
+      inside a page is not reachable; the lines wrap instead, with a hanging
+      indent so a wrapped continuation is visibly not a new line of code.
+   3. The snippet is a page, so it centres itself in 880px and pads for a window.
+      Inside the frame it should fill the width it is given.
+
+   Regenerate with ./web/build-snippets.sh — editing a file under web/snippets/
+   by hand is lost on the next build. -- ref: docs/website.md */
+
+/* ── fill the frame ──────────────────────────────────────────────────────── */
+body {
+  max-width: none;
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ── the panel sits beside the code, not under it ────────────────────────── */
+@media (min-width: 560px) {
+  .snippet-layout {
+    flex-direction: row;
+  }
+  .snippet-layout > .lean-snippet > code.hl.lean.block {
+    border-radius: 8px 0 0 8px;
+    border-right: none;
+    border-bottom: 1px solid #d0d7de;
+  }
+  .info-panel-cell {
+    min-height: 0;
+  }
+  .info-panel {
+    position: absolute;
+    border-left: 4px solid #0969da;
+    border-top: 1px solid #d0d7de;
+    border-radius: 0 8px 8px 0;
+    max-height: none;
+  }
+}
+
+/* ── wrap, do not scroll ─────────────────────────────────────────────────── */
+code.hl.lean.block,
+body.slide .snippet-layout > .lean-snippet > code.hl.lean.block {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
+  /* A wrapped continuation is indented past the deepest normal indent, so it
+     reads as the same line of code rather than the next one. */
+  padding-left: 3.2rem;
+  text-indent: -2.2rem;
+  tab-size: 2;
+}
+
+/* ── a little less page, a little more code ──────────────────────────────── */
+.snippet-layout {
+  margin: 0;
+}
+.snippet-header {
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+}

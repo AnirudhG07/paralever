@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A sequential chain becomes a tree of forks, and the rewrite is proved to preserve the heap for every input program — with no hypothesis at all." />
+    <meta property="og:title" content="Autoparallelization — paralever" />
+    <meta property="og:description" content="A sequential chain becomes a tree of forks, and the rewrite is proved to preserve the heap for every input program — with no hypothesis at all." />
+    <meta property="og:type" content="website" />
+    <title>Autoparallelization — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="autopar.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        Autoparallelization
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        The common case is a program nobody parallelized. An untrusted analysis
+        proposes a tree of forks; a proved gate decides whether to take it. The
+        resulting theorem has no hypothesis, because the pass returns the program
+        unchanged when its own check fails.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- the theorem first -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The theorem</h2>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/AutoPar/Rewrite.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="rewrite_sound — no hypothesis"
+                    src="snippets/rewrite-sound.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          No hypothesis. For <em>every</em> program <code>p</code>, the rewritten
+          program read in parallel leaves exactly the heap the original leaves read
+          sequentially. That is possible only because <code>rewrite</code> checks
+          its own plan and returns <code>p</code> untouched when the check fails:
+          the analysis is untrusted and the gate is proved, which is the same
+          architecture as the
+          <a href="races.html" class="prose-link">race search</a>.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The equation is about the <em>heap</em>, not the pair. At a fork,
+          <code>execPar</code> hands the continuation the pre-fork register file,
+          so there is nothing to say about registers afterwards.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          <code>rewrite_sound</code> is about one schedule, the reference one. A
+          companion lemma, <code>rewrite_wf</code>, carries <code>wfB</code>
+          through the rewrite and feeds <code>par_seq_eq</code>, so
+          <code>rewrite_parSeqEq</code> gives every schedule.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- worked example -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">One file, start to finish</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>chain.prl</code> is two independent squaring computations written
+          interleaved, then a join that reads both. Nothing in it is marked
+          parallel.
+        </p>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">chain.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">buf a[5]
+
+a[0] := 3
+a[1] := 4
+%0 := a[0]
+a[2] := %0 * %0
+%1 := a[1]
+a[3] := %1 * %1
+%2 := a[2]
+%3 := a[3]
+a[4] := %2 + %3</code></pre>
+        </div>
+
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever autopar Examples/Language/chain.prl</span>
+          </div>
+          <pre><code class="language-console">buf a[5]
+
+parallel {
+  a[0] := 3
+} | {
+  a[1] := 4
+}
+parallel {
+  %0 := a[0]
+  a[2] := (%0 * %0)
+} | {
+  %1 := a[1]
+  a[3] := (%1 * %1)
+}
+parallel {
+  %2 := a[2]
+  %3 := a[3]
+  a[4] := (%2 + %3)
+}
+
+-- units 5, stages 3, depth 6 (sequential 9, lower bound 6)
+-- committed true, optimal true</code></pre>
+        </div>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Ten statements became five scheduling units in three stages. The depth
+          fell from 9 memory operations to 6, and <code>optimal true</code> is not
+          an estimate: 6 is the critical path of the dependence DAG, and no
+          schedule of those units — fork–join or otherwise — can do better.
+        </p>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 830 300" role="img"
+             aria-label="Five register-closed units group into three stages: units one and two, units three and four, then unit five alone.">
+          <defs>
+            <marker id="ap-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <text class="t-lab" x="0" y="70">UNITS</text>
+          <text class="t-lab" x="0" y="162">STAGES</text>
+          <text class="t-lab" x="0" y="230">EMIT</text>
+
+          <text class="t-lab" x="148" y="22" text-anchor="middle">u₁</text>
+          <rect class="box" x="80" y="30" width="136" height="70" rx="8" />
+          <text class="t-sm" x="148" y="50" text-anchor="middle">a[0] := 3</text>
+          <text class="t-lab" x="298" y="22" text-anchor="middle">u₂</text>
+          <rect class="box" x="230" y="30" width="136" height="70" rx="8" />
+          <text class="t-sm" x="298" y="50" text-anchor="middle">a[1] := 4</text>
+          <text class="t-lab" x="448" y="22" text-anchor="middle">u₃</text>
+          <rect class="box" x="380" y="30" width="136" height="70" rx="8" />
+          <text class="t-sm" x="448" y="50" text-anchor="middle">%0 := a[0]</text>
+          <text class="t-sm" x="448" y="69" text-anchor="middle">a[2] := %0*%0</text>
+          <text class="t-lab" x="598" y="22" text-anchor="middle">u₄</text>
+          <rect class="box" x="530" y="30" width="136" height="70" rx="8" />
+          <text class="t-sm" x="598" y="50" text-anchor="middle">%1 := a[1]</text>
+          <text class="t-sm" x="598" y="69" text-anchor="middle">a[3] := %1*%1</text>
+          <text class="t-lab" x="748" y="22" text-anchor="middle">u₅</text>
+          <rect class="box" x="680" y="30" width="136" height="70" rx="8" />
+          <text class="t-sm" x="748" y="50" text-anchor="middle">%2 := a[2]</text>
+          <text class="t-sm" x="748" y="69" text-anchor="middle">%3 := a[3]</text>
+          <text class="t-sm" x="748" y="88" text-anchor="middle">a[4] := %2+%3</text>
+
+          <path class="edge" d="M148,100 V118 H223 V140" marker-end="url(#ap-arw)" />
+          <path class="edge" d="M298,100 V118 H223 V140" />
+          <path class="edge" d="M448,100 V118 H523 V140" marker-end="url(#ap-arw)" />
+          <path class="edge" d="M598,100 V118 H523 V140" />
+          <path class="edge" d="M748,100 V140" marker-end="url(#ap-arw)" />
+
+          <rect class="box-acc" x="123" y="140" width="200" height="30" rx="8" />
+          <text class="t-acc t-sm" x="223" y="160" text-anchor="middle">stage 1</text>
+          <rect class="box-acc" x="423" y="140" width="200" height="30" rx="8" />
+          <text class="t-acc t-sm" x="523" y="160" text-anchor="middle">stage 2</text>
+          <rect class="box-acc" x="680" y="140" width="136" height="30" rx="8" />
+          <text class="t-acc t-sm" x="748" y="160" text-anchor="middle">stage 3</text>
+
+          <line class="brace" x1="80" y1="195" x2="816" y2="195" />
+
+          <text class="t-sm" x="80" y="222">parallel { u₁ } | { u₂ }</text>
+          <text class="t-sm" x="80" y="244">parallel { u₃ } | { u₄ }</text>
+          <text class="t-sm" x="80" y="266">parallel { u₅ }</text>
+        </svg>
+        <figcaption>
+          Units group into threads, threads group into stages, and nothing moves
+          past anything. A unit is a register-closed segment, so
+          <code>%0 := a[0]</code> and the store that consumes <code>%0</code> are
+          one unit and are never split across a fork. Depth 6 against a sequential
+          9, and 6 is the dependence DAG's critical path, so this plan is optimal.
+        </figcaption>
+      </figure>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the pass -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The pass, in four steps</h2>
+
+        <figure class="dgm">
+        <svg viewBox="0 0 830 150" role="img"
+             aria-label="A hand-written program becomes a ParProg, is cut into units, planned into stages and threads, emitted as a ParProg again and printed back as .prl; rewrite_sound relates the two ParProgs.">
+          <defs>
+            <marker id="ap2-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <path class="edge" d="M155,54 H169" marker-end="url(#ap2-arw)" />
+          <path class="edge" d="M277,54 H291" marker-end="url(#ap2-arw)" />
+          <path class="edge" d="M411,54 H425" marker-end="url(#ap2-arw)" />
+          <path class="edge" d="M561,54 H575" marker-end="url(#ap2-arw)" />
+          <path class="edge" d="M683,54 H697" marker-end="url(#ap2-arw)" />
+
+          <rect class="box" x="15" y="30" width="140" height="48" rx="8" />
+          <text x="85" y="52" text-anchor="middle">paralever { … }</text>
+          <text class="t-note" x="85" y="69" text-anchor="middle">written by hand</text>
+          <rect class="box-acc" x="173" y="30" width="104" height="48" rx="8" />
+          <text class="t-acc" x="225" y="52" text-anchor="middle">ParProg</text>
+          <text class="t-note" x="225" y="69" text-anchor="middle">a tree</text>
+          <rect class="box" x="295" y="30" width="116" height="48" rx="8" />
+          <text x="353" y="52" text-anchor="middle">units</text>
+          <text class="t-note" x="353" y="69" text-anchor="middle">segments</text>
+          <rect class="box" x="429" y="30" width="132" height="48" rx="8" />
+          <text x="495" y="52" text-anchor="middle">plan</text>
+          <text class="t-note" x="495" y="69" text-anchor="middle">stages × threads</text>
+          <rect class="box-acc" x="579" y="30" width="104" height="48" rx="8" />
+          <text class="t-acc" x="631" y="52" text-anchor="middle">ParProg</text>
+          <text class="t-note" x="631" y="69" text-anchor="middle">a tree</text>
+          <rect class="box" x="701" y="30" width="96" height="48" rx="8" />
+          <text x="749" y="52" text-anchor="middle">.prl</text>
+          <text class="t-note" x="749" y="69" text-anchor="middle">surface</text>
+
+          <path class="brace" d="M225,78 V112 H631 V78" />
+          <rect class="box-acc" x="352" y="98" width="152" height="28" rx="8" />
+          <text class="t-acc t-sm" x="428" y="117" text-anchor="middle">rewrite_sound</text>
+        </svg>
+        <figcaption>
+          The pass is untrusted and the gate is proved, so the theorem can relate
+          the two ends with no hypothesis: <code>rewrite</code> emits the planned
+          tree only when its own check passes, and returns the input otherwise.
+          Entry point <code>rewrite</code>; round trip <code>surface</code> and
+          <code>report</code>.
+        </figcaption>
+      </figure>
+
+        <div class="space-y-6 mt-8">
+          <div class="flex gap-4 items-start">
+            <div class="step-num">1</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1"><code>flatten</code> — the <code>;</code>-chain as a list</p>
+              <p class="text-stone-600 leading-relaxed">
+                A <code>parallel</code> block counts as one statement; the pass
+                does not descend into it.
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">2</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1"><code>atoms</code> — regroup into register-closed segments</p>
+              <p class="text-stone-600 leading-relaxed">
+                A boundary may be placed after a prefix only when no register that
+                prefix writes is still live in what follows. Liveness kills on
+                <em>must</em>-writes, not may-writes: a conditional's write set is
+                the union of its branches and only one branch runs, so killing on
+                the union would under-approximate what is live, which is unsound.
+                Without the kill, a reused <code>%0</code> would look live across
+                the whole program and no boundary would ever be legal.
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">3</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1"><code>plan</code> — one left-to-right fold</p>
+              <p class="text-stone-600 leading-relaxed mb-3">
+                For each unit, the three ways a dependence can fall are the three
+                cases:
+              </p>
+              <figure class="dgm" style="margin-top:0">
+                <ul class="branch">
+                  <li>
+                    <span class="q">Does the unit conflict with an earlier thread of this stage?</span>
+                    <ul class="branch">
+                      <li>
+                        <span class="yn yn-y">yes</span>
+                        <span class="act">close the stage</span>
+                        <span class="why">— only a join can order them</span>
+                      </li>
+                      <li>
+                        <span class="yn yn-n">no</span>
+                        <span class="q">Does it conflict with the thread being built?</span>
+                        <ul class="branch">
+                          <li>
+                            <span class="yn yn-y">yes</span>
+                            <span class="act">extend that thread</span>
+                          </li>
+                          <li>
+                            <span class="yn yn-n">no</span>
+                            <span class="act">open a new thread beside it</span>
+                          </li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </figure>
+              <p class="text-stone-600 leading-relaxed">
+                Greedy prefix grouping, the obvious alternative, gets a depth of 5
+                on the two-interleaved-chains example where this gets 3, because
+                one conflicting unit ends its group even when everything after it
+                is free.
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">4</div>
+            <div>
+              <p class="text-stone-900 font-bold mb-1"><code>emit</code> — stages to <code>par</code> nodes</p>
+              <p class="text-stone-600 leading-relaxed">
+                A singleton thread stays a plain statement rather than becoming a
+                one-thread fork.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white/55 border border-stone-200 rounded-2xl p-6 mt-8">
+          <p class="text-stone-900 font-bold mb-2">Order preservation is the load-bearing restriction.</p>
+          <p class="text-stone-600 leading-relaxed text-[0.95rem]">
+            A plan is a two-level <em>consecutive</em> partition, which makes
+            <code>planUnits (plan us) = us</code> a structural theorem rather than
+            a run-time check, and means the soundness proof needs only
+            <code>par_block_heap</code>. A scheduler that reordered units would
+            need a commutation theorem — independent statements may be transposed —
+            and that is not proved here.
+          </p>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the bound -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The bound is a certificate, not an estimate</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The dependence DAG is built in one scoreboard pass, because Bernstein's
+          three clauses <em>are</em> the three kinds of edge.
+        </p>
+        <figure class="dgm">
+          <table class="opts-table">
+            <thead>
+              <tr><th>For unit <code>i</code>, each…</th><th>adds the edge</th><th>Kind</th><th>Bernstein clause</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>cell <code>l</code> it <strong>reads</strong></td>
+                <td><code>lastWriter[l] → i</code></td>
+                <td><span class="tag-pill">RAW</span></td>
+                <td><code>W ∩ R</code></td>
+              </tr>
+              <tr>
+                <td>cell <code>l</code> it <strong>writes</strong></td>
+                <td><code>lastWriter[l] → i</code></td>
+                <td><span class="tag-pill">WAW</span></td>
+                <td><code>W ∩ W</code></td>
+              </tr>
+              <tr>
+                <td>cell <code>l</code> it <strong>writes</strong></td>
+                <td><code>r → i</code> for every <code>r ∈ readers[l]</code></td>
+                <td><span class="tag-pill">WAR</span></td>
+                <td><code>R ∩ W</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <figcaption>
+            Then <code>lastWriter</code> and <code>readers</code> are updated and
+            the pass moves to <code>i + 1</code> — one left-to-right sweep, no
+            pairwise scan. Readers are collected <em>after</em> the writes clear
+            them, so a unit that both reads and writes a cell is left as its reader.
+          </figcaption>
+        </figure>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>critical</code> is that DAG's longest path, and it is a lower bound
+          on the depth of <em>any</em> schedule of those units. So
+          <code>optimalB p</code>, which is
+          <code>depth (rewrite p) == critical (units p)</code>, certifies
+          optimality rather than guessing at it. Each kind of edge is pinned by one
+          test:
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/AutoPar/Dag.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="the four dependence cases, as #guards"
+                    src="snippets/dag-edges.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed">
+          Cost is <code>depth</code>, counted off the syntax: <code>+</code> at a
+          <code>seq</code>, <code>foldr max</code> at a <code>par</code>, memory
+          operations only. The library's real cost model needs a heap and is
+          quadratic in the work to evaluate, which a scheduling heuristic cannot
+          afford.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- how the proof goes -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">How the proof goes</h2>
+        <figure class="dgm">
+          <ol class="plist">
+            <li><span><code>execPar</code> and <code>execSeq</code> agree under <code>runSeq</code></span><span class="cite">execPar_runSeq_all</span></li>
+            <li><span><code>execSeq</code> of a <code>par</code> restores the register file, so <strong>every</strong> thread of the whole plan runs at the initial registers</span><span class="cite">stages_seqAll</span></li>
+            <li><span>Threads in order, each at the initial <code>ρ</code>, equal the chain — when no register flows between them</span><span class="cite">fork_heap</span></li>
+            <li><span>A chain of blocks runs like the flat chain</span><span class="cite">runSeq_block_map</span></li>
+            <li><span>The plan's units are the program's statements</span><span class="cite">plan_units<br />atoms_flatten<br />runSeq_flatten</span></li>
+          </ol>
+        </figure>
+        <p class="text-stone-600 leading-relaxed">
+          Step 2 is the idea. Because a fork restores the register file, a
+          <em>chain</em> of forks never advances it, so the whole top-level plan
+          sits in exactly the position <code>fork_heap</code> was written for — one
+          level up from a single <code>par</code>. Steps 4 and 5 are the
+          bookkeeping that makes that identification legitimate.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the gate refuses -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What the gate still refuses</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>rewriteOk</code> requires that no thread read a register an
+          earlier thread writes, tested on <em>raw</em> read sets. That is stronger
+          than the liveness <code>atoms</code> actually establishes: a segment that
+          writes <code>%0</code> and then reads it has <code>%0</code> in its raw
+          read set even though the value is local to the segment. So a chain that
+          reuses <code>%0</code> across segments is declined and returned
+          sequential.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">[10] := 1; [11] := 2; %0 := [10]; [12] := %0; %0 := [11]; [13] := %0</code></pre>
+        </div>
+        <figure class="dgm">
+          <div class="flow">
+            <div class="flow-node is-dim">the chain above<small>two independent pairs, reusing <code>%0</code></small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">rewriteOk<small><span class="verdict verdict-race">false</span></small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node is-acc">returned unchanged<small>sequential, and sound</small></div>
+          </div>
+        </figure>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Sound, and the parallelism is lost. There are two ways out, in order of
+          value. <strong>Make registers survive the join:</strong>
+          <code>execPar</code>'s <code>par</code> case discards the children's
+          register files, and merging them instead — guarded by register-Bernstein
+          among siblings — removes the constraint at its source. Registers can be
+          renamed per thread at emission where memory cells cannot, because a
+          location is reached by a computed address, so the cell <em>is</em> the
+          name. <strong>Or weaken the gate to liveness,</strong> which means
+          restating the agreement lemma over a statement list.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          Also refused, by construction rather than by the gate: anything the
+          footprint over-approximates. <code>A[B[i]]</code> reports the whole
+          array, so scatters serialise, and <code>whileAtMost</code> is nested
+          conditionals whose footprint is the branch union, so iterations look
+          dependent. Conservative, never unsound.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- two routes -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two routes to a forked program</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Both are live, and neither is a superset of the other.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th></th><th><code>ParProg.autoPar</code></th><th><code>AutoPar.rewrite</code></th></tr></thead>
+            <tbody>
+              <tr><td>What is proved</td><td>Nothing in general. <code>wfB</code> is <code>decide</code>d on the result, per program</td><td><code>rewrite_sound</code>, for every program, no hypothesis</td></tr>
+              <tr><td>Grouping</td><td>greedy: the longest independent prefix</td><td>the three-case fold, with a critical-path certificate</td></tr>
+              <tr><td>Register handling</td><td>liveness, via <code>atoms</code></td><td>liveness for the cut, raw read sets for the gate — so stricter</td></tr>
+              <tr><td>Refuses</td><td>less</td><td>more, including chains the other forks</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          The first route's claim is per program and checked by
+          <code>decide</code>; the second's is a theorem. A chain that reuses
+          <code>%0</code> across segments forks under the first and is returned
+          unchanged by the second — which is the measured price of having the proof.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="cli.html"><h3>The command line →</h3><p><code>autopar</code>, and <code>prove --autopar</code> which carries <code>rewrite_sound</code> into a Lean module.</p></a>
+          <a class="card" href="language.html"><h3>The language →</h3><p>Where the footprints the pass depends on come from.</p></a>
+          <a class="card" href="races.html"><h3>Finding races →</h3><p>The same architecture — untrusted analysis, proved gate — applied to the other question.</p></a>
+          <a class="card" href="lean.html"><h3>The Lean library →</h3><p><code>Paralever/AutoPar/</code> module by module.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

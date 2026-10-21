@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Module by module: what to import, which induction principle to use, how to build it, and the worked examples that gate every claim." />
+    <meta property="og:title" content="The Lean library — paralever" />
+    <meta property="og:description" content="Module by module: what to import, which induction principle to use, how to build it, and the worked examples that gate every claim." />
+    <meta property="og:type" content="website" />
+    <title>The Lean library — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="../web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="../web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="../" data-page="lean.html"></div>
+
+    <header class="pt-4 pb-12 px-6 md:px-12 lg:px-24 max-w-4xl mx-auto">
+      <a href="../index.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        paralever
+      </a>
+      <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
+        The Lean library
+      </h1>
+      <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
+        Six libraries and one executable. <code>Core/</code> and
+        <code>Theory/</code> need no Mathlib at all, so a single file can be
+        typechecked on its own in a second.
+      </p>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-24">
+
+      <!-- building -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Building it</h2>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">lean Paralever/Core/ParM.lean    # typecheck one file — fast, no dependencies needed
+lake exe cache get               # Mathlib oleans, before a first full build
+lake build                       # everything
+lake build Examples              # just the worked examples
+grep -rn "sorry" Paralever/      # the no-sorry gate
+lake exe paralever --help        # the command line</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          The toolchain is pinned to <code>leanprover/lean4:v4.34.0</code>, with
+          Mathlib and iris-lean at the same tag. Mathlib is never imported through
+          an umbrella file: a lemma is imported from the module it actually lives
+          in, which is what keeps a standalone <code>lean &lt;file&gt;</code> check
+          viable on the files that matter most.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- the tree -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The tree</h2>
+        <figure class="dgm">
+          <ul class="ftree">
+            <li><b>Paralever/</b>
+              <ul>
+                <li><b>Core/</b> <i>ParM · Semantics (State, step, Reaches) · Access (footprints, Indep)</i></li>
+                <li><b>Theory/</b> <i>Decomposition · WellFormedCanonical · Sequentialize (the theorem) · Intervals</i></li>
+                <li><b>Logic/</b> <i>a tier-2 concurrent separation logic, instantiated at <code>State → Prop</code></i></li>
+                <li><b>Lib/</b> <i>Compose · TypedRead · TouchesOnly · Notation · FootprintSimp · ArrRef · Loop · Block · OpaqueOp · Reduce · Pure · Render</i></li>
+                <li><b>Kernels/</b> <i>named parallel shapes, each with its one-shot theorem</i></li>
+                <li><b>AutoPar/</b> <i>Chain · Plan · Dag · Sound (<code>rewrite_sound</code>) · Rewrite · Print</i></li>
+                <li><b>Search/</b> <i>RaceSearch · Explain · ExplainHtml</i></li>
+                <li><b>Compile/</b> <i>TaskFacts · Exec (<code>execTask</code> — real threads)</i></li>
+                <li><b>Tactic.lean</b> <i><code>paralever_race</code> and <code>paralever_check</code></i></li>
+              </ul>
+            </li>
+            <li><b>Prl/</b> <i>the surface language, and the <code>.prl</code> file in front of it</i>
+              <ul>
+                <li><b>Lang/</b> <i>Core · Layout · Kernels · Cuda · Cost · Exec · Notation · Analysis · AutoParSound</i></li>
+                <li><b>Compile/</b> <i>Ast · Parse · Lower · Print</i></li>
+                <li><b>Load.lean</b> <i><code>prl_file</code> — read and compile a file while Lean elaborates</i></li>
+                <li><b>Report.lean</b> <i>the four <code>#eval</code> views</i></li>
+              </ul>
+            </li>
+            <li><b>MLIR/</b> <i>Ast · Parse · Affine · Lower · Eval (the ℚ reference) · Load · Emit · Corpus</i></li>
+            <li><b>Examples/</b> <i>the worked examples, in one tree</i></li>
+            <li><b>Tool/</b> <i>the <code>paralever</code> command line, as a library</i></li>
+            <li><b>Test/</b> <i>the build gates</i></li>
+            <li><b>docs/</b> <i>design rationale, one file per decision</i></li>
+          </ul>
+        </figure>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- core -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Where each thing is</h2>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Module</th><th>What it defines</th></tr></thead>
+            <tbody>
+              <tr><td><code>Core/ParM.lean</code></td><td><code>ParM</code>, the <code>Childs</code> spine, <code>bind</code>, and the two induction principles</td></tr>
+              <tr><td><code>Core/Semantics.lean</code></td><td><code>State</code>, <code>Conf</code>, <code>step</code>, <code>stepC</code>, <code>Reaches</code>, <code>ReachesChilds</code></td></tr>
+              <tr><td><code>Core/Access.lean</code></td><td><code>Footprint</code>, <code>runSeq</code>, <code>accesses</code>, <code>Indep</code>, <code>IndepAll</code>, <code>WellFormed</code></td></tr>
+              <tr><td><code>Theory/Sequentialize.lean</code></td><td><code>ParSeqEq</code>, <code>par_seq_eq</code>, the N-ary form, and the region forms</td></tr>
+              <tr><td><code>Theory/WellFormedCanonical.lean</code></td><td>the canonical-outcomes theorem: a well-formed program has exactly one terminal outcome</td></tr>
+              <tr><td><code>Prl/Lang/Core.lean</code></td><td><code>ParProg</code>, <code>footprintOf</code>, <code>wfB</code>, <code>execPar</code>, <code>execSeq</code>, and <code>par_seq_eq</code> on the surface</td></tr>
+              <tr><td><code>Prl/Lang/Analysis.lean</code></td><td><code>flatten</code>, <code>atoms</code>, <code>dependences</code>, <code>canPar</code>, <code>autoPar</code></td></tr>
+              <tr><td><code>AutoPar/Dag.lean</code></td><td>the scoreboard, <code>preds</code>, <code>asap</code>, <code>critical</code></td></tr>
+              <tr><td><code>AutoPar/Plan.lean</code></td><td><code>plan</code> — the three-case fold — and <code>plan_units</code></td></tr>
+              <tr><td><code>AutoPar/Sound.lean</code></td><td><code>rewrite_sound</code>, <code>rewrite_wf</code>, <code>rewrite_parSeqEq</code></td></tr>
+              <tr><td><code>Search/RaceSearch.lean</code></td><td><code>raceSites</code>, <code>raceSites_nil_iff</code>, <code>wellFormedB</code>, <code>findWrongGuided</code>, <code>follow_sound</code></td></tr>
+              <tr><td><code>Compile/Exec.lean</code></td><td><code>execTask</code> — the same term, on real <code>Task</code>s</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- induction -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Lean's <code>induction</code> refuses <code>ParM</code></h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          This is the one thing that will surprise someone reading a proof for the
+          first time. <code>ParM</code>'s <code>par</code> constructor takes a
+          <code>Childs ParM αs</code> — a nested inductive family — and the
+          automatically generated recursor is not in the shape the tactic wants, so
+          every proof goes through one of two hand-written principles instead.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Use</th><th>When</th></tr></thead>
+            <tbody>
+              <tr><td><code>ParM.inductionOn</code></td><td>the statement is about one program</td></tr>
+              <tr><td><code>ParM.mutualInduction</code></td><td>the statement is about a program <em>and</em> its children's spine at once — which is most of the theory, since a fork's property is stated in terms of its children's</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The reason the spine exists at all is worth recording, because the
+          obvious alternative does not typecheck.
+          <code>List (ParM α)</code> with a constructor-local <code>α</code> is
+          rejected by the kernel — "nested inductive datatypes parameters cannot
+          contain local variables" — so the children carry their own type list, and
+          that index is what keeps each child's result type static. The N-ary
+          theorems are then proved by induction on the children list, where the
+          <code>cons</code> case is the two-to-N step.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- examples -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The worked examples</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>Examples/</code> is one tree with Lean files, <code>.prl</code>
+          files and <code>.mlir</code> files side by side. The source files are
+          read and compiled from <em>inside</em> Lean while the Lean file
+          elaborates, so no command line is involved and <code>by decide</code>
+          sees the compiled program rather than the reader.
+        </p>
+        <figure class="dgm">
+          <ul class="ftree">
+            <li><b>Tour.lean</b> <i>the whole project on one program — start here</i></li>
+            <li><b>Programs/</b> <i>how do I prove my own algorithm equivalent?</i></li>
+            <li><b>Language/</b> <i>how do I write and check a <code>.prl</code> file?</i></li>
+            <li><b>Mlir/</b> <i>how do I bring a program in from MLIR?</i></li>
+            <li><b>AutoPar/</b> <i>what does the parallelizing pass actually do?</i></li>
+            <li><b>Races/</b> <i>what does a failure look like?</i></li>
+            <li><b>Threads/</b> <i>does any of this run on real threads?</i></li>
+          </ul>
+        </figure>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Programs/</code> — the method, on real algorithms</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Every file follows the same chain, and the two links are independent:
+          changing the algorithm does not touch link 2, and changing the
+          decomposition does not touch link 1.
+        </p>
+        <figure class="dgm">
+          <div class="flow">
+            <div class="flow-node">pure function<small>an ordinary Lean definition</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node is-dim">①<small>an ordinary Lean proof</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node">seq<small>the same algorithm, on the heap</small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node is-dim">②<small><code>par_seq_eq</code>, given <code>WellFormed</code></small></div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node is-acc">par<small>forked</small></div>
+          </div>
+          <figcaption>
+            Link ① is about the algorithm and link ② about the decomposition, and
+            neither touches the other: changing how the work is split leaves ①
+            alone, and changing what the work computes leaves ② alone.
+          </figcaption>
+        </figure>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>File</th><th>The program</th><th>What makes it interesting</th></tr></thead>
+            <tbody>
+              <tr><td><code>SharedReads</code></td><td>min and max of the same three cells</td><td>the case Bernstein admits and <code>∗</code>-disjointness refuses</td></tr>
+              <tr><td><code>MapArray</code></td><td><code>Out[i] := 2 * In[i]</code></td><td>the smallest complete instance of the chain</td></tr>
+              <tr><td><code>SumArray</code></td><td>chunked sum, uneven chunks</td><td>read-only, so independence is free at every plan</td></tr>
+              <tr><td><code>RowSums</code></td><td><code>Out[i] := Σⱼ A[i,j]</code></td><td>written purely, then lifted into the program type</td></tr>
+              <tr><td><code>CompareSwap</code></td><td>independent compare-swap rounds</td><td>reads <em>and</em> writes the same cells, so the obligation is real</td></tr>
+              <tr><td><code>MergeSort</code></td><td>recursive parallel mergesort</td><td>genuine divide and conquer; a fork inside every call</td></tr>
+              <tr><td><code>MatMul</code></td><td><code>C[i,j] := Σₖ A[i,k]·B[k,j]</code></td><td>threads share whole rows and columns; four keyings compared</td></tr>
+              <tr><td><code>SortBatches</code></td><td>sort independent batches</td><td>pure chunks, so there is no footprint proof at all</td></tr>
+              <tr><td><code>OpaqueAgents</code></td><td>two bodies never read</td><td>footprints <em>declared</em>; the theorem holds for every implementation</td></tr>
+              <tr><td><code>Pipeline</code></td><td>sequential, loop, sequential, loop</td><td>what ordinary code actually looks like</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Races/</code> — what failure looks like</h3>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>File</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><code>Caught.lean</code></td><td>two programs where the <em>conclusion</em> of the theorem is false, not just its hypothesis</td></tr>
+              <tr><td><code>Report.lean</code></td><td>reading a counterexample: the interleaving, and the heap the sequential run leaves</td></tr>
+              <tr><td><code>Pointers.lean</code></td><td>a stray index — rejected in three shapes, and <strong>accepted</strong> in one, because this is equivalence, not memory safety</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>Caught.lean</code> is the file that keeps the main theorem honest.
+          If the independence hypothesis were decoration, the conclusion would hold
+          without it; these two programs are the witnesses that it does not. The
+          other standing obligation is a loop-carried dependence —
+          <code>A[i] := A[i-1] + 1</code> — kept as a case whose obligation is
+          <em>unprovable</em>.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- dependencies -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Dependencies, and what is deliberately absent</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Mathlib and iris-lean, and nothing else. From iris-lean the library takes
+          its propositional interface and proof mode: instantiating that interface
+          at this project's own <code>State → Prop</code> buys a few dozen
+          proof-mode tactics for one instance declaration.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>HeapLang is deliberately not imported</strong>, and read only as
+          a template. Its <code>par</code> is derived from an unstructured
+          <code>fork</code>; it is nondeterministic in allocation and prophecies;
+          it has no arrays; and its parallel-composition rule is unary, so it
+          cannot express an equivalence at all. Any one of those would be enough.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          Several other systems were read for design and are not required —
+          deliberately, since each would add a toolchain pin. The reading list and
+          the reasons are in <code>docs/papers.md</code>; every rejected
+          alternative has its own note in <code>docs/</code>, which is where
+          rationale lives. Source files carry a one-line pointer to the paper or
+          the design note a declaration comes from, and nothing more: the rule is
+          that every definition, hypothesis and design choice traces to one or the
+          other.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="concept.html"><h3>The theorem →</h3><p>The six definitions in <code>Core/</code>, and the proof in <code>Theory/</code>.</p></a>
+          <a class="card" href="language.html"><h3>The language →</h3><p><code>Prl/</code>, and reading a file while Lean elaborates.</p></a>
+          <a class="card" href="cli.html"><h3>The command line →</h3><p><code>Tool/</code>, and the module <code>prove</code> writes.</p></a>
+          <a class="card" href="../slides/"><h3>The talk →</h3><p>Built from the library: every code block on a slide is read out of the source that compiles.</p></a>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base="../"></div>
+  </body>
+</html>

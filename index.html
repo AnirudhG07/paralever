@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Paralever proves that a parallel program leaves the same heap as its sequential counterpart under every schedule, in Lean 4 — one metatheorem, then a decidable independence check per program." />
+    <meta property="og:title" content="paralever — paralever" />
+    <meta property="og:description" content="Paralever proves that a parallel program leaves the same heap as its sequential counterpart under every schedule, in Lean 4 — one metatheorem, then a decidable independence check per program." />
+    <meta property="og:type" content="website" />
+    <title>paralever — paralever</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+
+    <!-- the main site's own theme and header bar, served from its source -->
+    <link rel="stylesheet" href="/src/css/theme.css" />
+    <script src="/src/js/blog-post-header.js" defer></script>
+
+    <link rel="stylesheet" href="web/css/site.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="web/js/site.js" defer></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { serif: ["Lora", "serif"], sans: ["Inter", "sans-serif"] },
+            colors: {
+              mustard: { 50: "#fefce8", 100: "#fef9c3", 600: "#ca8a04", 700: "#a16207" },
+              stone: {
+                50: "#f9f8f6", 100: "#f1f0ee", 200: "#e7e5e4",
+                500: "#78716c", 800: "#2d2a26", 900: "#1c1917",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="font-sans antialiased">
+    <div id="post-header"></div>
+    <div id="prl-side" data-base="" data-page=""></div>
+
+    <!-- HERO -->
+    <header class="pt-4 pb-16 px-6 md:px-12 lg:px-24 max-w-5xl mx-auto">
+      <a href="/src/projects.html" class="breadcrumb mb-8 inline-flex">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5" /><path d="M12 5l-7 7 7 7" />
+        </svg>
+        Projects &amp; Code
+      </a>
+
+      <div class="flex flex-wrap items-center gap-3 mb-6 mt-4">
+        <span class="tag-pill">Lean 4</span>
+        <span class="tag-pill">Verification</span>
+        <span class="tag-pill">Parallelism</span>
+        <span class="tag-pill">MLIR</span>
+      </div>
+
+      <h1 class="text-5xl md:text-7xl font-bold serif text-stone-900 tracking-tight leading-[1.0] mb-6">
+        paralever
+      </h1>
+      <p class="text-xl md:text-2xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl mb-6">
+        A parallel program and its sequential counterpart leave the same heap —
+        under <em>every</em> schedule — whenever the forked branches are
+        independent. Proved once in Lean 4; after that, each program owes a
+        single decidable check.
+      </p>
+      <p class="text-base text-stone-500 leading-relaxed max-w-2xl mb-10">
+        The theorem is about a semantics, not about Lean's runtime. <code>par</code>
+        is a constructor of the program type and its meaning is fixed by an
+        interleaving machine, so there is something to prove. A program that races
+        does not quietly get the equality: it reaches an absorbing
+        <code>wrong</code>, and the tool prints the interleaving that puts it there.
+      </p>
+
+      <div class="flex flex-wrap gap-4">
+        <a href="https://github.com/AnirudhG07/paralever" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-2.5 px-6 py-3 bg-stone-900 text-stone-100 rounded-xl font-bold text-sm hover:bg-stone-800 transition-colors no-underline">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          Source on GitHub
+        </a>
+        <a href="web/concept.html"
+           class="inline-flex items-center gap-2.5 px-6 py-3 bg-white/70 border border-stone-200 text-stone-900 rounded-xl font-bold text-sm hover:border-mustard-700 transition-colors no-underline">
+          Read the theorem
+        </a>
+        <a href="slides/"
+           class="inline-flex items-center gap-2.5 px-6 py-3 bg-white/70 border border-stone-200 text-stone-900 rounded-xl font-bold text-sm hover:border-mustard-700 transition-colors no-underline">
+          The talk
+        </a>
+      </div>
+    </header>
+
+    <main class="px-6 md:px-12 lg:px-24 max-w-5xl mx-auto pb-24">
+
+      <!-- THE THEOREM -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">One theorem, then a check</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>ParSeqEq p q σ</code> says the two programs reach exactly the same
+          terminal configurations from the heap <code>σ</code>: not that one
+          refines the other, not that both satisfy a specification, but that the
+          sets of reachable results coincide. On the surface language, the
+          hypothesis is a <code>Bool</code>.
+        </p>
+
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Paralever/Theory/Sequentialize.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="ParSeqEq — what &quot;the same outcomes&quot; means"
+                    src="web/snippets/parseqeq.html"></iframe>
+          </div>
+          <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · Prl/Lang/Core.lean</div>
+            <iframe class="lean-demo" loading="lazy" title="par_seq_eq — one Bool, then the theorem"
+                    src="web/snippets/wfb-par-seq-eq.html"></iframe>
+          </div>
+
+        <p class="text-stone-600 leading-relaxed">
+          Everything a user writes per program is <code>h</code>, and
+          <code>h</code> is discharged by <code>by decide</code>. The surface
+          language computes a footprint from the syntax, so <code>wfB</code> tests
+          Bernstein's three conditions at every <code>parallel</code> node without
+          ever running the program.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- TWO PROGRAMS -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Shared reads are allowed</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Independence is <strong>Bernstein's condition</strong> —
+          <code>w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅</code> — and not separation logic's
+          <code>∗</code>. The difference is the whole reason the method covers real
+          kernels: a matrix multiply writes disjoint cells of <code>C</code> while
+          reading overlapping rows of <code>A</code> and columns of
+          <code>B</code>, which <code>∗</code>-disjointness refuses and Bernstein
+          admits.
+        </p>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <div>
+            <div class="mb-3"><span class="verdict verdict-ok">wfB = true</span></div>
+            <div class="code-wrap" style="margin-top:0">
+              <div class="code-wrap-header">
+                <span class="code-wrap-lang">stencil.prl</span>
+                <button class="copy-btn">Copy</button>
+              </div>
+              <pre><code class="language-prl">const n = 4
+
+buf inp[5] = 1, 2, 3, 4, 5
+buf out[4]
+
+parfor i in n {
+  %a := inp[i]
+  %b := inp[i + 1]
+  out[i] := %a + %b
+} :: "stencil"</code></pre>
+            </div>
+            <p class="text-sm text-stone-500 leading-relaxed">
+              Neighbouring threads read <code>inp[i+1]</code> in common and no cell
+              is written twice. Independent, so <code>par_seq_eq</code> applies at
+              every heap.
+            </p>
+          </div>
+
+          <div>
+            <div class="mb-3"><span class="verdict verdict-race">race</span></div>
+            <div class="code-wrap" style="margin-top:0">
+              <div class="code-wrap-header">
+                <span class="code-wrap-lang">race.prl</span>
+                <button class="copy-btn">Copy</button>
+              </div>
+              <pre><code class="language-prl">buf x[1]
+buf log[2]
+
+parallel {
+  log[0] := 1
+  x[0] := 7
+} | {
+  log[1] := 1
+  x[0] := 9
+}</code></pre>
+            </div>
+            <p class="text-sm text-stone-500 leading-relaxed">
+              Both threads write <code>x[0]</code>. The parallel reading reaches
+              <code>wrong</code>, the sequential reading terminates, and the
+              equality is <em>false</em> — refuted in Lean, not merely unproved.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- THE LADDER -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Three verdicts, no fourth</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          A program lands in exactly one of three places, and which one is decided
+          by the checks rather than chosen. <code>paralever prove FILE</code>
+          writes the Lean module that carries whichever theorem the verdict
+          licenses.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden">
+          <table class="opts-table">
+            <thead>
+              <tr><th>Verdict</th><th>What holds</th><th>How</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="verdict verdict-ok">independent</span></td>
+                <td><code>ParSeqEq</code> at <strong>every</strong> heap and register file</td>
+                <td><code>ParProg.par_seq_eq (by decide) ρ σ</code></td>
+              </tr>
+              <tr>
+                <td><span class="verdict verdict-heap">this heap only</span></td>
+                <td><code>ParSeqEq</code> at the <strong>declared</strong> heap — the syntactic footprint over-approximated a computed address</td>
+                <td><code>parSeqEq_of_runSeq_eq</code> from the exact per-heap check</td>
+              </tr>
+              <tr>
+                <td><span class="verdict verdict-race">race</span></td>
+                <td>No theorem of this shape. Both refusals are proved, and the interleaving is printed</td>
+                <td><code>by decide</code> on each, plus <code>follow_sound</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- WHAT IS HERE -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-6">What is here</h2>
+        <div class="grid md:grid-cols-2 gap-4">
+          <a class="card" href="web/concept.html">
+            <h3>The theorem</h3>
+            <p><code>ParM</code>, the interleaving machine, footprints, Bernstein
+            independence, canonical outcomes, and how <code>par ≡ seq</code> is
+            proved.</p>
+          </a>
+          <a class="card" href="web/language.html">
+            <h3>The language</h3>
+            <p>The <code>.prl</code> grammar in full: buffers and lifetimes,
+            registers, computed addresses, control flow, and what is rejected.</p>
+          </a>
+          <a class="card" href="web/autopar.html">
+            <h3>Autoparallelization</h3>
+            <p>A <code>;</code>-chain becomes a tree of forks, and the rewrite is
+            proved to preserve the heap — with no hypothesis at all.</p>
+          </a>
+          <a class="card" href="web/races.html">
+            <h3>Finding races</h3>
+            <p>A complete scan for conflict sites, then a search aimed by it, and
+            a found schedule replayed against the real <code>step</code>.</p>
+          </a>
+          <a class="card" href="web/mlir.html">
+            <h3>From MLIR</h3>
+            <p>Generic form in, a verdict out, and a differential run against an
+            exact rational reference interpreter.</p>
+          </a>
+          <a class="card" href="web/cli.html">
+            <h3>The command line</h3>
+            <p><code>check</code>, <code>run</code>, <code>race</code>,
+            <code>autopar</code>, <code>prove</code>, and the two conversions.</p>
+          </a>
+          <a class="card" href="web/lean.html">
+            <h3>The Lean library</h3>
+            <p>Module by module: what to import, which induction principle to use,
+            and the worked examples that gate the build.</p>
+          </a>
+          <a class="card" href="slides/">
+            <h3>The talk</h3>
+            <p>The slide deck, built from the library itself — every code block on
+            a slide is read out of the source that compiles.</p>
+          </a>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- QUICK START -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Checking a program</h2>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">git clone https://github.com/AnirudhG07/paralever &amp;&amp; cd paralever
+lake exe cache get          # Mathlib oleans, before a first build
+lake build paralever        # ./.lake/build/bin/paralever
+
+paralever check Examples/Language/matmul.prl</code></pre>
+        </div>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">output</span>
+          </div>
+          <pre><code class="language-console">Examples/Language/matmul.prl
+  memory    A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
+  reads     {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
+  writes    {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
+  threads   2
+  rounds    10 parallel, 20 sequential
+  verdict   independent — par = seq under every schedule (wfB = true)</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          The same four reports are available as <code>#eval</code>s inside Lean,
+          over a program read at elaboration time, so a <code>.prl</code> file can
+          be the subject of a theorem without a build step in between. See
+          <a href="web/cli.html" class="prose-link">the command line</a>.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- LOAD-BEARING FACTS -->
+      <section>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Why the theorem is not empty</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          The standing risk in a development like this is proving something true
+          and vacuous. Four facts keep it honest, and each is enforced by the
+          build.
+        </p>
+        <div class="space-y-5">
+          <div class="flex gap-4 items-start">
+            <div class="step-num">1</div>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">Lean's <code>Task</code> cannot host the theorem.</strong>
+              <code>Task</code> is a one-field structure with a real body, so
+              <code>(Task.spawn f).get = f ()</code> holds by <code>rfl</code> —
+              parallel and sequential would be the same term. <code>Task</code> is
+              a compilation target only; nothing is ever proved about parallelism
+              there.
+            </p>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">2</div>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">A racy program is exhibited, in Lean, where the conclusion fails.</strong>
+              If the hypothesis were decoration, the theorem would hold without it.
+              <code>Examples/Races/Caught.lean</code> is the witness that it does not.
+            </p>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">3</div>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">A race is an absorbing <code>wrong</code>, not an assumption.</strong>
+              Following Reynolds' grainless semantics, a conflicting fork steps to
+              a configuration with no successors. That is what makes the atomic
+              grain irrelevant and keeps racy programs excluded rather than
+              silently assumed away.
+            </p>
+          </div>
+          <div class="flex gap-4 items-start">
+            <div class="step-num">4</div>
+            <p class="text-stone-600 leading-relaxed">
+              <strong class="text-stone-900">No <code>sorry</code>, and no <code>native_decide</code>.</strong>
+              <code>grep -rn "sorry" Paralever/</code> is a gate in the build, and
+              every per-program obligation is discharged by the kernel.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div id="prl-footer" data-base=""></div>
+  </body>
+</html>
