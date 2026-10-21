@@ -1,0 +1,344 @@
+/* ===================================================================
+   paralever — per-deck styles, layered ON TOP of the shared lean.css.
+   Put only what's specific to THIS deck here: the header name, this
+   deck's title-slide tuning, and its custom components. Loaded via
+   `extraCss` in SlidesMain.lean and read at runtime → edit + re-run
+   `lake exe slides`, no rebuild.
+   =================================================================== */
+
+/* header name shown at the top-left of every content slide
+   (bump --name-w if you make the name longer) */
+:root { --project: "paralever"; --name-w: 5.4em; }
+
+/* ---- title slide: anchor the block higher and tighten it ----
+   lean.css centres the title vertically; with a subtitle + byline +
+   event + links that reads low and loose, so top-anchor and close gaps. */
+.reveal section[data-state="title"] {
+  justify-content: flex-start;
+  padding: 8.5vh 7vw 5vh;
+}
+.reveal section[data-state="title"]::before { margin-bottom: 1em; }
+.reveal section[data-state="title"] h2 { margin-bottom: 0.3em; }
+.reveal .subheader { font-size: 1.3em; margin-bottom: 1.5em; }
+.reveal .byline { font-size: 1.05em; line-height: 1.4; margin-bottom: 0.16em; }
+.reveal .byline + .event,
+.reveal .subheader + .event { margin-top: 1.2em; padding-top: 0.8em; }
+.reveal .event { font-size: 0.9em; }
+.reveal .links { margin-top: 0.9em; font-size: 0.8em; }
+
+/* ---- body: bump bullet-point text a touch ---- */
+.reveal ul, .reveal ol { font-size: 0.92em; }
+
+/* ---- staggered bullets (stagger.js turns each > li into a fragment) ----
+   NOTE: the class is "steps" (plural). ":::class \"step\"" does nothing. */
+.reveal .steps { font-size: 0.95em; }
+.reveal .steps li { margin-bottom: 0.35em; }
+
+/* ---- punch line: the one sentence a slide is actually about ---- */
+.reveal .punch { font-size: 1.2em; font-weight: 700; color: var(--lean-blue); margin: 0.35em 0; }
+.reveal .punch.center { text-align: center; }
+
+/* ---- big-number stats ---- */
+.reveal .stats { display: flex; justify-content: center; gap: 3vw; margin: 0.5em 0; }
+.reveal .stat { font-size: 1.9em; font-weight: 800; color: var(--lean-blue); text-align: center; }
+.reveal .stat small { display: block; font-size: 0.34em; font-weight: 500; color: var(--muted); letter-spacing: 0.01em; }
+
+/* ===================================================================
+   Code cards — promoted to global (were scoped to the old template's
+   per-slide states). A .gbox is a bordered card around a code block.
+   =================================================================== */
+.reveal .gbox {
+  margin: 0.25em 0; padding: 0.4em 0.7em; border-radius: 8px; width: fit-content;
+  max-width: 100%; border: 1px solid rgba(15,23,42,0.12);
+  background: rgba(248,250,252,0.9);
+  height: auto !important; max-height: none !important;
+}
+.reveal .gbox code { font-size: inherit; }
+/* definition / theorem cards: distinguished by border weight and ground,
+   not by an accent bar down one edge */
+.reveal .defbox { border: 1px solid rgba(15,23,42,0.22); background: #fff; }
+.reveal .thm    { border: 1px solid rgba(15,23,42,0.28); background: #fff; box-shadow: 0 1px 0 rgba(15,23,42,0.06); }
+.reveal .thm code { font-size: inherit; }
+.reveal .caplabel {
+  font-size: 0.72em; font-weight: 700; color: var(--lean-blue); margin: 0 0 0.15em;
+}
+
+/* ---- arrows between stacked/side-by-side boxes ---- */
+.reveal .arrow-right,
+.reveal .arrow-down,
+.reveal .arrow-dl,
+.reveal .arrow-dr {
+  color: var(--lean-teal); font-weight: 700; white-space: nowrap;
+}
+.reveal .arrow-right { align-self: center; font-size: 0.95em; }
+.reveal .arrow-down  { align-self: center; font-size: 0.95em; margin: 0.1em 0; }
+
+/* ===================================================================
+   CRITICAL — do not remove.
+   ```lean blocks are emitted with reveal's `r-stretch`, which
+   mis-computes a tiny height and collapses the block to a single
+   scrolling line. This neutralises it.
+   =================================================================== */
+.reveal code.hl.lean.block {
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* ===================================================================
+   paralever-specific components
+   =================================================================== */
+
+/* ---- .rule : an inference rule — premises over a bar over the conclusion ---- */
+.reveal .rulewrap { text-align: center; margin: 0.55em 0; }
+.reveal .rule {
+  display: inline-block; text-align: center;
+  font-family: var(--mono); font-size: 0.68em; line-height: 1.5;
+}
+.reveal .rule .prem { padding: 0 0.7em 0.2em; }
+.reveal .rule .bar  { border-top: 2px solid var(--lean-blue); margin: 0; }
+.reveal .rule .conc { padding: 0.2em 0.7em 0; font-weight: 700; }
+.reveal .rule .side {
+  display: block; font-family: var(--sans); font-size: 0.82em;
+  color: var(--muted); margin-top: 0.35em; font-weight: 400;
+}
+
+/* ---- .pullquote : a quotation from a cited paper, with its attribution ---- */
+.reveal .pullquote {
+  border-left: 3px solid var(--lean-teal);
+  background: var(--tint);
+  padding: 0.5em 0.9em; margin: 0.5em auto; max-width: 42em;
+  font-size: 0.62em; line-height: 1.5; text-align: left; font-style: italic;
+}
+.reveal .pullquote .src {
+  display: block; margin-top: 0.4em; font-style: normal;
+  color: var(--muted); font-size: 0.9em;
+}
+
+/* ---- .notation : the key for the symbols a slide uses, as a quiet footer ---- */
+.reveal .notation {
+  font-size: 0.6em; color: var(--muted); margin-top: 0.7em;
+  letter-spacing: 0.01em; text-align: center;
+}
+.reveal .notation code { font-size: 1em; color: var(--ink); }
+.reveal .notation strong { color: var(--ink); }
+
+/* ---- .cite : paper attribution under a borrowed theorem ----
+   e.g. "Brookes, A Semantics for CSL, CONCUR'04 §5-7" */
+.reveal .cite {
+  font-size: 0.62em; color: var(--muted); font-style: italic;
+  margin-top: 0.45em; letter-spacing: 0.01em;
+}
+.reveal .cite strong { font-style: normal; color: var(--ink); font-weight: 700; }
+
+/* ---- .map : ASCII mental maps / flowcharts in a <pre> ----
+   Tight leading and a hairline box so box-drawing characters line up. */
+.reveal pre.map,
+.reveal .map pre {
+  font-family: var(--mono);
+  font-size: 0.42em;
+  line-height: 1.25;
+  text-align: left;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.3em auto;
+  padding: 0.6em 0.9em;
+  border: 1px solid var(--tint-line);
+  border-radius: 8px;
+  background: var(--tint);
+  overflow-x: auto;
+  white-space: pre;
+  height: auto !important; max-height: none !important;
+}
+.reveal .map.tall pre, .reveal pre.map.tall { font-size: 0.36em; }
+.reveal .map.wide pre, .reveal pre.map.wide { font-size: 0.38em; }
+
+/* ===================================================================
+   Diagram primitives — for ```html flowcharts / mental maps.
+   `.dgm` is a flex container; `.nd` is a node box; `.arr` is an arrow.
+   Compose: <div class="dgm col"> … </div> for a vertical flow.
+   =================================================================== */
+.reveal .dgm {
+  display: flex; gap: 0.45em; align-items: center; justify-content: center;
+  margin: 0.45em auto; flex-wrap: wrap; max-width: 100%;
+}
+.reveal .dgm.col  { flex-direction: column; }
+.reveal .dgm.top  { align-items: flex-start; }
+.reveal .dgm.tight { gap: 0.25em; }
+
+.reveal .nd {
+  border: 1px solid var(--tint-line); background: var(--tint);
+  border-radius: 8px; padding: 0.34em 0.7em;
+  font-size: 0.6em; line-height: 1.35; text-align: center;
+}
+.reveal .nd.mono {
+  font-family: var(--mono); text-align: left; white-space: pre;
+  font-size: 0.5em; padding: 0.45em 0.7em;
+}
+.reveal .nd.wide  { min-width: 20em; }
+.reveal .nd.blue  { border-color: var(--lean-blue); }
+.reveal .nd.key   { border: 2px solid var(--lean-blue); font-weight: 700; color: var(--lean-blue); }
+.reveal .nd.good  { border-color: #16a34a; background: rgba(22,163,74,0.09); }
+.reveal .nd.bad   { border-color: #dc2626; background: rgba(220,38,38,0.09); }
+.reveal .nd.plain { border: none; background: none; padding: 0.1em 0.3em; }
+.reveal .nd em    { color: var(--muted); font-style: normal; font-size: 0.86em; display: block; }
+.reveal .nd code  { font-size: 0.95em; }
+
+.reveal .arr { color: var(--lean-teal); font-weight: 700; font-size: 0.75em; line-height: 1; }
+.reveal .arr.lbl2 { display: flex; flex-direction: column; align-items: center; gap: 0.1em; }
+.reveal .arr small { font-size: 0.62em; color: var(--muted); font-weight: 500; }
+
+/* verdict chips — ACCEPTS / REJECTS / RACE / FINE */
+.reveal .vd {
+  display: inline-block; border-radius: 999px; padding: 0.06em 0.6em;
+  font-size: 0.92em; font-weight: 700; letter-spacing: 0.02em;
+}
+.reveal .vd.ok { background: rgba(22,163,74,0.14);  color: #15803d; }
+.reveal .vd.no { background: rgba(220,38,38,0.14);  color: #b91c1c; }
+
+/* a branch fan: one parent, several children */
+.reveal .fan { display: flex; gap: 0.5em; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+.reveal .fan > .nd { flex: 0 1 auto; max-width: 14em; }
+
+/* diagram-local tables (the trace table, the rfl results) */
+.reveal table.dgmt { width: auto; margin: 0.4em auto; }
+.reveal table.dgmt th, .reveal table.dgmt td {
+  font-size: 0.52em !important; padding: 0.2em 0.7em; border: none;
+  font-family: var(--mono); text-align: left;
+}
+.reveal table.dgmt th { font-family: var(--sans); color: var(--lean-blue); font-weight: 700; }
+.reveal table.dgmt tbody tr + tr td { border-top: 1px solid var(--tint-line); }
+
+/* ---- .gap : the "nobody has this" row of the lineage table ---- */
+.reveal .gap,
+.reveal tr.gap td {
+  background: rgba(37,99,235,0.1);
+  font-weight: 700;
+  color: var(--lean-blue);
+}
+
+/* ---- .ladder : the combinator ladder (cheapest route at the top) ---- */
+.reveal .ladder { display: flex; flex-direction: column; gap: 0.25em; margin: 0.4em 0; }
+.reveal .tier {
+  display: flex; align-items: baseline; gap: 0.6em;
+  padding: 0.28em 0.7em; border-radius: 6px;
+  border: 1px solid var(--tint-line); background: var(--tint);
+  font-size: 0.78em;
+}
+.reveal .tier strong { color: var(--lean-blue); min-width: 9em; }
+.reveal .tier em { color: var(--muted); font-style: normal; font-size: 0.9em; }
+
+.reveal .lose { color: var(--muted); text-decoration: line-through; }
+
+/* ---- tables: keep them readable at slide size (was scoped to one state) ---- */
+.reveal table {
+  width: 100%; max-width: 100%; table-layout: auto;
+  border-collapse: collapse; margin: 0.3em auto;
+}
+.reveal table th,
+.reveal table td {
+  font-size: 0.56em !important; padding: 0.24em 0.55em;
+  vertical-align: top; overflow-wrap: anywhere;
+}
+.reveal table.tight th,
+.reveal table.tight td { font-size: 0.5em !important; }
+
+/* ---- two-column tuning (lean.css provides the .two-col grid) ---- */
+.reveal .two-col { gap: 2vw; align-items: start; }
+
+/* ---- hstack/vstack defaults for side-by-side code ---- */
+.reveal .r-hstack { align-items: flex-start; justify-content: center; gap: 2vw; width: 100%; }
+.reveal .r-vstack { gap: 0.25em; align-items: stretch; }
+
+/* ---- closing slide ---- */
+.reveal .finale { font-size: 1.3em; font-weight: 700; color: var(--lean-blue); text-align: center; }
+
+/* ---- .refs : the references slide — small, dense, unobtrusive ---- */
+.reveal .refs { font-size: 0.52em; line-height: 1.45; }
+.reveal .refs ul { margin: 0; }
+.reveal .refs li { margin: 0.12em 0; }
+
+/* ---- .treewrap : code on the left, its tree on the right ---- */
+.reveal .treewrap { display: flex; align-items: center; justify-content: center;
+                    gap: 1.6em; margin: 0.3em auto; max-width: 100%; }
+.reveal .treewrap pre { margin: 0; font-size: 0.78em; line-height: 1.5;
+                        border: 1px solid var(--tint-line); border-radius: 6px;
+                        padding: 0.7em 0.9em; background: rgba(15,23,42,0.025); }
+.reveal .treewrap svg { width: 46%; height: auto; }
+.reveal .treewrap svg text { font-family: var(--mono); fill: var(--ink); }
+
+/* ---- .shotbox : a slot for a screenshot.  The caption shows through while the
+   image is absent, so the slide is still readable before the file is dropped in. ---- */
+.reveal .shotbox {
+  border: 2px dashed var(--tint-line); border-radius: 10px;
+  padding: 0.5em; margin: 0.2em auto; text-align: center;
+  display: flex; flex-direction: column; justify-content: center; min-height: 6em;
+}
+.reveal .shotbox img { max-width: 100%; max-height: 40vh; border-radius: 6px; }
+.reveal .shotbox .cap { font-size: 0.56em; color: var(--muted); margin-top: 0.3em; }
+
+/* ---- .figwrap : a wrapper for an inline SVG figure.  Unlike .pipewrap it sets
+   no font, so each figure's own font-family attributes decide mono vs sans. ---- */
+.reveal .figwrap { display: flex; justify-content: center; margin: 0.35em auto; width: 100%; }
+.reveal .figwrap svg { width: 92%; height: auto; max-height: 46vh; }
+
+/* ---- .pipewrap : the pure -> seq -> par proof pipeline ---- */
+.reveal .pipewrap { display: flex; justify-content: center; margin: 0.2em auto; }
+.reveal .pipewrap svg { width: 88%; height: auto; }
+.reveal .pipewrap svg text { font-family: var(--sans); fill: var(--ink); }
+
+/* ---- .bigclaim : the one statement the talk exists to make ---- */
+.reveal .bigclaim {
+  font-size: 1.16em; line-height: 1.42; text-align: center;
+  margin: 0.3em auto 0.55em; padding: 0.7em 1.1em; max-width: 92%;
+  border: 2px solid var(--lean-blue); border-radius: 10px;
+  background: rgba(37,99,235,0.045);
+}
+.reveal .bigclaim code { font-size: 0.95em; }
+.reveal .bigclaim-sub {
+  display: block; margin-top: 0.45em; font-size: 0.62em;
+  color: var(--muted); font-weight: 600;
+}
+
+
+/* ---- .lineage : prior results, open typography — no cards, no fills ---- */
+.reveal .lineage { margin: 0.45em auto; text-align: left; max-width: 94%; }
+.reveal .lineage .le { padding: 0.30em 0 0.34em; }
+.reveal .lineage .le + .le { border-top: 1px solid rgba(15,23,42,0.08); }
+.reveal .lineage .who {
+  font-family: var(--sans); font-weight: 700; font-size: 0.74em;
+  color: var(--lean-blue); letter-spacing: 0.005em;
+}
+.reveal .lineage .who span {
+  font-weight: 400; color: var(--muted); font-size: 0.82em;
+}
+.reveal .lineage .who span::before { content: " \00b7  "; }
+.reveal .lineage .thm {
+  font-size: 0.68em; line-height: 1.44; margin: 0.10em 0 0 1.15em;
+}
+.reveal .lineage .thm code { font-size: 0.95em; }
+.reveal .lineage .miss {
+  font-size: 0.60em; line-height: 1.35; margin: 0.10em 0 0 1.15em;
+  color: var(--muted); font-style: italic;
+}
+.reveal .lineage .miss::before {
+  content: "\2192  "; font-style: normal; color: #b91c1c; font-weight: 700;
+}
+/* our own row: distinguished by weight and colour, not by a container */
+.reveal .lineage .le.ours .who { color: var(--lean-teal); }
+.reveal .lineage .le.ours .thm { font-weight: 600; }
+.reveal .lineage .le.ours .miss { color: var(--lean-teal); font-style: normal; font-weight: 600; }
+.reveal .lineage .le.ours .miss::before { content: "\2713  "; color: var(--lean-teal); }
+
+/* ---- two halves via Verso's own hstack/vstack ----
+   reveal's .r-hstack has no sizing policy, so children must be told to share the row
+   equally; min-width:0 is what lets a wide code block wrap instead of forcing overflow.
+   List spacing inherited from lean.css is airy at full width and far too airy in a
+   half-width column, so tighten it here only. */
+.reveal .r-hstack > .r-vstack { flex: 1 1 0; min-width: 0; }
+.reveal .r-vstack ul, .reveal .r-vstack ol { line-height: 1.45; }
+.reveal .r-vstack li { margin-bottom: 0.12em; }
+.reveal .r-vstack p { margin: 0.3em 0; }
+.reveal .r-vstack > *:first-child { margin-top: 0; }

@@ -20,7 +20,7 @@ set -uo pipefail
 # repo root = two levels up from this script (docs/slides/dev.sh)
 cd "$(dirname "$(readlink -f "$0")")/../.."
 
-OUT="_slides/paralever"
+OUT="slides"
 SRC="docs/slides"
 PORT="${PORT:-3000}"
 

@@ -18,9 +18,15 @@ image) needs only a re-run of `lake exe slides` — no rebuild. -/
 def loadTheme : IO CustomTheme := do
   let base ← findBase
   let css ← IO.FS.readFile (base / "lean.css")
-  let asset (name : String) : IO ThemeAsset := do
-    return { filename := "assets/" ++ name, contents := ← IO.FS.readBinFile (base / "assets" / name) }
-  let assets ← #[].mapM asset
+  -- every file in `assets/` ships verbatim to `<outputDir>/assets/`, so dropping a
+  -- screenshot in there needs only a re-run.  A missing directory is not an error:
+  -- a slide referencing an absent image shows its placeholder instead.
+  let assetDir := base / "assets"
+  let assets ← if ← assetDir.pathExists then do
+      let entries ← assetDir.readDir
+      entries.mapM fun e => do
+        return { filename := "assets/" ++ e.fileName, contents := ← IO.FS.readBinFile e.path }
+    else pure #[]
   -- stagger.js (per-item reveal fragments for `:::class "steps"` lists) is deliberately
   -- NOT loaded: every slide appears in full, with no staged reveals. To restore the
   -- staggered behaviour, ship it as an asset here and add it back to `extraJs` below.
@@ -31,8 +37,9 @@ def loadTheme : IO CustomTheme := do
     highlightTheme := HighlightTheme.forRevealTheme "white"
   }
 
-/-- Shared config; every deck writes to its own subfolder under `_slides/`.
-`build-site.sh` then deploys each `_slides/<name>/` to `/<name>/`. -/
+/-- Shared config. The output directory is the published path: the deck is served
+from `<repo>/slides/`, beside `index.html` and `web/`, so the URL carries no
+underscore-prefixed segment (which GitHub Pages' Jekyll step would skip). -/
 def cfg (theme : CustomTheme) (out : System.FilePath) : Config where
   theme       := .custom theme
   outputDir   := out
@@ -51,7 +58,7 @@ def main : IO UInt32 := do
   let theme ← loadTheme
   -- per-deck overrides, layered on top of lean.css (read at runtime too)
   let deckCss ← IO.FS.readFile (base / "paralever.css")
-  let config : Config := { cfg theme "_slides/paralever" with
+  let config : Config := { cfg theme "slides" with
     extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
     extraJs  := #[] }
   discard <| slidesMain config (doc := %doc Slides)
