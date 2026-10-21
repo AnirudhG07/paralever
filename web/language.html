@@ -95,14 +95,14 @@
           <text x="350" y="29" text-anchor="middle">sum.prl</text>
 
           <path class="edge" d="M350,40 V76" marker-end="url(#lg-arw)" />
-          <text class="t-sm" x="366" y="56">Prl.Compile.Parse</text>
+          <text class="t-sm" x="366" y="56">Lang.Compile.Parse</text>
           <text class="t-note" x="366" y="71">text → a syntax tree</text>
 
           <rect class="box" x="240" y="76" width="220" height="32" rx="8" />
           <text x="350" y="97" text-anchor="middle">a syntax tree</text>
 
           <path class="edge" d="M350,108 V150" marker-end="url(#lg-arw)" />
-          <text class="t-sm" x="366" y="125">Prl.Compile.Lower</text>
+          <text class="t-sm" x="366" y="125">Lang.Compile.Lower</text>
           <text class="t-note" x="366" y="140">names, constant folding, loop unrolling</text>
 
           <rect class="box-acc" x="250" y="150" width="200" height="32" rx="8" />
@@ -133,10 +133,10 @@
 
         <p class="text-stone-600 leading-relaxed">
           The file exists because a <code>ParProg</code> is first-order and can
-          therefore be printed. <code>Prl.print</code> emits <code>.prl</code> text
+          therefore be printed. <code>Lang.print</code> emits <code>.prl</code> text
           and <code>prl_file</code> reads it back, so a program can leave the
           repository — into a bug report, a paper appendix, another tool's output —
-          and come back as the same program. <code>Prl.roundTrips src</code> is the
+          and come back as the same program. <code>Lang.roundTrips src</code> is the
           gate on the reader, and it runs on every example in the build.
         </p>
       </section>
@@ -578,7 +578,7 @@ buf S[4] at 100                 -- hand placement, clear of everything live
           A file that does not compile is an elaboration error at the
           <code>prl_file</code> term, carrying the position the reader reported.
           <code>prl_prog</code> and <code>prl_layout</code> give the two halves
-          alone, and <code>Prl.load</code> is the same compiler behind
+          alone, and <code>Lang.load</code> is the same compiler behind
           <code>IO</code> for reading a path at run time.
         </p>
       </section>

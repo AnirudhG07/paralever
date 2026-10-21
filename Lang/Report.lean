@@ -1,6 +1,6 @@
-import Prl.Compile.Print
-import Prl.Load
-import Prl.Lang.Exec
+import Lang.Compile.Print
+import Lang.Load
+import Lang.Core.Exec
 import Paralever.Search.Explain
 
 /-! # Views of a compiled file, for `#eval`
@@ -8,7 +8,7 @@ import Paralever.Search.Explain
 Addresses print as the buffer cells they are (`Layout.show`), so a verdict or a counterexample reads
 in the vocabulary of the program that was written. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -26,6 +26,7 @@ def stepBound : ParProg → Nat
   | .seq a b       => stepBound a + stepBound b
   | .par ss        => stepBoundAll ss + ss.length
   | .label _ s     => stepBound s
+  | .synchronize         => 0
   | .ifElse _ t e  => max (stepBound t) (stepBound e)
 
 def stepBoundAll : List ParProg → Nat
@@ -69,13 +70,32 @@ def checkReport (name : String) (c : Compiled) : String :=
     ++ " parallel, " ++ toString (time (ParProg.execSeq c.prog ρ) L.state) ++ " sequential"
     ++ "\n  verdict   " ++ verdict ++ "\n"
 
-/-- The heap after a run, as the buffers that were declared. -/
+/-- The heap after a run, as the buffers that were declared, with a legend: the columns are not
+self-explaining and the heap is the only thing a run produces. -/
 def runReport (c : Compiled) (threads : Bool) : String :=
   let ρ : Regs := fun _ => 0
-  let σ := if threads then (ParProg.runTask c.prog ρ c.layout.state).2
-                      else (ParProg.runTaskSeq c.prog ρ c.layout.state).2
-  (if threads then "-- on real threads (one Task per thread of every parallel block)\n" else "")
-    ++ c.layout.render σ ++ "\n"
+  let L := c.layout
+  let σ := if threads then (ParProg.runTask c.prog ρ L.state).2
+                      else (ParProg.runTaskSeq c.prog ρ L.state).2
+  let n := L.bufs.length
+  "heap after the run — a .prl program has no print statement, so this is its output\n"
+    ++ toString L.size ++ " cells in " ++ toString n
+    ++ (if n == 1 then " buffer" else " buffers")
+    ++ (if c.dead.isEmpty then "" else ", " ++ toString c.dead.length ++ " of them freed")
+    ++ ", addressed 0 to " ++ toString (L.size - 1) ++ "\n"
+    ++ "NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there\n"
+    ++ (if threads then "on real threads: one Task per thread of every parallel block\n" else "")
+    ++ "\n"
+    -- a freed buffer still has an address, and a later one is placed on its cells, so the two
+    -- print the same numbers. Say which is dead rather than leave the reader to guess.
+    ++ "\n".intercalate (L.bufs.map fun p =>
+         let r := p.render σ
+         if c.dead.contains p.name then
+           match r.splitOn "\n" with
+           | first :: rest => "\n".intercalate ((first ++ "   (freed)") :: rest)
+           | []            => r
+         else r)
+    ++ "\n"
 
 /-- The interleaving that realizes a race, replayed against `step`. -/
 def raceReport (c : Compiled) : String :=
@@ -85,8 +105,19 @@ def raceReport (c : Compiled) : String :=
     (ParProg.execPar c.prog ρ) (ParProg.execSeq c.prog ρ) c.layout.state
     (nubLocs (f.reads ++ f.writes))
 
-/-- The autoparallelized program, as `.prl`, with the plan's numbers. -/
+/-- The autoparallelized program, as `.prl`, with the plan's numbers.
+
+A `synchronize` is outside the proved route (`AutoPar.rewriteOk`), so a program with one is reported
+through `ParProg.autoPar` instead: each phase planned on its own, the barriers kept, and the result
+checked by `wfB` rather than proved. -- ref: docs/autopar.md § Synchronization -/
 def parReport (c : Compiled) : String :=
+  if !ParProg.synchronizeFree c.prog then
+    let p := ParProg.autoPar c.prog
+    print { c with prog := p }
+      ++ "\n-- phases " ++ toString (ParProg.phases (ParProg.flatten c.prog)).length
+      ++ ", greedy route (a barrier is outside the proved one)"
+      ++ "\n-- independent " ++ toString (ParProg.wfB p) ++ "\n"
+  else
   let p := AutoPar.rewrite c.prog
   let (d, l, s) := AutoPar.quality c.prog
   print { c with prog := p }
@@ -97,4 +128,4 @@ def parReport (c : Compiled) : String :=
     ++ "\n-- committed " ++ toString (AutoPar.rewriteOk c.prog)
     ++ ", optimal " ++ toString (AutoPar.optimalB c.prog) ++ "\n"
 
-end Paralever.Prl
+end Paralever.Lang

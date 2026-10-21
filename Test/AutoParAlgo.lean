@@ -1,5 +1,5 @@
 import Paralever.AutoPar.Rewrite
-import Prl.Lang.Exec
+import Lang.Core.Exec
 
 /-! # The rewrite, on programs
 
@@ -8,7 +8,7 @@ import Prl.Lang.Exec
 here means the scheduler changed shape. -- ref: docs/autopar-algorithm.md -/
 
 namespace Paralever.Test.AutoParAlgo
-open Paralever Paralever.Prl Paralever.Prl.ParProg Paralever.AutoPar
+open Paralever Paralever.Lang Paralever.Lang.ParProg Paralever.AutoPar
 
 /-- Probe a program both ways: the rewrite on real threads, the original sequentially. -/
 def agrees (p : ParProg) (σ : State) (probes : List Loc) : Bool :=

@@ -1,9 +1,9 @@
-import Prl.Lang.Imp
+import Lang.Core.Imp
 import Paralever.AutoPar.Print
 
 
 namespace Paralever.Examples.Writing
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-! ## A program
 
@@ -273,7 +273,7 @@ theorem strided3_par_seq_eq (ρ : Regs) (σ : State) :
 /-! ## A pipeline, assembled from proved pieces
 
 Phases named with `:: "…"` so each can be stated about on its own; the whole chain's obligation is
-their conjunction. -- ref: `Prl/Lang/Core.lean` § Composing a pipeline out of proved pieces -/
+their conjunction. -- ref: `Lang/Core/Prog.lean` § Composing a pipeline out of proved pieces -/
 
 def pipeline (n : Nat) : ParProg := paralever {
   for i in n { [100 + i] := 0 };
@@ -438,7 +438,7 @@ alone. -/
 /-! ## Kernels from machine learning
 
 The shape most ML kernels have — each task reads a window of the input and writes one cell of its
-own — is the Bernstein case exactly. Four that recur, each pre-verified in `Prl/Lang/Kernels.lean`: -/
+own — is the Bernstein case exactly. Four that recur, each pre-verified in `Lang/Core/Kernels.lean`: -/
 
 /-- Elementwise binary: `out[i] := a[i] + b[i]`. Add, multiply, `max` for a ReLU. -/
 example : ParProg.wfB (ParProg.zipK 4 0 10 20 (fun x y => x + y)) = true  := by decide
@@ -476,7 +476,7 @@ example : ParProg.wfB (ParProg.biasAddK 2 3 0 50 51)  = false := by decide
 
 `%n` and `%name` are the same syntax on either side of a `:=`. A name is any identifier of type
 `Reg`, so one `abbrev` buys it; nothing in the semantics knows the difference, which is why the two
-spellings below are the *same term*. -- ref: `Prl/Lang/Notation.lean` -/
+spellings below are the *same term*. -- ref: `Lang/Core/Notation.lean` -/
 
 abbrev acc : Reg := 0
 abbrev tmp : Reg := 1

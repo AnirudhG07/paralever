@@ -73,7 +73,7 @@ describes.
 ## Data-dependent addresses
 
 `load`/`store` take a `Loc` — a Lean `Nat`, fixed before the program is data — which is exactly what
-makes `footprintOf` a fold and `wfB` a `decide`. `A[B[i]]` does not fit, so `Prl/Lang/Core.lean` adds two
+makes `footprintOf` a fold and `wfB` a `decide`. `A[B[i]]` does not fit, so `Lang/Core/Prog.lean` adds two
 constructors whose address is an expression:
 
 ```lean

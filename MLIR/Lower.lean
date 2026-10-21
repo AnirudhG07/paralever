@@ -1,8 +1,8 @@
 import MLIR.Affine
 import MLIR.Scalar
 import MLIR.Parse
-import Prl.Lang.Exec
-import Prl.Lang.Layout
+import Lang.Core.Exec
+import Lang.Core.Layout
 import Paralever.Search.RaceSearch
 
 /-! # `Mlir.Op → Layout × ParProg`
@@ -34,7 +34,7 @@ target is footprint preservation — every access the MLIR program performs lies
 produced `ParProg` reports. -- ref: `docs/mlir.md` § Why in Lean -/
 
 namespace Paralever.MLIR
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## Buffers
 

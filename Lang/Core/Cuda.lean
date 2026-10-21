@@ -1,4 +1,4 @@
-import Prl.Lang.Kernels
+import Lang.Core.Kernels
 
 /-! # Launching threads, CUDA-style
 
@@ -6,7 +6,7 @@ A thread is distinguished only by its index, so a kernel is a *function of the i
 Lean definition that may live in any file. This is the vocabulary for that: `launch`, `launchGrid`
 with CUDA's `blockIdx`/`threadIdx` split, and `globalTid`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -52,4 +52,4 @@ abbrev globalTid (threads b t : Nat) : Nat := b * threads + t
 
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

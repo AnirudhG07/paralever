@@ -1,10 +1,10 @@
 import MLIR.Lower
-import Prl.Load
+import Lang.Load
 import Lean
 
 /-! # `mlir_prog` — lowering a `.mlir` file while the Lean file elaborates
 
-The same door `prl_file` is (`Prl/Load.lean`): the file is parsed, lowered and **quoted** at
+The same door `prl_file` is (`Lang/Load.lean`): the file is parsed, lowered and **quoted** at
 elaboration time, so the declaration holds a `ParProg` literal and `by decide` on `wfB` sees the
 program rather than the reader. Without it a corpus pilot can only carry a `#guard` on its verdict,
 because `decide` would have to run the parser in the kernel. -- ref: `docs/mlir.md` -/

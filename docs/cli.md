@@ -4,10 +4,13 @@ One file in, and one of four things out: a verdict, a run, a parallelization, or
 proves the program's parallel reading equals its sequential one**. The last is the point of the
 tool. A checker that prints `race-free` is a linter, and you believe it or you do not; a tool that
 writes a module Lean then checks is different in kind, because the claim leaves with its proof
-attached.
+attached. Name a file and no command and the tool answers the question a file arrives with — is
+this program race-free, and if so what holds of it — which is `check` followed by the evidence
+either way.
 
 ```bash
 lake build paralever                      # ./.lake/build/bin/paralever
+paralever         Examples/Language/sum.prl    # the verdict, and the evidence for it
 paralever check   Examples/Language/sum.prl
 paralever prove   Examples/Language/sum.prl -o Proofs/Sum.lean --check
 paralever to-mlir Examples/Language/sum.prl -o sum.mlir
@@ -23,8 +26,8 @@ Every command takes a `.prl` file or a `.mlir` module in generic form, because b
 same pair — a `Layout` saying where the buffers are, and an unrolled `ParProg`:
 
 ```text
-      sum.prl ──► Prl.Compile ──┐
-                                ├──► Layout × ParProg ──┬──► check     the verdict
+      sum.prl ──► Lang.Compile ──┐                    ┌──► ⟨none⟩    the verdict, with evidence
+                                ├──► Layout × ParProg ──┼──► check     the verdict
 doall-no.mlir ──► MLIR.Lower ───┘                       ├──► run       the heap it leaves
                                                         ├──► autopar   the parallelized .prl
                                                         ├──► prove     a .lean file
@@ -39,26 +42,67 @@ written once.
 
 | command | what it prints | from |
 |---|---|---|
-| `check FILE` | memory, reads, writes, thread count, rounds, verdict | `Prl.checkReport` |
-| `run FILE [--threads]` | the heap after a run, buffer by buffer | `Prl.runReport` |
-| `race FILE` | the interleaving that reaches `wrong`, step by step | `Prl.raceReport` |
-| `autopar FILE` | the parallelized program as `.prl`, with the plan's numbers | `Prl.parReport` |
+| `FILE` (no command) | the check, then the theorem that holds or the interleaving that breaks it | `Tool.Run` |
+| `check FILE` | memory, reads, writes, thread count, rounds, verdict | `Lang.checkReport` |
+| `run FILE [--threads]` | the heap after a run, buffer by buffer | `Lang.runReport` |
+| `race FILE` | the interleaving that reaches `wrong`, step by step | `Lang.raceReport` |
+| `autopar FILE` | the parallelized program as `.prl`, with the plan's numbers | `Lang.parReport` |
 | `prove FILE` | a Lean module stating what holds of the program | `Tool.proofFile` |
-| `to-prl FILE` | the program as `.prl` | `Prl.print` |
+| `to-prl FILE` | the program as `.prl` | `Lang.print` |
 | `to-mlir FILE` | the program as MLIR generic form | `MLIR.emitText` |
-| `to-lean FILE` | a `Layout` and a `paralever { … }` block | `Prl.toLean` |
+| `to-lean FILE` | a `Layout` and a `paralever { … }` block | `Lang.toLean` |
 
 `-o PATH` writes there instead of to standard output. `--threads` runs one `Task` per thread of
 every fork rather than the canonical order — the heap is the same one, which is what `runTask_eq`
 says for every program `wfB` accepts. `--autopar` makes `prove`, `to-mlir` and `to-lean` take the
 parallelized program as their subject. `--colour` paints `to-prl`'s output in the editor grammar's
-token classes.
+token classes. `--prove PATH` is for the no-command form: the verdict goes to standard output and
+the Lean module that proves it goes to `PATH`, so one invocation gives both the answer and its
+proof. With `--check` as well, Lean's verdict on that module is the exit code.
 
-`check` exits 1 when the program has a race, so a build can gate on it:
+`check` and the no-command form exit 1 when the program has a race, so a build can gate on either:
 
 ```bash
 for f in Examples/Language/*.prl; do paralever check "$f" || echo "$f is racy"; done
 ```
+
+## The verdict a bare file gets
+
+`paralever FILE` prints `check`'s report and then one of three paragraphs, chosen by the same
+ladder `prove` uses. `wfB` accepts: `PROVED`, and the `paralever prove` line that writes the Lean
+module for it. `wfB` refuses but no schedule reaches `wrong` at the declared heap: `NO RACE FOUND,
+BUT NOT PROVED`, naming the over-approximated footprint as the reason (`docs/block-ir.md`) and the
+weaker per-heap statement as what is available. A schedule does reach `wrong`: `RACY`, followed by
+`race`'s interleaving. Only the third exits 1.
+
+## What `run` prints
+
+A `.prl` program has no print statement, so its output *is* the heap, and `run` prints the heap as
+the buffers that were declared:
+
+```console
+$ paralever run Examples/Language/arena.prl
+heap after the run — a .prl program has no print statement, so this is its output
+12 cells in 3 buffers, 1 of them freed, addressed 0 to 11
+NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
+
+src [4] @0  [1, 2, 3, 4]
+tmp [4] @4  [3, 5, 7, 9]   (freed)
+out [4] @4  [3, 5, 7, 9]
+```
+
+The header states the three things the numbers need: how many cells the layout has and how they are
+split into buffers, the address range those cells occupy, and what each row's `[dims] @base` means.
+`[4]` is the shape — a `[2, 6]` buffer prints as two rows, and `n [1] @0  [3]` is a one-cell
+buffer holding the value `3` — and `@4` is the address of the buffer's first cell in the one flat
+heap `State = Loc → Val` gives. `tmp` and `out` print the same numbers above because `free`
+returns the cells and the next buffer is placed on them (`docs/layout.md` § *Lifetimes*); the
+`(freed)` marker says which of the two is dead rather than leaving the repetition to be guessed at.
+
+A report is read, not elaborated, so none of it is commented out. `check`, `run`, `race` and the
+no-command verdict print plain lines; the `--` prefix is kept for output that is *source* —
+`autopar`, `to-prl`, `to-mlir` and `to-lean`, where the reader's approximations have to survive as
+comments in a file that still compiles.
 
 ## What `prove` writes
 
@@ -151,8 +195,11 @@ read as a group of operations rather than as one.
 ## Limits
 
 - **`prove` writes; Lean checks.** Without `--check` the tool does not run Lean, so a module it
-  writes for a large program can still be slow to check or exceed `maxRecDepth` — `decide` reduces
-  the program against a heap. The generated module sets the bound to 100000 and says why.
+  writes for a large program can still be slow to check: `decide` reduces the program against a
+  heap, and the reader quotes the whole program into the elaborator first. The generated module
+  raises `maxRecDepth` to 100000 and lifts the heartbeat limit, because both costs are the
+  program's size and both terminate — a 14,451-line MLIR module takes Lean 78 s and would
+  otherwise fail at the default budget before `decide` ran (`docs/mlir.md` § *Scale*).
 - **`--check` needs the repo.** It shells out to `lake env lean`, so it has to run from a directory
   where `lake` resolves this package.
 - **One function per module.** An MLIR file with several `func.func`s and none called `main` is

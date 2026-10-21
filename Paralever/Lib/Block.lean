@@ -90,7 +90,7 @@ instance : Sub AExp := ⟨AExp.sub⟩
 /-- `*` on `AExp`. -/
 instance : Mul AExp := ⟨AExp.mul⟩
 /-- A numeric literal elaborates as `AExp.lit`, so `%0 * 2 + 1` is an `AExp`
-(`%n` is surface syntax, `Prl/Lang/Notation.lean`). -/
+(`%n` is surface syntax, `Lang/Core/Notation.lean`). -/
 instance : OfNat AExp n := ⟨AExp.lit (Int.ofNat n)⟩
 
 /-! ### Lowering to `ParM`

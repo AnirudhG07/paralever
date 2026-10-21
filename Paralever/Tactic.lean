@@ -1,5 +1,5 @@
 import Paralever.Search.ExplainHtml
-import Prl.Lang.Core
+import Lang.Core.Prog
 import Lean
 
 /-! # Two tactics: the theorem first, the counterexample second
@@ -150,12 +150,12 @@ rather than compiled. -/
 
 private def routes : TacticM (List (TSyntax `tactic)) := do
   pure
-    [ ← `(tactic| refine Prl.ParProg.par_seq_eq ?_ _ _ <;> grind)
-    , ← `(tactic| refine Prl.ParProg.par_seq_eq ?_ _ _ <;> simp +decide)
-    , ← `(tactic| refine Prl.ParProg.par_seq_eq ?_ _ _ <;> decide)
+    [ ← `(tactic| refine Lang.ParProg.par_seq_eq ?_ _ _ <;> grind)
+    , ← `(tactic| refine Lang.ParProg.par_seq_eq ?_ _ _ <;> simp +decide)
+    , ← `(tactic| refine Lang.ParProg.par_seq_eq ?_ _ _ <;> decide)
     , ← `(tactic| refine parSeqEq_of_runSeq_eq _ _ _
                     ((wellFormedB_iff _ _).1 ?_) ((wellFormedB_iff _ _).1 ?_)
-                    (Prl.ParProg.execPar_runSeq_all.1 _ _ _) <;> decide)
+                    (Lang.ParProg.execPar_runSeq_all.1 _ _ _) <;> decide)
     , ← `(tactic| refine par_seq_eq _ _ _ ((wellFormedB_iff _ _).1 ?_) <;> decide)
     , ← `(tactic| refine parSeqEq_of_runSeq_eq _ _ _
                     ((wellFormedB_iff _ _).1 ?_) ((wellFormedB_iff _ _).1 ?_) rfl <;> decide) ]

@@ -1,4 +1,4 @@
-import Prl.Lang.Analysis
+import Lang.Core.Analysis
 
 /-! # Regrouping a `;`-chain
 
@@ -7,7 +7,7 @@ segments, segments become threads, threads become stages. Each step is one regro
 (`runSeq_block_map`) covers all of them. -- ref: docs/autopar-algorithm.md § Why regrouping -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-- `block []` is `%r := R r`, so it is a no-op only up to function extensionality. -/
 theorem Regs.set_self (ρ : Regs) (r : Reg) : ρ.set r (ρ r) = ρ := by
@@ -62,7 +62,7 @@ theorem runSeq_flatten_all :
     (∀ (p : ParProg) (ρ : Regs) (σ : State),
         runSeq (execSeq (block (flatten p)) ρ) σ = runSeq (execSeq p ρ) σ)
     ∧ (∀ (_ : List ParProg), True) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ; rfl
   · intro l e ρ σ; rfl
   · intro r e ρ σ; rfl
@@ -75,6 +75,7 @@ theorem runSeq_flatten_all :
   · intro r a e ρ σ; rfl
   · intro a e v ρ σ; rfl
   · intro c t e _ _ ρ σ; rfl
+  · intro ρ σ; rfl
   · trivial
   · intro _ _ _ _; trivial
 

@@ -1,5 +1,5 @@
 import Paralever.Tactic
-import Prl.Load
+import Lang.Load
 
 /-! # The two tactics, as build gates
 
@@ -9,7 +9,7 @@ case is gated on its message, because what the tactic owes a user there is an ex
 -- ref: `docs/race-search.md` § In tactic position -/
 
 namespace Test.Tactic
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 set_option maxRecDepth 100000
 

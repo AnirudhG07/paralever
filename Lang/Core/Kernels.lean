@@ -1,4 +1,4 @@
-import Prl.Lang.Core
+import Lang.Core.Prog
 import Paralever.Kernels.Grid
 
 /-! # Premade kernels in the language
@@ -7,7 +7,7 @@ The data-parallel shapes of `Kernels/`, written as `ParProg`s. Each carries its 
 proved once at every size, so a program assembled from them needs no proof of its own — that is
 what `par_seq_eq_of_kernels` says. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -670,4 +670,4 @@ theorem par_seq_eq_of_kernels {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ :
     ParSeqEq (execPar s ρ) (execSeq s ρ) σ := par_seq_eq h ρ σ
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

@@ -1,4 +1,4 @@
-import Prl.Lang.Core
+import Lang.Core.Prog
 import Paralever.Lib.Cost
 
 /-! # Cost: the parallel reading is never slower
@@ -6,7 +6,7 @@ import Paralever.Lib.Cost
 `par_seq_eq` says the two readings compute the same thing; this says what parallelising buys. The
 spans are ordered for every program the check accepts, from the same `Bool`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -21,7 +21,7 @@ theorem time_execPar_le_all :
     (∀ s ρ σ, wfB s = true → time (execPar s ρ) σ ≤ time (execSeq s ρ) σ) ∧
     (∀ ss ρ σ, wfAllB ss = true →
       time (ParM.seqAll (execParAll ss ρ)) σ ≤ time (ParM.seqAll (execSeqAll ss ρ)) σ) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ _; exact Nat.le_refl _
   · intro l e ρ σ _; exact Nat.le_refl _
   · intro r e ρ σ _; exact Nat.le_refl _
@@ -69,6 +69,7 @@ theorem time_execPar_le_all :
     · rw [ite_eq_left hc, ite_eq_left hc]; exact it ρ σ h.1
     · rw [ite_eq_right hc, ite_eq_right hc]; exact ie ρ σ h.2
   · intro ρ σ _; exact Nat.le_refl _
+  · intro ρ σ _; exact Nat.le_refl _
   · intro s ss i1 i2 ρ σ h
     rw [wfAllB, Bool.and_eq_true] at h
     have hwp : WellFormed (ParM.seqAll (execParAll (s :: ss) ρ)) σ :=
@@ -88,4 +89,4 @@ theorem time_le {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
     time (execPar s ρ) σ ≤ time (execSeq s ρ) σ := time_execPar_le_all.1 s ρ σ h
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

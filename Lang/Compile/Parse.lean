@@ -1,19 +1,19 @@
-import Prl.Compile.Ast
+import Lang.Compile.Ast
 
 /-! # A reader for `.prl` files
 
 Recursive descent, and untrusted like `MLIR/Parse.lean`'s reader: what is believed is `wfB` on the
 `ParProg` it produces, and the gate that a file was read as written is the round trip in
-`Prl/Compile/Print.lean`. A newline ends a statement, so `ws` crosses one only inside brackets (`depth > 0`)
+`Lang/Compile/Print.lean`. A newline ends a statement, so `ws` crosses one only inside brackets (`depth > 0`)
 and `wsl` crosses one deliberately, before `|`, `::` or `else`.
 
 Grammar: `docs/prl.md`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 
-/-- Every reserved word. `Test/Prl.lean` gates the editor grammar against this list. -/
+/-- Every reserved word. `Test/Lang.lean` gates the editor grammar against this list. -/
 def keywords : List String :=
-  [ "paralever", "parallel", "parfor", "for", "while", "if", "else", "in", "at", "free",
+  [ "paralever", "parallel", "parfor", "for", "while", "if", "else", "in", "at", "free", "synchronize",
     "buf", "const", "reg", "min", "max", "zeros", "ones", "eye", "arange", "full" ]
 
 /-- Input, a cursor, and the bracket depth: `depth > 0` means a line break is whitespace. -/
@@ -344,7 +344,8 @@ mutual
 /-- One statement. -/
 partial def stmt : P Stmt := do
   ws
-  if ← tryKw "free" then pure (.free (← ident))
+  if ← tryKw "synchronize" then pure .synchronize
+  else if ← tryKw "free" then pure (.free (← ident))
   else if ← atDecl then pure (.decl (← decl))
   else if ← tryKw "parallel" then do
     let ts ← threads
@@ -457,4 +458,4 @@ def parse (src : String) : Except String File :=
   | .ok (f, _)   => .ok f
   | .error e     => .error e
 
-end Paralever.Prl
+end Paralever.Lang

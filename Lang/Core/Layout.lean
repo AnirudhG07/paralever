@@ -261,12 +261,12 @@ theorem Layout.disjoint (L : Layout) (m n : String) (h : L.disjointB m n = true)
 returns the cells to the allocator when the buffer is the most recent one placed, so the next
 declaration is placed on them — `buf`/`free` is a stack, and freeing out of order leaves the hole.
 Nothing is zeroed and no location goes away, which is why this is an arena and not a heap. There is
-no run-time allocator; `Prl.Compile.Lower` decides the same placement from a `.prl` file.
+no run-time allocator; `Lang.Compile.Lower` decides the same placement from a `.prl` file.
 -- ref: `docs/prl.md` § Declaring memory -/
 
 /-- **Where the cursor goes when `p` is freed**: back to the buffer's base when it is the most
 recent one placed, and nowhere otherwise — which is what makes `buf`/`free` a stack and what leaves
-the hole when it is used out of order. `Prl.Compile.Lower` frees by this rule too. -/
+the hole when it is used out of order. `Lang.Compile.Lower` frees by this rule too. -/
 def Placed.release (p : Placed) (next : Loc) : Loc :=
   if p.base + p.toBuf.size == next then p.base else next
 
@@ -287,7 +287,7 @@ structure Arena where
 def Arena.find? (A : Arena) (nm : String) : Option Placed :=
   if A.dead.contains nm then none else A.bufs.find? (fun p => p.name == nm)
 
-/-- One declaration. Freeing a name that is not live does nothing: `Prl.Compile.Lower` rejects that
+/-- One declaration. Freeing a name that is not live does nothing: `Lang.Compile.Lower` rejects that
 case, and the cursor must not move back over cells a later buffer now owns. -/
 def Arena.decl (A : Arena) : LDecl → Arena
   | .buf b   => { A with bufs := A.bufs ++ [⟨b, A.next⟩], next := A.next + b.size }

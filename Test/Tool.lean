@@ -14,7 +14,7 @@ is inlined into whatever reads it, and the registers that remain are renumbered.
 one, the per-heap check the second, and a real race leaves neither. -- ref: `docs/cli.md` -/
 
 namespace Test.Tool
-open Paralever Paralever.Prl Paralever.Tool
+open Paralever Paralever.Lang Paralever.Tool
 
 /-! ## `.prl` out as MLIR, and back -/
 
@@ -57,9 +57,9 @@ the reader supports, and two MLIR globals cannot alias. -/
 The other direction needs no new code: the lowering gives a `Layout` and a `ParProg`, which is
 what `print` takes. What is gated is that the text it writes reads back as the same program. -/
 
-def doall : Prl.ParProg      := mlir_prog "../Examples/Mlir/doall-no.mlir"
+def doall : Lang.ParProg      := mlir_prog "../Examples/Mlir/doall-no.mlir"
 def doallL : Layout          := mlir_layout "../Examples/Mlir/doall-no.mlir"
-def nested2d : Prl.ParProg   := mlir_prog "../Examples/Mlir/nested-2d-no.mlir"
+def nested2d : Lang.ParProg   := mlir_prog "../Examples/Mlir/nested-2d-no.mlir"
 def nested2dL : Layout       := mlir_layout "../Examples/Mlir/nested-2d-no.mlir"
 
 #guard roundTrips (print ⟨doallL, doall, [], []⟩)
@@ -109,9 +109,13 @@ private def opts (as : List String) : Option Opts := (parseArgs as).toOption
   (fun o => o.out == some "A.lean" && o.check)
 #guard (opts ["run", "--threads", "a.prl"]).any (fun o => o.threads && o.file == "a.prl")
 #guard (opts ["to-mlir", "--autopar", "a.prl"]).any (fun o => o.autopar)
--- what is refused: an unknown flag, a missing `-o` path, a second file
+-- no command, and the proof asked for alongside the verdict
+#guard (opts ["a.prl", "--prove", "A.lean"]).any
+  (fun o => o.cmd.isEmpty && o.file == "a.prl" && o.proof == some "A.lean")
+-- what is refused: an unknown flag, a missing `-o` path, a missing `--prove` path, a second file
 #guard (opts ["check", "--wat", "a.prl"]).isNone
 #guard (opts ["prove", "a.prl", "-o"]).isNone
+#guard (opts ["a.prl", "--prove"]).isNone
 #guard (opts ["check", "a.prl", "b.prl"]).isNone
 
 end Test.Tool

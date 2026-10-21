@@ -1,12 +1,12 @@
-import Prl.Lang.Imp
-import Prl.Lang.Exec
-import Prl.Lang.Cost
+import Lang.Core.Imp
+import Lang.Core.Exec
+import Lang.Core.Cost
 import Paralever.Search.Explain
 import Paralever.AutoPar.Rewrite
 
 
 namespace Paralever.Examples.BlogSnippets
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## The hook -/
 

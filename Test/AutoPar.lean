@@ -1,6 +1,6 @@
-import Prl.Lang.Notation
-import Prl.Lang.AutoParSound
-import Prl.Lang.Exec
+import Lang.Core.Notation
+import Lang.Core.AutoParSound
+import Lang.Core.Exec
 import Paralever.AutoPar.Rewrite
 
 /-! # `autoPar` regression tests
@@ -10,7 +10,7 @@ may not cross a fork boundary. The last section compares the two routes on all t
 -- ref: docs/autopar.md -/
 
 namespace Paralever.Test.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg Paralever.AutoPar
+open Paralever Paralever.Lang Paralever.Lang.ParProg Paralever.AutoPar
 
 def σ0 : State := fun _ => .int 0
 

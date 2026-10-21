@@ -1,16 +1,16 @@
-import Prl.Lang.Layout
+import Lang.Core.Layout
 
 /-! # The syntax of a `.prl` file
 
 The statement forms `paralever { … }` has, plus declarations, which in Lean are ordinary `Buf` and
-`Reg` definitions. Names survive here and are resolved in `Prl/Compile/Lower.lean`.
+`Reg` definitions. Names survive here and are resolved in `Lang/Compile/Lower.lean`.
 
 Grammar and rationale: `docs/prl.md`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 
 /-- An expression. One type for both roles: an *address*, folded to a `Loc` at compile time, and a
-*value*, which becomes an `AExp`. Position decides which, and `Prl/Compile/Lower.lean` rejects the
+*value*, which becomes an `AExp`. Position decides which, and `Lang/Compile/Lower.lean` rejects the
 combinations that do not exist. -/
 inductive Exp where
   | num  : Int → Exp
@@ -77,6 +77,8 @@ inductive Stmt where
   /-- `free A` — the end of a buffer's lifetime. Erased: it compiles to nothing, and its whole
   effect is on what the compiler will accept afterwards. -/
   | free    : String → Stmt
+  /-- `synchronize` — the end of a phase. Nothing before it and after it is grouped into one fork. -/
+  | synchronize   : Stmt
   deriving Repr, Inhabited
 
 /-- A whole file. -/
@@ -84,4 +86,4 @@ structure File where
   body : List Stmt
   deriving Repr, Inhabited
 
-end Paralever.Prl
+end Paralever.Lang

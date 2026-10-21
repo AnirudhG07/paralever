@@ -1,6 +1,6 @@
 import Paralever.Lib.Pure
 import Paralever.Kernels.Grid
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.MatMul
@@ -177,7 +177,7 @@ bounding `p / n` and `p % n`, and here there is nothing to bound — `gridIdx` a
 when the term elaborates, so every address is a literal by the time the thread exists. -/
 
 namespace Surface
-open Paralever.Prl
+open Paralever.Lang
 
 /-- One thread per output cell: zero the accumulator, fold `A[i,k] * B[k,j]` over `k`, store. The
 accumulator is a **register**, so the thread's whole write set is the single cell `C[i,j]` — which
@@ -233,7 +233,7 @@ example : (runSeq (ParProg.execPar (matmul 2) ρ0) σ2).2 11 = .int 4 := rfl
 
 `#eval` runs this matmul on real `Task`s, one per output cell, and `runTask_eq` says the spawned run
 computes the canonical sequential answer — so the same `decide` certifies both.
--- ref: `Prl/Lang/Exec.lean` § Running it on real threads
+-- ref: `Lang/Core/Exec.lean` § Running it on real threads
 
 With `A = [[1,2],[3,4]]` and `B = [[5,6],[7,8]]`, `#eval` gives `[19, 22, 43, 50]`: -/
 
@@ -291,7 +291,7 @@ sees two operands to multiply; §2's `gridReducePar` takes a *list* per step and
 product. Closing that gap in the DSL is the next kernel to add. -/
 
 namespace SurfaceSymbolic
-open Paralever.Prl Paralever.Prl.ParProg
+open Paralever.Lang Paralever.Lang.ParProg
 
 /-- Three `n×n` blocks at bases `a`, `b`, `c`; cell `(i,j)` folds row `i` of `a` then column `j`
 of `b` into `c[i,j]`. -/

@@ -1,9 +1,9 @@
 import Paralever.Search.Explain
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.Scatter
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 -- `decide` on `wellFormedB` reduces a lowered program against a concrete heap
 set_option maxRecDepth 4000

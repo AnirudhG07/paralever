@@ -43,7 +43,7 @@ step|Paralever.Core.Semantics|site-step|step — every schedule at once
 footprint|Paralever.Core.Access|site-footprint|Footprint — what a computation touches
 accesses-childs|Paralever.Core.Access|site-accesses-childs|accessesChilds — staggered measurement
 par-seq-eq|Paralever.Theory.Sequentialize|site-par-seq-eq|par_seq_eq — the metatheorem
-wfb-par-seq-eq|Prl.Lang.Core|site-wfb-par-seq-eq|par_seq_eq — one Bool, then the theorem
+wfb-par-seq-eq|Lang.Core.Prog|site-wfb-par-seq-eq|par_seq_eq — one Bool, then the theorem
 rewrite-sound|Paralever.AutoPar.Rewrite|site-rewrite-sound|rewrite_sound — no hypothesis
 dag-edges|Paralever.AutoPar.Dag|site-dag-edges|the four dependence cases, as #guards
 follow-sound|Paralever.Search.RaceSearch|site-follow-sound|follow_sound — a schedule is a run

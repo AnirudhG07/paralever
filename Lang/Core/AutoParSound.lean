@@ -1,4 +1,4 @@
-import Prl.Lang.Analysis
+import Lang.Core.Analysis
 
 /-! # The proposal preserves the program
 
@@ -9,7 +9,7 @@ import Prl.Lang.Analysis
 race: a `par` node resets the register file, so a register written on one side of a fork boundary
 and read on the other reads a stale value, in **both** readings. -- ref: docs/autopar.md -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -38,7 +38,7 @@ theorem regs_frame_all :
     (∀ (s : ParProg) (ρ : Regs) (σ : State) (r : Reg),
         r ∉ (regFootprint s).writes → (runSeq (execSeq s ρ) σ).1 r = ρ r)
     ∧ (∀ _ : List ParProg, True) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r' l ρ σ r hr
     simp only [regFootprint, List.mem_cons, List.not_mem_nil, or_false] at hr
     simp [execSeq, readAs, runSeq, Regs.set, hr]
@@ -62,6 +62,7 @@ theorem regs_frame_all :
     split
     · exact iht _ _ _ hr.1
     · exact ihe _ _ _ hr.2
+  · intro ρ σ r _; simp [execSeq, runSeq]
   · trivial
   · intro _ _ _ _; trivial
 
@@ -87,7 +88,7 @@ theorem agree_run_all :
         (∀ r ∈ (regFootprintsOf ss).reads, r ∈ R) → (∀ r ∈ R, ρ r = ρ' r) →
           (runSeq (ParM.seqAll (execSeqAll ss ρ)) σ).2
             = (runSeq (ParM.seqAll (execSeqAll ss ρ')) σ).2) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   -- load: the address is a literal, so both sides read the same cell
   · intro r' l R ρ ρ' σ _ hR
     refine ⟨by simp [execSeq, readAs, runSeq], ?_⟩
@@ -156,6 +157,8 @@ theorem agree_run_all :
     · exact iht R ρ ρ' σ (fun r hr => hsub r (Or.inr (Or.inl hr))) hR
     · exact ihe R ρ ρ' σ (fun r hr => hsub r (Or.inr (Or.inr hr))) hR
   -- nil
+  · intro R ρ ρ' σ _ hR
+    exact ⟨by simp [execSeq, runSeq], by intro r hr; simpa [execSeq, runSeq] using hR r hr⟩
   · intro R ρ ρ' σ _ _; rfl
   -- cons
   · intro s ss ih1 ih2 R ρ ρ' σ hsub hR
@@ -235,4 +238,4 @@ theorem par_block_heap (g : List ParProg) (h : noRegFlow g = true) (ρ : Regs) (
   exact fork_heap g [] ρ ρ σ (fun _ _ => rfl) (fun _ _ _ _ => by simp) h
 
 end ParProg
-end Paralever.Prl
+end Paralever.Lang

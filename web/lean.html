@@ -113,7 +113,7 @@ lake exe paralever --help        # the command line</code></pre>
                 <li><b>Tactic.lean</b> <i><code>paralever_race</code> and <code>paralever_check</code></i></li>
               </ul>
             </li>
-            <li><b>Prl/</b> <i>the surface language, and the <code>.prl</code> file in front of it</i>
+            <li><b>Lang/</b> <i>the surface language, and the <code>.prl</code> file in front of it</i>
               <ul>
                 <li><b>Lang/</b> <i>Core · Layout · Kernels · Cuda · Cost · Exec · Notation · Analysis · AutoParSound</i></li>
                 <li><b>Compile/</b> <i>Ast · Parse · Lower · Print</i></li>
@@ -144,8 +144,8 @@ lake exe paralever --help        # the command line</code></pre>
               <tr><td><code>Core/Access.lean</code></td><td><code>Footprint</code>, <code>runSeq</code>, <code>accesses</code>, <code>Indep</code>, <code>IndepAll</code>, <code>WellFormed</code></td></tr>
               <tr><td><code>Theory/Sequentialize.lean</code></td><td><code>ParSeqEq</code>, <code>par_seq_eq</code>, the N-ary form, and the region forms</td></tr>
               <tr><td><code>Theory/WellFormedCanonical.lean</code></td><td>the canonical-outcomes theorem: a well-formed program has exactly one terminal outcome</td></tr>
-              <tr><td><code>Prl/Lang/Core.lean</code></td><td><code>ParProg</code>, <code>footprintOf</code>, <code>wfB</code>, <code>execPar</code>, <code>execSeq</code>, and <code>par_seq_eq</code> on the surface</td></tr>
-              <tr><td><code>Prl/Lang/Analysis.lean</code></td><td><code>flatten</code>, <code>atoms</code>, <code>dependences</code>, <code>canPar</code>, <code>autoPar</code></td></tr>
+              <tr><td><code>Lang/Core/Prog.lean</code></td><td><code>ParProg</code>, <code>footprintOf</code>, <code>wfB</code>, <code>execPar</code>, <code>execSeq</code>, and <code>par_seq_eq</code> on the surface</td></tr>
+              <tr><td><code>Lang/Core/Analysis.lean</code></td><td><code>flatten</code>, <code>atoms</code>, <code>dependences</code>, <code>canPar</code>, <code>autoPar</code></td></tr>
               <tr><td><code>AutoPar/Dag.lean</code></td><td>the scoreboard, <code>preds</code>, <code>asap</code>, <code>critical</code></td></tr>
               <tr><td><code>AutoPar/Plan.lean</code></td><td><code>plan</code> — the three-case fold — and <code>plan_units</code></td></tr>
               <tr><td><code>AutoPar/Sound.lean</code></td><td><code>rewrite_sound</code>, <code>rewrite_wf</code>, <code>rewrite_parSeqEq</code></td></tr>
@@ -312,7 +312,7 @@ lake exe paralever --help        # the command line</code></pre>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Next</h2>
         <div class="grid md:grid-cols-2 gap-4">
           <a class="card" href="concept.html"><h3>The theorem →</h3><p>The six definitions in <code>Core/</code>, and the proof in <code>Theory/</code>.</p></a>
-          <a class="card" href="language.html"><h3>The language →</h3><p><code>Prl/</code>, and reading a file while Lean elaborates.</p></a>
+          <a class="card" href="language.html"><h3>The language →</h3><p><code>Lang/</code>, and reading a file while Lean elaborates.</p></a>
           <a class="card" href="cli.html"><h3>The command line →</h3><p><code>Tool/</code>, and the module <code>prove</code> writes.</p></a>
           <a class="card" href="../slides/"><h3>The talk →</h3><p>Built from the library: every code block on a slide is read out of the source that compiles.</p></a>
         </div>

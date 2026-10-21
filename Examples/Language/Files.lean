@@ -1,7 +1,7 @@
-import Prl.Report
+import Lang.Report
 
 namespace Paralever.Examples.Files
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-! ## The nine files
 
@@ -40,7 +40,11 @@ info: sum.prl
 
 -- running it fills the buffers the file declared
 /--
-info: A [6] @0  [1, 2, 3, 4, 5, 6]
+info: heap after the run — a .prl program has no print statement, so this is its output
+9 cells in 2 buffers, addressed 0 to 8
+NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
+
+A [6] @0  [1, 2, 3, 4, 5, 6]
 out [3] @6  [3, 7, 11]
 -/
 #guard_msgs in

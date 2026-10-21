@@ -1,5 +1,5 @@
-import Prl.Compile.Lower
-import Prl.Lang.Analysis
+import Lang.Compile.Lower
+import Lang.Core.Analysis
 import Paralever.AutoPar.Print
 
 /-! # Printing a compiled file back out
@@ -9,12 +9,12 @@ on the reader. `toLean` writes the `paralever { … }` block through `AutoPar.su
 form has one printer. `highlight` is the same text with ANSI colour, in the editor grammar's token
 classes. Loops and names are gone by now: what prints is the unrolled program `wfB` decides on. -/
 
-namespace Paralever.Prl
-open Paralever Paralever.Prl
+namespace Paralever.Lang
+open Paralever Paralever.Lang
 
 -- Structural equality on programs, for the round-trip gate below. Not in the language's own
 -- module: the theory never compares two programs, only runs them.
-deriving instance BEq for Paralever.Prl.ParProg
+deriving instance BEq for Paralever.Lang.ParProg
 
 /-! ## `.prl` out -/
 
@@ -66,6 +66,7 @@ partial def stmtLines (L : Layout) (d : Nat) : ParProg → List String
       let eb := stmtLines L (d + 1) e
       (ind d ++ "if " ++ expStr c ++ " {") :: stmtLines L (d + 1) t
         ++ (if eb.isEmpty then [ind d ++ "}"] else (ind d ++ "} else {") :: eb ++ [ind d ++ "}"])
+  | .synchronize         => [ind d ++ "synchronize"]
 
 /-- `parallel {…} | {…}`, one thread per group, with an optional `:: "name"`. -/
 partial def parLines (L : Layout) (d : Nat) (ss : List ParProg) (nm : Option String) :
@@ -201,4 +202,4 @@ where
           (if keywords.contains word then paint "keyword" word else word) ++ go tail
         else c.toString ++ go rest
 
-end Paralever.Prl
+end Paralever.Lang

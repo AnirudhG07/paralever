@@ -51,7 +51,7 @@ information the lowering depends on.
 ## An affine map is a footprint function
 
 This is the alignment the whole design rests on. `wfB_parFor_of_lists`
-(`Prl/Lang/Kernels.lean`) asks for each thread's read and write sets as two lists of `Loc`.
+(`Lang/Core/Kernels.lean`) asks for each thread's read and write sets as two lists of `Loc`.
 An `affine.store` already carries exactly that:
 
 ```text
@@ -325,17 +325,17 @@ A verdict is not yet a theorem, and `#guard` on `verdict` only says the obligati
 `true`. So each race-free pilot also carries the instance of the theorem that the verdict licenses:
 
 ```lean
-def doall : Prl.ParProg := mlir_prog "corpus/doall-no.mlir"
+def doall : Lang.ParProg := mlir_prog "corpus/doall-no.mlir"
 
 theorem doall_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar doall ρ) (Prl.ParProg.execSeq doall ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar doall ρ) (Lang.ParProg.execSeq doall ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 ```
 
 `mlir_prog` is what makes that `decide` possible. It parses and lowers the file while the Lean file
 elaborates and quotes the result, so the declaration holds a `ParProg` literal and `decide` reduces
 `wfB` on the program rather than running the reader inside the kernel. It is the same door
-`prl_file` is for a `.prl` file (`MLIR/Load.lean`, `Prl/Load.lean`; `docs/prl.md`). The three racy
+`prl_file` is for a `.prl` file (`MLIR/Load.lean`, `Lang/Load.lean`; `docs/prl.md`). The three racy
 pilots have no such theorem — `wfB` refuses them, which is the `tp = 3` above.
 
 Two readings. The absence of false negatives is not luck: `raceSites_nil_iff` makes the scan
@@ -349,6 +349,63 @@ Paralever's footprint for a computed subscript is the whole array, so the thread
 whatever `Idx` holds — the real program *is* racy, but a race-free indirect access would be rejected
 too. That is the precision cost of an over-approximation, and `approximated` names the entry that
 pays it.
+
+## Scale
+
+`Examples/Scale/matmul12.prl` is the 12×12 matmul in twenty lines. `paralever to-mlir` turns it
+into `Examples/Scale/matmul12.mlir`: **14,451 lines**, 1.0 MB, all twelve threads unrolled, every
+subscript a constant. Reading that file back gives the same verdict, the same footprint and the
+same heap as the `.prl` it was emitted from — the equality `MLIR.emitRoundTrips` gates on the
+pilots, at a size no pilot reaches.
+
+| program | `.mlir` lines | threads | statements | `check` from `.prl` | `check` from `.mlir` |
+|---|---|---|---|---|---|
+| matmul 8×8 | 4,391 | 8 | 1,088 | 0.05 s | 1.8 s |
+| matmul 12×12 | 14,451 | 12 | 3,600 | 0.22 s | 21 s |
+| matmul 16×16 | 33,855 | 16 | 8,448 | 0.81 s | 128 s |
+
+Two separate costs are visible there. Reading generic form is linear and cheap — `to-mlir` writes
+the 14,451-line file in 0.03 s — but the `.mlir` column also pays for the *unrolled* program:
+12×12 `.prl` source text is twenty lines whichever size `n` is, while the module names all 3,600
+statements. The superlinear part is `raceSites`, which compares every pair of threads, and
+`checkReport` calls it to separate a race from an over-approximated footprint.
+
+The in-Lean reader costs more than the command line, and the first thing it hits is not `decide`.
+`mlir_prog` quotes the lowered program into the elaborator, and on this file that alone exceeds
+Lean's default 200,000 heartbeats — which is why the module `paralever prove` writes lifts the
+limit. With it lifted, Lean elaborates the module and proves `par_seq_eq` for the 14,451-line file
+in **78 s**, `by decide` on `wfB` included:
+
+```console
+$ paralever Examples/Scale/matmul12.mlir --prove Big12.lean --check
+...
+lake env lean Big12.lean
+Big12.lean: Lean accepts it
+```
+
+`Examples/Scale/` still has no Lean module of its own, because a module in the tree is elaborated
+by every `lake build`, and 78 s is not a price the build should pay to repeat what the command line
+shows on demand.
+
+### An MLIR file from somewhere else
+
+Real-world MLIR is not in generic form. The three largest affine and memref test files in
+`llvm/llvm-project` — `mlir/test/Dialect/Affine/canonicalize.mlir` (2,691 lines),
+`Affine/loop-fusion.mlir` (1,600) and `Affine/memref-dependence-check.mlir` (1,168) — are all
+pretty form with `// RUN:` directives and `-split-input-file` separators, so the reader stops at the
+first operation:
+
+```console
+$ paralever to-prl upstream-canonicalize.mlir
+expected a quoted string (offset 464, near: func.func @compose_affine_maps_1dto2d_no_symbols)
+```
+
+which is accurate: generic form spells that operation `"func.func"() ({ … })`. Translating one form
+to the other is `mlir-opt --mlir-print-op-generic`, and `mlir-opt` is the toolchain this project
+does not depend on (`CLAUDE.md` § *Dependencies*), so a file from outside is readable exactly where
+an MLIR build is installed. Two consequences worth stating rather than discovering: the offset in
+that message is a byte count and not a `line:column`, and a `-split-input-file` file is several
+modules in one, which the reader has no notion of.
 
 ## Status, and what is next
 

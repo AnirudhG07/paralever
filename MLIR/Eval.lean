@@ -21,7 +21,7 @@ Three things make it the right shape for that job.
   take the sequential one. -- ref: `docs/mlir.md` § Differential execution -/
 
 namespace Paralever.MLIR
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-- A value at run time: every SSA name holds a number or a buffer. -/
 inductive EVal where

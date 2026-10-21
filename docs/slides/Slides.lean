@@ -335,7 +335,7 @@ program's postcondition.
 
 
 
-```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 62) (endLine := 64) -stretch
+```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 64) (endLine := 66) -stretch
 @[simp, grind .]
 def Indep (f₁ f₂ : Footprint) : Prop :=
   Disjoint f₁.writes f₂.writes ∧ Disjoint f₁.writes f₂.reads ∧ Disjoint f₂.writes f₁.reads
@@ -361,7 +361,7 @@ def Indep (f₁ f₂ : Footprint) : Prop :=
 
 
 
-```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 229) (endLine := 235) -stretch
+```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 235) (endLine := 241) -stretch
 def WellFormed {τ : Type} : ParM τ → State → Prop
   | .pure _,      _ => True
   | .read l k,    σ => WellFormed (k (σ l)) σ
@@ -394,7 +394,7 @@ That is the lemma the next slide's hypothesis rests on.
 
 
 
-```leanLibCode Prl.Lang.Core (package := paralever) (startLine := 533) (endLine := 534) -stretch
+```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 549) (endLine := 550) -stretch
 theorem par_seq_eq {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
     ParSeqEq (execPar s ρ) (execSeq s ρ) σ := by
 ```
@@ -508,7 +508,7 @@ later — the check, the theorem, the rewrite — is about `par` nodes only.
   programs: the computed lists contain the cells any run touches.
 :::
 
-```leanLibCode Prl.Lang.Core (package := paralever) (startLine := 295) (endLine := 296) -stretch
+```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 306) (endLine := 307) -stretch
 theorem execPar_accesses_sub (s : ParProg) (ρ : Regs) (σ : State) :
     (accesses (execPar s ρ) σ).Sub (footprintOf s) := execPar_accesses_sub_all.1 s ρ σ
 ```
@@ -573,7 +573,7 @@ never soundness. The three cases: a literal address gives an exact footprint, a 
 </div>
 ```
 
-```leanLibCode Prl.Lang.Core (package := paralever) (startLine := 179) (endLine := 189) -stretch
+```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 187) (endLine := 198) -stretch
 def wfB : ParProg → Bool
   | .load _ _  => true
   | .store _ _ => true
@@ -585,6 +585,7 @@ def wfB : ParProg → Bool
   | .storeAt _ _ _ => true
   -- either branch may run, so both must be well-formed
   | .ifElse _ t e  => wfB t && wfB e
+  | .synchronize         => true
 ```
 
 A check that only looked at the outermost fork would be unsound, which is why `wfB` is defined by
@@ -753,7 +754,7 @@ mutually inductive.
 
 
 
-```leanLibCode Prl.Lang.Core (package := paralever) (startLine := 454) (endLine := 455) -stretch
+```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 467) (endLine := 468) -stretch
 theorem wfB_wellFormed {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
     WellFormed (execPar s ρ) σ := wfB_wellFormed_all.1 s h ρ σ
 ```
@@ -813,7 +814,7 @@ worry about.
 
 
 
-```leanLibCode Prl.Lang.Cost (package := paralever) (startLine := 87) (endLine := 88) -stretch
+```leanLibCode Lang.Core.Cost (package := paralever) (startLine := 88) (endLine := 89) -stretch
 theorem time_le {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
     time (execPar s ρ) σ ≤ time (execSeq s ρ) σ := time_execPar_le_all.1 s ρ σ h
 ```
@@ -1181,7 +1182,7 @@ says whether a plan is optimal rather than merely better.
 
 ```html
 <div class="dgm col tight">
-  <div class="nd mono bad wide">| .par ss, &#961; =&gt; ParM.bind (ParM.parAll (execParAll ss &#961;)) (fun _ =&gt; .pure &#961;)<em>the continuation gets the PRE-fork register file — `Prl/Lang/Core.lean`</em></div>
+  <div class="nd mono bad wide">| .par ss, &#961; =&gt; ParM.bind (ParM.parAll (execParAll ss &#961;)) (fun _ =&gt; .pure &#961;)<em>the continuation gets the PRE-fork register file — `Lang/Core/Prog.lean`</em></div>
   <div class="arr">&#9660;</div>
   <div class="nd bad wide">a register written inside a thread is gone at the join<em>both readings agree, so it is NOT a race — `wfB` cannot see it</em></div>
   <div class="arr">&#9660;</div>
@@ -1304,7 +1305,7 @@ it is free.
 
 
 
-```leanLibCode Paralever.AutoPar.Rewrite (package := paralever) (startLine := 47) (endLine := 48) -stretch
+```leanLibCode Paralever.AutoPar.Rewrite (package := paralever) (startLine := 51) (endLine := 52) -stretch
 theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
     (runSeq (execPar (rewrite p) ρ) σ).2 = (runSeq (execSeq p ρ) σ).2 := by
 ```

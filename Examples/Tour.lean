@@ -1,8 +1,8 @@
-import Prl.Report
+import Lang.Report
 import Paralever.AutoPar.Print
 
 namespace Paralever.Examples.Tour
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! # The whole project, on one program
 

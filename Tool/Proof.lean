@@ -1,5 +1,5 @@
 import MLIR.Emit
-import Prl.Report
+import Lang.Report
 
 /-! # The Lean file a program's correctness is carried by
 
@@ -16,7 +16,7 @@ exists — the generated file says so and proves the refusals.
 -- ref: `docs/cli.md` -/
 
 namespace Paralever.Tool
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-- Which front end the program came through: the generated file reads the source the same way. -/
 inductive Kind where
@@ -77,8 +77,8 @@ private def heap (s : Subject) : String :=
 /-- The preamble: the imports, the namespace, and the source read back. -/
 private def header (s : Subject) (title : String) (blurb : List String) : List String :=
   (match s.kind with
-   | .prl  => ["import Prl.Report"]
-   | .mlir => ["import MLIR.Load", "import Prl.Report"])
+   | .prl  => ["import Lang.Report"]
+   | .mlir => ["import MLIR.Load", "import Lang.Report"])
   ++ [ ""
      , "/-! # `" ++ s.name ++ "` — " ++ title
      , "" ]
@@ -89,10 +89,13 @@ private def header (s : Subject) (title : String) (blurb : List String) : List S
      , "-- ref: `docs/cli.md` -/"
      , ""
      , "namespace Paralever.Proofs." ++ upperOf s.stem
-     , "open Paralever Paralever.Prl"
+     , "open Paralever Paralever.Lang"
      , ""
-     , "-- `decide` reduces the program against a heap, which nests deeper than the default bound."
+     , "-- `decide` reduces the program against a heap, which nests deeper than the default bound,"
+     , "-- and reading a large file costs more than the default heartbeat budget allows. Both"
+     , "-- terminate: the program is a finite literal by the time either runs."
      , "set_option maxRecDepth 100000"
+     , "set_option maxHeartbeats 0"
      , "" ]
   ++ (match s.kind with
       | .prl  =>

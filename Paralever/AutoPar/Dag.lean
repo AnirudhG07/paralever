@@ -1,4 +1,4 @@
-import Prl.Lang.Analysis
+import Lang.Core.Analysis
 
 /-! # The dependence DAG, and the bound it gives
 
@@ -8,7 +8,7 @@ critical path is a **lower bound** on the depth of any schedule, so it is what s
 is optimal. -- ref: docs/autopar-algorithm.md § The bound -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## A syntactic cost
 
@@ -26,6 +26,7 @@ def depth : ParProg → Nat
   | .seq a b       => depth a + depth b
   | .par ss        => depthAll ss
   | .label _ s     => depth s
+  | .synchronize         => 0
   | .loadAt _ _ _  => 1
   | .storeAt _ _ _ => 1
   | .ifElse _ t e  => max (depth t) (depth e)

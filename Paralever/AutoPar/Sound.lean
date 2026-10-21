@@ -1,15 +1,15 @@
 import Paralever.AutoPar.Plan
-import Prl.Lang.AutoParSound
+import Lang.Core.AutoParSound
 
 /-! # The rewrite preserves the outcome
 
 `execSeq` of a `par` node hands every thread the pre-fork register file and restores it at the join,
 so **every thread of the whole plan runs at the initial registers** — which is exactly the situation
-`fork_heap` (`Prl/Lang/AutoParSound.lean`) is about, one level up. The proof is that observation plus
+`fork_heap` (`Lang/Core/AutoParSound.lean`) is about, one level up. The proof is that observation plus
 the regrouping lemmas. -- ref: docs/autopar-algorithm.md § The theorem -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## Running a list of threads in order -/
 

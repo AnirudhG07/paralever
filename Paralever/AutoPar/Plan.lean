@@ -8,7 +8,7 @@ provable with `par_block_heap` alone — a scheduler that moved units past one a
 commutation theorem instead. -- ref: docs/autopar-algorithm.md § The shape of a plan -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-- Stages, each a list of threads, each thread a list of units — all in program order. -/
 abbrev Plan := List (List (List ParProg))
@@ -30,7 +30,7 @@ or forces a new stage — and the three cases are exactly the three ways a depen
 -- ref: docs/autopar-algorithm.md § The pass -/
 
 /-- Does `x` conflict with anything in `ts`, so that no fork may hold them side by side?
--- ref: Prl/Lang/Analysis.lean `canParSeg` -/
+-- ref: Lang/Core/Analysis.lean `canParSeg` -/
 def mustFollow (ts : List (List ParProg)) (x : ParProg) : Bool :=
   ts.any (fun t => t.any (fun u => !ParProg.canParSeg u x))
 

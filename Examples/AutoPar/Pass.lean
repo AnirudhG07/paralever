@@ -1,8 +1,8 @@
 import Paralever.AutoPar.Rewrite
-import Prl.Report
+import Lang.Report
 
 namespace Paralever.Examples.AutoPar
-open Paralever Paralever.Prl Paralever.AutoPar
+open Paralever Paralever.Lang Paralever.AutoPar
 
 /-! `chain.prl` is written as a straight line of nine statements. The pass turns it into three
 stages without being told anything, and the five steps below are the whole algorithm, each one
@@ -149,5 +149,38 @@ def carried : ParProg := paralever {
 #guard (planOf carried).map (fun stage => stage.length) == [1]
 #guard quality carried == (6, 6, 6)
 #guard optimalB carried
+
+/-! ## Synchronization
+
+`phases.prl` has two phases separated by a `synchronize`. Both write disjoint buffers and only read
+`A`, so Bernstein accepts running all eight statements together — and without the barrier `autoPar`
+does exactly that. The barrier is what keeps them apart.
+
+A barrier is outside this route: `emit` wraps every stage in a `par`, so one reaching the plan would
+land inside a thread, and carrying a register across it needs a liveness condition `rewriteOk` does
+not state. `ParProg.autoPar` is the route that honours a barrier, and `parReport` uses it for a
+program that has one. -- ref: `docs/autopar.md` § Synchronization -/
+
+def synchronized : Compiled := prl_file "../Language/phases.prl"
+
+#guard !ParProg.synchronizeFree synchronized.prog
+#guard !rewriteOk synchronized.prog
+#guard (ParProg.phases (ParProg.flatten synchronized.prog)).map List.length == [8, 8]
+
+/-- One fork of four per phase, with the barrier between them. -/
+private def forks (p : ParProg) : List Nat :=
+  (ParProg.flatten p).map fun s => match s with | .par ts => ts.length | _ => 1
+
+#guard forks (ParProg.autoPar synchronized.prog) == [4, 1, 4]
+
+/-- The same program with the barrier dropped: one fork of eight, which is what it forbids. -/
+def unsynchronized : ParProg :=
+  ParProg.block ((ParProg.flatten synchronized.prog).filter (fun s => !s.isSynchronize))
+
+#guard forks (ParProg.autoPar unsynchronized) == [8]
+
+-- the proposal still passes the proved check, and the printed result reads back as itself
+#guard ParProg.wfB (ParProg.autoPar synchronized.prog)
+#guard roundTrips (print { synchronized with prog := ParProg.autoPar synchronized.prog })
 
 end Paralever.Examples.AutoPar

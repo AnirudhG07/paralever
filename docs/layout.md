@@ -1,6 +1,6 @@
 # `Layout` — declare buffers, not addresses
 
-Code: `Prl/Lang/Layout.lean`. Used by `Examples/Language/NeuralNet.lean` (the net's memory) and
+Code: `Lang/Core/Layout.lean`. Used by `Examples/Language/NeuralNet.lean` (the net's memory) and
 `Examples/Races/Report.lean` §9 (named diagnostics).
 
 ## The problem
@@ -175,7 +175,7 @@ cursor and below the old one would be inside the range just freed — which the 
 already ruled out.
 
 A double `free` is a no-op rather than a second release, for the same reason: the cursor must not
-walk back over cells a later buffer now owns. `Prl.Compile.Lower` rejects that case outright, along
+walk back over cells a later buffer now owns. `Lang.Compile.Lower` rejects that case outright, along
 with any use of a freed name.
 
 ## Out-of-range subscripts are still total
@@ -224,7 +224,7 @@ where it used to say `{37}`.
 
 ## A note on the `mem` keyword
 
-`Prl/Lang/Notation.lean` used to spell memory `mem l`, which reserved `mem` as a **global** token: while
+`Lang/Core/Notation.lean` used to spell memory `mem l`, which reserved `mem` as a **global** token: while
 it did, no declaration anywhere in the project could be named `mem` — including the obvious name for
 a layout. Memory is now written `[l]`, which reserves nothing (`[` and `]` are tokens already) and
 drops the parentheses arithmetic addresses needed:

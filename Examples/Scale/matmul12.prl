@@ -1,0 +1,23 @@
+-- 12x12 matmul: the same program as Language/matmul.prl at a size that fills a big file. Twelve
+-- threads write disjoint rows of C and read all of A and all of B, so independence is Bernstein's
+-- and not disjointness. `paralever to-mlir` turns this into matmul12.mlir, 14,451 lines of MLIR
+-- generic form, which `paralever` reads back to the same verdict and the same heap.
+
+const n = 12
+
+buf A[12, 12] = arange
+buf B[12, 12] = arange
+buf C[12, 12]
+
+
+parfor i in n {
+  for j in n {
+    %acc := 0
+    for k in n {
+      %x := A[i, k]
+      %y := B[k, j]
+      %acc := %acc + %x * %y
+    }
+    C[i, j] := %acc
+  }
+} :: "matmul 12x12"

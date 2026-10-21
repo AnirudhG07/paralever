@@ -1,11 +1,11 @@
-import Prl.Lang.Kernels
+import Lang.Core.Kernels
 
 /-! # Printing a `ParProg`, and writing one
 
 Printing is purely syntactic — unlike `Lib/Render.lean`'s `codeStr`, this needs no state, because
 the computations are data. The surface syntax `paralever { … }` elaborates to a `ParProg`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 /-! `%n` and `%name` denote register `n` on *either* side of a `:=`: as the destination of a load or
@@ -14,7 +14,7 @@ an assignment, and as an operand inside an expression. A named register is any i
 
 `scoped`, deliberately. `%` is already a token, so this reserves nothing project-wide, but it does
 add a *leading* parser for it, and in a leading position `f 7 % 2` reads as `f 7 (%2)`. Scoping the
-notation to `Paralever.Prl` confines that to the files that write programs, where the workaround is
+notation to `Paralever.Lang` confines that to the files that write programs, where the workaround is
 `(f 7) % 2`. -- ref: `CLAUDE.md` § Surface-syntax tokens are global -/
 scoped syntax:max "%" num   : term
 scoped syntax:max "%" ident : term
@@ -58,6 +58,7 @@ def render : ParProg → Nat → List String
   | .ifElse c t e, d =>
       ((ind d ++ "if " ++ showExp c ++ " {") :: render t (d + 1)) ++
       ((ind d ++ "} else {") :: render e (d + 1)) ++ [ind d ++ "}"]
+  | .synchronize, d => [ind d ++ "synchronize;"]
 
 def renderAll : List ParProg → Nat → Nat → List String
   | [],      _, _ => []
@@ -133,6 +134,10 @@ syntax "parfor " ident " in " term:max impThread : impStmt
 syntax "parfor " ident " in " term:max impThread " :: " str : impStmt
 /-- `parallel {…} | {…} :: "name"` — a named parallel block. -/
 syntax "parallel " sepBy1(impThread, "| ") " :: " str : impStmt
+/-- `synchronize` — end the phase. Statements before and after are never grouped into one fork.
+This reserves `synchronize` project-wide, so no declaration may be named it; the constructor
+`ParProg.synchronize` is unaffected. -- ref: `CLAUDE.md` § Surface-syntax tokens are global -/
+syntax "synchronize" : impStmt
 
 /-- A `;`-separated group of statements, as a single `ParProg`. -/
 syntax "paralever " "{" sepBy1(impStmt, "; ") "}" : term
@@ -145,6 +150,7 @@ partial def expandProg : TSyntax `impStmt → MacroM (TSyntax `term)
   | `(impStmt| % $i:num := $e:term)     => `(ParProg.set $i $e)
   | `(impStmt| % $x:ident := [$l:term]) => `(ParProg.load $x $l)
   | `(impStmt| % $x:ident := $e:term)   => `(ParProg.set $x $e)
+  | `(impStmt| synchronize)                   => `(ParProg.synchronize)
   | `(impStmt| for $i:ident in $n:term { $[$ss];* }) => do
       let body ← ss.mapM expandProg
       `(ParProg.block ((List.range $n).map (fun $i => ParProg.block [$[$body],*])))
@@ -187,4 +193,4 @@ macro_rules
 
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

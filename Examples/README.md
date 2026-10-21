@@ -13,6 +13,7 @@ Tour.lean          the whole project on one program — start here
 Programs/          how do I prove my own algorithm equivalent?
 Language/          how do I write and check a .prl file?
 Mlir/              how do I bring a program in from MLIR?
+Scale/             does any of this survive a 14,451-line file?
 AutoPar/           what does the parallelizing pass actually do?
 Races/             what does a failure look like?
 Threads/           does any of this run on real threads?
@@ -67,6 +68,22 @@ The nine programs: `sum`, `matmul`, `stencil`, `pipeline`, `chain`, `control`, `
 Seven hand-written pilots in MLIR generic form, named with the verdict each is expected to get in
 DataRaceBench's `-yes`/`-no` convention. `Files.lean` lowers one end to end and prints the whole
 corpus report. The exhaustive gates live in `MLIR/Corpus.lean`.
+
+## `Scale/` — one big file
+
+`matmul12.prl` is the 12×12 matmul, twenty lines. `matmul12.mlir` is the same program as
+`paralever to-mlir` emits it: **14,451 lines** of MLIR generic form, 1.0 MB, every one of the 12
+threads unrolled. Reading it back gives the same verdict, the same footprint and the same heap as
+the `.prl` it came from:
+
+```bash
+paralever Examples/Scale/matmul12.mlir          # wfB = true, 12 threads, 300 rounds — 21 s
+paralever run Examples/Scale/matmul12.mlir      # the same heap the .prl run leaves
+```
+
+Lean proves it too — `paralever ... --prove Big12.lean --check` writes the module and Lean accepts
+it in 78 s — but no Lean module in this tree reads the pair, because every `lake build` would pay
+that. `docs/mlir.md` § *Scale* has the measurements.
 
 ## `AutoPar/` — sequential in, parallel out
 

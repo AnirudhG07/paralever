@@ -1,4 +1,4 @@
-import Prl.Compile.Lower
+import Lang.Compile.Lower
 import Lean
 
 /-! # `prl_file` — reading a `.prl` file from a Lean file
@@ -8,12 +8,12 @@ holds is a `Compiled` literal: `by decide` on `wfB` sees the program, never the 
 does not compile is an elaboration error at the `prl_file` term, carrying the `line:column` the
 reader reported. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Lean Elab Term
 
 deriving instance ToExpr for Paralever.AExp
 deriving instance ToExpr for Paralever.ArrRef
-deriving instance ToExpr for Paralever.Prl.ParProg
+deriving instance ToExpr for Paralever.Lang.ParProg
 deriving instance ToExpr for Paralever.Buf
 deriving instance ToExpr for Paralever.Placed
 deriving instance ToExpr for Paralever.Layout
@@ -50,4 +50,4 @@ def load (path : System.FilePath) : IO Compiled := do
   | .ok c    => pure c
   | .error e => throw (IO.userError s!"{path}:{e}")
 
-end Paralever.Prl
+end Paralever.Lang

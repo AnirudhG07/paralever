@@ -7,10 +7,10 @@ and no second compiler — the file exists so a program can be taken out of Lean
 
 ```text
                 sum.prl
-                   │   Prl.Compile.Parse      text → Prl.Compile.Ast.File
+                   │   Lang.Compile.Parse      text → Lang.Compile.Ast.File
                    ▼
-              Prl.Compile.Ast.File
-                   │   Prl.Compile.Lower    names, constant folding, loop unrolling
+              Lang.Compile.Ast.File
+                   │   Lang.Compile.Lower    names, constant folding, loop unrolling
                    ▼
             Layout × ParProg
                    │
@@ -27,9 +27,9 @@ Everything below the third line is the existing library: a compiled `.prl` file 
 
 Two reasons, both about programs being data.
 
-A `ParProg` is first-order, so it can be printed; `Prl.print` prints it as `.prl` text and
+A `ParProg` is first-order, so it can be printed; `Lang.print` prints it as `.prl` text and
 `prl_file` reads that text back. A program can therefore leave the repository — into a bug report,
-a paper appendix, another tool's output — and come back as the same program. `Prl.toLean` prints the
+a paper appendix, another tool's output — and come back as the same program. `Lang.toLean` prints the
 `paralever { … }` block instead, for pasting into a Lean source file.
 
 A file is also the only surface a non-Lean producer can write. `MLIR/` lowers MLIR generic form to
@@ -60,7 +60,7 @@ exp     ::= exp ("+"|"-"|"*"|"/"|"%") exp | "-"? number | name | "%" reg
 reg     ::= number | name
 ```
 
-Comments run from `--` to the end of the line. The reserved words are in `Prl.keywords`.
+Comments run from `--` to the end of the line. The reserved words are in `Lang.keywords`.
 
 Declarations are statements, because `free` is one: a buffer has a lifetime in the program text.
 They are allowed only at the top level, where the whole program sees them — a `buf` or a `free`
@@ -127,7 +127,7 @@ A[0] := 1
 free A
 ```
 
-is `[0] := 1` on the nose, and `Test/Prl.lean` pins that equality. Consequently no theorem about a
+is `[0] := 1` on the nose, and `Test/Lang.lean` pins that equality. Consequently no theorem about a
 program can depend on either: `wfB`, `footprintOf`, `par_seq_eq`, `time_le` and `runTask_eq` are
 statements about the `ParProg`, and they are proved exactly as they are for a program written in
 Lean — `by decide` on `wfB`, then the theorem.
@@ -144,12 +144,12 @@ register wherever it occurs and `%0` is register `0` as always. `reg acc = 3` pi
 index when that matters; `reg a, b` is accepted and does nothing a first use would not do.
 
 Registers are thread-private — a `parallel` block hands each thread the pre-fork register file and
-discards what the threads leave (`Prl/Lang/Core.lean`) — so two threads using `%acc` do not
+discards what the threads leave (`Lang/Core/Prog.lean`) — so two threads using `%acc` do not
 interfere, and that is why independence is about memory alone.
 
 ## Addresses, values, and the two readings of `%`
 
-An address is a compile-time number. `Prl.Compile.Lower` folds it: literals, `const`s, enclosing loop
+An address is a compile-time number. `Lang.Compile.Lower` folds it: literals, `const`s, enclosing loop
 variables, and `+ - * / %`. A buffer subscript `A[i, j]` becomes `Layout.at "A" [i, j]`, and the
 subscript is range-checked then and there — `A[9]` on `buf A[6]` is a compile error, not a stray
 write.
@@ -184,9 +184,9 @@ anything else, which the library allows, prints as a comment and does not read b
 
 ## The round trip
 
-`Prl.roundTrips src` is `true` when reading `print (compile (parse src))` gives the same program and
+`Lang.roundTrips src` is `true` when reading `print (compile (parse src))` gives the same program and
 the same memory as reading `src`. It is the gate on the reader: a rule that reads a file in a way
-nobody intended fails the build rather than a review. `Test/Prl.lean` runs it on every example,
+nobody intended fails the build rather than a review. `Test/Lang.lean` runs it on every example,
 alongside the verdict each example's header claims.
 
 Printing resolves an address to a buffer name only when one *live* buffer owns it; a range that was
@@ -194,7 +194,7 @@ freed and claimed again has two owners and prints as a raw address, since which 
 is not recoverable from the program. A `free` that returned space prints where the space is claimed
 again, and one that only ended a scope prints after the program, where it has the same effect.
 
-The comparison is modulo the associativity of `;`, which `Prl.norm` normalizes. `seq` is associative
+The comparison is modulo the associativity of `;`, which `Lang.norm` normalizes. `seq` is associative
 under `execPar` because `bind` is, and `whileAtMost` nests its unrolling the opposite way from the
 chain the printer emits.
 
@@ -204,8 +204,8 @@ Printing picks buffer names over addresses (`A[1, 2]`, not `[7]`) via `Layout.na
 ## Using one from Lean
 
 ```lean
-import Prl.Load
-open Paralever Paralever.Prl
+import Lang.Load
+open Paralever Paralever.Lang
 
 def sum : Compiled := prl_file "../Examples/Language/sum.prl"
 
@@ -221,9 +221,9 @@ theorem sum_ok (ρ : Regs) (σ : State) :
 `prl_file` quotes the compiled program into the term, so `decide` sees the program and never the
 reader; `prl_prog` and `prl_layout` give the two halves alone. A file that does not compile is an
 elaboration error at the `prl_file` term, carrying the `line:column` the reader reported.
-`Prl.load` is the same compiler behind `IO`, for reading a path at run time.
+`Lang.load` is the same compiler behind `IO`, for reading a path at run time.
 
-`Prl/Report.lean` holds four views, for `#eval`:
+`Lang/Report.lean` holds four views, for `#eval`:
 
 | view | what it prints |
 |---|---|
@@ -232,10 +232,10 @@ elaboration error at the `prl_file` term, carrying the `line:column` the reader 
 | `raceReport` | the interleaving that realizes a race, replayed against `step` |
 | `parReport` | `AutoPar.rewrite`'s output as `.prl`, with the plan's numbers |
 
-`Prl.highlight` is the same text with ANSI colour, in token classes a scan of the text can
+`Lang.highlight` is the same text with ANSI colour, in token classes a scan of the text can
 recognize: comment, keyword, register, number, string, `:=`.
 
-The same four views are what the `paralever` executable prints, over `Prl.load` rather than
+The same four views are what the `paralever` executable prints, over `Lang.load` rather than
 `prl_file`, so a file can be checked without writing a Lean file for it:
 `paralever check sum.prl`. One command has no `#eval` counterpart — `paralever prove sum.prl -o
 Sum.lean` writes the Lean module that states and proves what the verdict licenses, which is the
@@ -243,7 +243,7 @@ file above rather than a report about it. See `docs/cli.md`.
 
 ## The examples
 
-`Examples/Language/` is gated by `Test/Prl.lean`, which compiles each file, prints it back, checks the
+`Examples/Language/` is gated by `Test/Lang.lean`, which compiles each file, prints it back, checks the
 verdict it is labelled with, and — for each of the seven files `wfB` accepts — proves the instance
 of `par_seq_eq` that the verdict licenses (`sum_ok`, `matmul_ok`, `stencil_ok`, `pipeline_ok`,
 `control_ok`, `chain_ok`, `arena_ok`). The two it refuses have no such theorem: for `race.prl` the

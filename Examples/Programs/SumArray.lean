@@ -1,7 +1,7 @@
 import Paralever.Lib.Compose
 import Paralever.Lib.Cost
 import Paralever.Lib.Notation
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.SumArray
@@ -150,7 +150,7 @@ forced: registers are **thread-private**, so a thread cannot return a value the 
 write set is one location per thread. -/
 
 namespace Surface
-open Paralever.Prl
+open Paralever.Lang
 
 /-- Chunk `c` zeroes an accumulator register, adds its `len` cells into it, and stores the partial
 sum at `out + c`. Written in the surface syntax; `reduceK` builds the same thing. -/

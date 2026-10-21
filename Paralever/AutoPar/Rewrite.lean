@@ -1,6 +1,6 @@
 import Paralever.AutoPar.Sound
 import Paralever.AutoPar.Dag
-import Prl.Lang.Notation
+import Lang.Core.Notation
 
 /-! # The rewrite, end to end
 
@@ -9,13 +9,13 @@ closed: `surface` emits what `paralever { … }` parses, so a rewritten program 
 into the language it came from. -- ref: docs/autopar-algorithm.md § Round trip -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## Units
 
 The scheduling unit is a register-closed segment, not a statement: a load and the store consuming
 its register are one unit and are never split across a fork.
--- ref: Prl/Lang/Analysis.lean `atoms`, docs/autopar.md -/
+-- ref: Lang/Core/Analysis.lean `atoms`, docs/autopar.md -/
 
 /-- The chain's units, in order. -/
 def units (p : ParProg) : List ParProg := (atoms (flatten p)).map block
@@ -31,11 +31,14 @@ theorem units_faithful (p : ParProg) (ρ : Regs) (σ : State) :
 /-- The plan for a program. -/
 def planOf (p : ParProg) : Plan := plan (units p)
 
-/-- Whether the plan may be committed: no register flows between threads, and the emitted program
-passes the independence check. Both are what the soundness theorems need, so a plan that fails
-either is simply not used. -/
+/-- Whether the plan may be committed: the program has no `synchronize`, no register flows between
+threads, and the emitted program passes the independence check. The last two are what the soundness
+theorems need; the first is a boundary, not a theorem's hypothesis — `emit` wraps every stage in a
+`par`, so a barrier reaching the plan would end up inside a thread, and carrying a register across
+one needs a liveness condition this route does not yet state. `ParProg.autoPar` is the route that
+honours a barrier. -- ref: docs/autopar.md § Synchronization -/
 def rewriteOk (p : ParProg) : Bool :=
-  noRegFlow (threads (planOf p)) && wfB (emit (planOf p))
+  synchronizeFree p && noRegFlow (threads (planOf p)) && wfB (emit (planOf p))
 
 /-- **The rewrite.** The analysis is untrusted; `rewriteOk` is the proved gate, and a program whose
 plan does not pass it is returned unchanged. -/
@@ -50,8 +53,8 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
   unfold rewrite
   by_cases h : rewriteOk p = true
   · simp only [h, ite_true]
-    have hflow : noRegFlow (threads (plan (units p))) = true :=
-      (Bool.and_eq_true _ _ ▸ h : _ ∧ _).1
+    have hflow : noRegFlow (threads (plan (units p))) = true := by
+      simp only [rewriteOk, Bool.and_eq_true] at h; exact h.1.2
     exact rewrite_heap p (units p) (plan_units (units p)) (units_faithful p) hflow ρ σ
   · simp only [h, ite_false, Bool.false_eq_true]
     exact execPar_runSeq_all.1 p ρ σ ▸ rfl
@@ -63,7 +66,8 @@ theorem rewrite_wf (p : ParProg) (hp : wfB p = true) : wfB (rewrite p) = true :=
   unfold rewrite
   by_cases h : rewriteOk p = true
   · simp only [h, ite_true]
-    exact (Bool.and_eq_true _ _ ▸ h : _ ∧ _).2
+    simp only [rewriteOk, Bool.and_eq_true] at h
+    exact h.2
   · simp only [h, ite_false, Bool.false_eq_true]; exact hp
 
 /-- **Every schedule of the rewrite agrees with the original.** `rewrite_wf` feeds `par_seq_eq`,

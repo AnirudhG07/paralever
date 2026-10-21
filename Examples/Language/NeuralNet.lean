@@ -1,8 +1,8 @@
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.NeuralNet
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-! ## Layout
 

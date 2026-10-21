@@ -1,4 +1,4 @@
-import Prl.Lang.Core
+import Lang.Core.Prog
 
 /-! # Finding the parallelism
 
@@ -12,7 +12,7 @@ this file's `flatten`, `atoms`, `canParSeg` and `regFootprint`, and its rewrite 
 preserve the heap for every program — at the cost of refusing more. `docs/autopar.md § The two
 routes` has the comparison, and `Test/AutoPar.lean` pins it. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -67,6 +67,7 @@ def regFootprint : ParProg → Footprint
   | .storeAt _ e v => ⟨regsOf e ++ regsOf v, []⟩
   | .ifElse c t e  =>
       Footprint.union ⟨regsOf c, []⟩ (Footprint.union (regFootprint t) (regFootprint e))
+  | .synchronize     => .empty
 
 /-- The threads' register footprints, combined. -/
 def regFootprintsOf : List ParProg → Footprint
@@ -75,14 +76,23 @@ def regFootprintsOf : List ParProg → Footprint
 
 end
 
-/-- **May these two run concurrently?** Bernstein on memory *and* on registers.
+/-- Whether a statement is a `synchronize`. Its footprints are empty, so Bernstein alone would
+happily group it with anything — this is the case `canPar` and `canParSeg` answer before they look
+at a footprint. -/
+def isSynchronize : ParProg → Bool
+  | .synchronize => true
+  | _      => false
+
+/-- **May these two run concurrently?** Bernstein on memory *and* on registers, and never across a
+synchronize.
 
 The register clause is not decoration. `t0 := M[1]` and `M[4] := t0 + 1` touch disjoint memory, so
 memory-Bernstein alone would group them — but the second reads a register the first writes, and in a
 fork it would never see it, because threads get a private copy. Requiring independence on both
 footprints is what makes a proposal from `autoPar` an actual rewrite rather than a suggestion. -/
 def canPar (a b : ParProg) : Bool :=
-  indepB (footprintOf a) (footprintOf b) && indepB (regFootprint a) (regFootprint b)
+  !a.isSynchronize && !b.isSynchronize &&
+    indepB (footprintOf a) (footprintOf b) && indepB (regFootprint a) (regFootprint b)
 
 /-- Every ordered pair of statements in a chain that may **not** run together, with the index of
 each. This is the dependence report: it says where the sequential order is forced. -/
@@ -93,7 +103,7 @@ def dependences (p : ParProg) : List (Nat × Nat) :=
 
 /-! ### Register liveness across a fork
 
-A `par` node resets the register file to its pre-fork contents (`execPar`, `Prl/Lang/Core.lean`), so a
+A `par` node resets the register file to its pre-fork contents (`execPar`, `Lang/Core/Prog.lean`), so a
 register written on one side of a fork boundary and read on the other reads a stale value. That is
 not a race — both readings agree — so `wfB` cannot see it, and a scheduler that ignores it silently
 changes the program's answer. The boundary must therefore be placed where no register is live
@@ -114,6 +124,7 @@ def regKills : ParProg → List Reg
   | .loadAt r _ _  => [r]
   | .storeAt _ _ _ => []
   | .ifElse _ t e  => (regKills t).filter (fun r => (regKills e).contains r)
+  | .synchronize         => []
 
 /-- Registers live at the entry of a chain: read before being certainly overwritten. Backward
 liveness — without the kill a reused register like `%0` would appear live across the whole program
@@ -151,7 +162,8 @@ a reused `%0` is the normal way to write a loop body. What registers constrain i
 statements may be siblings but *where a fork boundary may be placed*, and that is `cutOK`: a
 property of the boundary, not of a pair. `atoms` has already enforced it by the time this is
 asked. -/
-def canParSeg (a b : ParProg) : Bool := indepB (footprintOf a) (footprintOf b)
+def canParSeg (a b : ParProg) : Bool :=
+  !a.isSynchronize && !b.isSynchronize && indepB (footprintOf a) (footprintOf b)
 
 /-- The longest prefix of `ss` that is pairwise independent — the next group a greedy scheduler
 would fork. -/
@@ -170,16 +182,94 @@ def groups : Nat → List ParProg → List (List ParProg)
       let k := g.length
       if k = 0 then [ss] else g :: groups fuel (ss.drop k)
 
-/-- **The proposal.** Rewrite a `;`-chain as a sequence of `parallel` blocks, one per independent
-run. A singleton run stays a plain statement rather than a one-thread fork.
+/-! ### Phases
+
+A `synchronize` ends a phase. The parallelizer plans each phase on its own and joins them back with
+the barriers still in place, so they survive the rewrite and say in the output what they said in the
+input. -- ref: `docs/autopar.md` § Synchronization -/
+
+/-- The statements before the first `synchronize`, and the phases after it. -/
+def phasesGo : List ParProg → List ParProg × List (List ParProg)
+  | []      => ([], [])
+  | s :: ss =>
+      if s.isSynchronize then ([], (phasesGo ss).1 :: (phasesGo ss).2)
+      else (s :: (phasesGo ss).1, (phasesGo ss).2)
+
+/-- The chain's phases, in order, split at every `synchronize`. Always at least one, so a chain with
+no barrier in it is one phase and the analysis below is unchanged for it. -/
+def phases (us : List ParProg) : List (List ParProg) := (phasesGo us).1 :: (phasesGo us).2
+
+/-- The phases back into one chain, `synchronize` between them. -/
+def joinPhases : List (List ParProg) → List ParProg
+  | []        => []
+  | [ph]      => ph
+  | ph :: phs => ph ++ .synchronize :: joinPhases phs
+
+/-- **Splitting into phases loses nothing.** So the barriers in an autoparallelized program are
+exactly the ones that were written, and `planPhase` may be applied phase by phase. -/
+theorem joinPhases_phases (us : List ParProg) : joinPhases (phases us) = us := by
+  induction us with
+  | nil => rfl
+  | cons s ss ih =>
+      simp only [phases] at ih ⊢
+      cases hg : phasesGo ss with
+      | mk ph phs =>
+      simp only [hg] at ih
+      by_cases h : s.isSynchronize = true
+      · have hs : s = .synchronize := by cases s <;> simp_all [isSynchronize]
+        subst hs
+        simp only [phasesGo, isSynchronize, hg, ite_true]
+        simp only [joinPhases, List.nil_append]
+        rw [ih]
+      · simp only [Bool.not_eq_true] at h
+        simp only [phasesGo, h, Bool.false_eq_true, ite_false, hg]
+        cases phs with
+        | nil => simp only [joinPhases] at ih ⊢; rw [ih]
+        | cons q qs =>
+            simp only [joinPhases] at ih ⊢
+            rw [List.cons_append, ih]
+
+mutual
+
+/-- Whether the statement contains no `synchronize` at all. -/
+def synchronizeFree : ParProg → Bool
+  | .synchronize        => false
+  | .seq a b      => synchronizeFree a && synchronizeFree b
+  | .par ss       => synchronizeFreeAll ss
+  | .label _ s    => synchronizeFree s
+  | .ifElse _ t e => synchronizeFree t && synchronizeFree e
+  | _             => true
+
+def synchronizeFreeAll : List ParProg → Bool
+  | []      => true
+  | s :: ss => synchronizeFree s && synchronizeFreeAll ss
+
+end
+
+/-- Whether no `synchronize` sits inside a `parallel` thread. Between phases it is a constraint on
+the schedule; *inside* a thread it would be a barrier between siblings, and `ParM` has no
+synchronisation node to give that a meaning. `Lang.Compile.Lower` refuses such a program. -/
+def noSynchronizeInThread : ParProg → Bool
+  | .par ss        => synchronizeFreeAll ss
+  | .seq a b       => noSynchronizeInThread a && noSynchronizeInThread b
+  | .label _ s     => noSynchronizeInThread s
+  | .ifElse _ t e  => noSynchronizeInThread t && noSynchronizeInThread e
+  | _              => true
+
+/-- **The proposal, for one phase.** The groups a greedy scheduler would fork: a singleton run stays
+a plain statement rather than a one-thread fork.
 
 The unit scheduled is the register-closed segment (`atoms`), not the statement: a load and the store
 that consumes its register are one segment and are never split across a fork. -/
-def autoPar (p : ParProg) : ParProg :=
-  let ats := (atoms (flatten p)).map block
-  block ((groups (ats.length + 1) ats).map fun g => match g with
+def planPhase (ss : List ParProg) : List ParProg :=
+  let ats := (atoms ss).map block
+  (groups (ats.length + 1) ats).map fun g => match g with
     | [s] => s
-    | g   => .par g)
+    | g   => .par g
+
+/-- **The proposal.** Each phase planned on its own, the barriers kept. -/
+def autoPar (p : ParProg) : ParProg :=
+  block (joinPhases ((phases (flatten p)).map planPhase))
 
 /-! ### The analysis, evaluated
 
@@ -240,4 +330,4 @@ reusing `%0` forks here, where `AutoPar.rewriteOk`'s `noRegFlow` — a condition
 declines it. -- ref: docs/autopar.md § The two routes -/
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

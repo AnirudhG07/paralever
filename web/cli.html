@@ -74,6 +74,8 @@
           A checker that prints <em>race-free</em> is a linter, and you believe it
           or you do not. A tool that writes a module which Lean then checks is
           different in kind, because the claim leaves with its proof attached.
+          Name a file and no command and the tool answers the question a file
+          arrives with — is this program race-free, and if so what holds of it.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -82,6 +84,7 @@
           </div>
           <pre><code class="language-console">lake build paralever                      # ./.lake/build/bin/paralever
 
+paralever         Examples/Language/sum.prl    # the verdict, and the evidence for it
 paralever check   Examples/Language/sum.prl
 paralever prove   Examples/Language/sum.prl -o Proofs/Sum.lean --check
 paralever to-mlir Examples/Language/sum.prl -o sum.mlir
@@ -112,7 +115,7 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
 
           <rect class="box" x="0" y="86" width="160" height="30" rx="8" />
           <text class="t-sm" x="80" y="106" text-anchor="middle">sum.prl</text>
-          <text class="t-note" x="172" y="106">Prl.Compile</text>
+          <text class="t-note" x="172" y="106">Lang.Compile</text>
           <path class="edge" d="M268,101 H300" />
 
           <rect class="box" x="0" y="132" width="160" height="30" rx="8" />
@@ -168,6 +171,7 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           <table class="opts-table">
             <thead><tr><th>Command</th><th>What it prints</th></tr></thead>
             <tbody>
+              <tr><td><code>FILE</code> (no command)</td><td>the check, then the theorem that holds or the interleaving that breaks it</td></tr>
               <tr><td><code>check FILE</code></td><td>memory, reads, writes, thread count, rounds, verdict</td></tr>
               <tr><td><code>run FILE [--threads]</code></td><td>the heap after a run, buffer by buffer</td></tr>
               <tr><td><code>race FILE</code></td><td>the interleaving that reaches <code>wrong</code>, step by step</td></tr>
@@ -187,13 +191,14 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
               <tr><td><code>--threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
               <tr><td><code>--autopar</code></td><td>make <code>prove</code>, <code>to-mlir</code> and <code>to-lean</code> take the parallelized program as their subject</td></tr>
               <tr><td><code>--check</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
+              <tr><td><code>--prove PATH</code></td><td>no command: write the Lean module that proves the verdict to <code>PATH</code> as well as printing the verdict itself</td></tr>
               <tr><td><code>--colour</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
             </tbody>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>check</code> exits 1 when the program has a race, so a build can
-          gate on it:
+          <code>check</code> and the no-command form exit 1 when the program has
+          a race, so a build can gate on either:
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -202,6 +207,51 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           </div>
           <pre><code class="language-console">for f in Examples/Language/*.prl; do paralever check "$f" || echo "$f is racy"; done</code></pre>
         </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A bare file gets one of three verdicts, by the same ladder
+          <code>prove</code> uses: <strong>PROVED</strong> when <code>wfB</code>
+          accepts, <strong>NO RACE FOUND, BUT NOT PROVED</strong> when the
+          footprint of a computed address is over-approximated and only the
+          per-heap check accepts, and <strong>RACY</strong> with the interleaving
+          that reaches <code>wrong</code>. Only the last exits 1.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- what run prints -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>run</code> prints</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>.prl</code> program has no print statement, so its output
+          <em>is</em> the heap, and <code>run</code> prints that heap as the
+          buffers the file declared:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">$ paralever run Examples/Language/arena.prl
+heap after the run — a .prl program has no print statement, so this is its output
+12 cells in 3 buffers, 1 of them freed, addressed 0 to 11
+NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
+
+src [4] @0  [1, 2, 3, 4]
+tmp [4] @4  [3, 5, 7, 9]   (freed)
+out [4] @4  [3, 5, 7, 9]</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mt-4">
+          <code>[4]</code> is the shape — a <code>[2, 6]</code> buffer prints as
+          two rows — and <code>@4</code> is the address of the buffer's first cell
+          in the one flat heap that <code>State = Loc → Val</code> gives.
+          <code>tmp</code> and <code>out</code> print the same numbers because
+          <code>free</code> returns the cells and the next buffer is placed on
+          them; the <code>(freed)</code> marker says which of the two is dead.
+          A report is read, not elaborated, so none of it is commented out — the
+          <code>--</code> prefix is kept for output that is source, where the
+          reader's approximations must survive in a file that still compiles.
+        </p>
       </section>
 
       <hr class="divider" />

@@ -7,7 +7,7 @@ its input was written in. Kept out of `Rewrite.lean` so that file is the algorit
 -- ref: docs/autopar-algorithm.md § Round trip -/
 
 namespace Paralever.AutoPar
-open Paralever Paralever.Prl Paralever.Prl.ParProg
+open Paralever Paralever.Lang Paralever.Lang.ParProg
 
 /-! ## Statements
 
@@ -35,6 +35,7 @@ def surfaceStmts : ParProg → List String
   | .seq a b       => surfaceStmts a ++ surfaceStmts b
   | .par ss        => ["parallel " ++ String.intercalate " | " (surfaceThreads ss)]
   | .label nm s    => surfaceStmts s ++ ["-- " ++ nm]
+  | .synchronize         => ["synchronize"]
   | .loadAt r a e  => ["/- loadAt %" ++ toString r ++ " A" ++ toString a.base
                         ++ "[" ++ surfaceExp e ++ "] : no surface form -/"]
   | .storeAt a e v => ["/- storeAt A" ++ toString a.base ++ "[" ++ surfaceExp e ++ "] := "

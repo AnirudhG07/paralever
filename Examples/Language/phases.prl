@@ -1,0 +1,20 @@
+-- Two phases, separated by a `synchronize`. Both write disjoint buffers and only read `A`, so
+-- Bernstein accepts running all eight statements together — and `paralever autopar` would. The
+-- barrier is what keeps them apart: each phase is planned on its own and the barrier survives in
+-- the output. -- ref: docs/autopar.md § Synchronization
+
+buf A[4] = arange
+buf B[4]
+buf C[4]
+
+for i in 4 {
+  %0 := A[i]
+  B[i] := %0 * %0
+}
+
+synchronize
+
+for i in 4 {
+  %1 := A[i]
+  C[i] := %1 + 1
+}

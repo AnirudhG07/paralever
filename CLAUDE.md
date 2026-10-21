@@ -47,8 +47,13 @@ Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinn
 
 A `syntax "foo"` reserves `foo` as a token for the *whole project*, so no declaration anywhere can
 then be named `foo`. This has bitten twice: `syntax "r "` broke `Test/NArySpike.lean`, and `mem l`
-made `def mem` impossible — the obvious name for a `Layout`. Memory in `Prl/Lang/Notation.lean` is now
+made `def mem` impossible — the obvious name for a `Layout`. Memory in `Lang/Core/Notation.lean` is now
 `[l]`, which reserves nothing. Prefer tokens that already exist (`[`, `%`, `*`) over new keywords.
+
+A *constructor* survives the reservation: `syntax "synchronize" : impStmt` makes `def synchronize`
+impossible but leaves `ParProg.synchronize` and `.synchronize` usable, because an identifier carrying
+a namespace is lexed as one token. So the keyword is spelled as the user expects and only the bare
+name is spent — which is the trade to check before reserving a word.
 
 ## Mathlib import policy
 
@@ -140,13 +145,15 @@ Paralever/
              findWrongGuided — phase 2 aimed by phase 1's conflict locations),
              Explain (the interleaving printed), ExplainHtml (the same as an infoview widget)
   Compile/   TaskFacts, Exec (execTask — runs a program on real threads)
-Prl/         the ParProg language and the `.prl` file in front of it — see docs/prl.md
-  Lang/      Core (loadAt/storeAt — computed addresses; ifElse + whileAtMost — control flow;
-             footprint over-approximated, see docs/block-ir.md), Layout (buffers, placement,
-             lifetimes — `Arena.of`, `live_disjoint`),
+Lang/         the paralever language and the `.prl` file in front of it — see docs/prl.md
+  Core/      Prog (the `ParProg` AST, both interpreters, `wfB`, `par_seq_eq`; loadAt/storeAt —
+             computed addresses; ifElse + whileAtMost — control flow; synchronize — a barrier
+             the parallelizer may not cross; footprint over-approximated, see docs/block-ir.md),
+             Layout (buffers, placement, lifetimes — `Arena.of`, `live_disjoint`),
              Kernels, Cuda, Cost, Exec (real threads), Notation (`[l]` memory, `%n` register,
-             `if`, `while … in`), Analysis (dependences, `atoms` — register-closed segments,
-             `autoPar`), AutoParSound (the rewrite preserves the heap — see docs/autopar.md)
+             `if`, `while … in`, `synchronize`), Analysis (dependences, `atoms` — register-closed
+             segments, `phases` — split at every barrier, `autoPar`), AutoParSound (the rewrite
+             preserves the heap — see docs/autopar.md)
   Compile/   Ast + Parse (`.prl` text; a newline or `;` separates statements), Lower (names,
              placement, lifetimes, unrolling → Layout × ParProg), Print (`.prl` back out, the
              Lean block, ANSI colour)
@@ -171,6 +178,8 @@ Examples/    every demonstrable thing in one tree, with the .prl and .mlir sourc
   Language/    the nine *.prl files, plus Files (all nine read by `prl_file`), Writing,
                ControlFlow, Scatter, NeuralNet
   Mlir/        the seven *.mlir pilots, plus Files (one lowered end to end, and the corpus report)
+  Scale/       matmul12.prl and the 14,451-line matmul12.mlir it emits — the command line's
+               ceiling, measured; no Lean module reads it (see docs/mlir.md § Scale)
   AutoPar/     Pass — the parallelizing pass on chain.prl, every step evaluated
   Races/       Caught (the conclusion fails), Report (reading a counterexample), Pointers
   Threads/     RealThreads — a ParM tree on real Tasks
@@ -179,7 +188,7 @@ Tool/        the `paralever` command line, as a lib (not `Cli`: Mathlib depends 
              that name) — Run (the commands, the option grammar, reading either front end),
              Proof (the Lean module `prove` writes, and which of the three theorems it carries)
              — see docs/cli.md
-Test/        Sanity, AccessSanity, RaceSearch, Prl, Tool, Tactic
+Test/        Sanity, AccessSanity, RaceSearch, Lang, Tool, Tactic
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
              opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md,
              race-search.md, layout.md, autopar.md, mlir.md, website.md, ...)

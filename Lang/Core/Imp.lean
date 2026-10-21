@@ -1,11 +1,11 @@
-import Prl.Lang.Core
-import Prl.Lang.Layout
-import Prl.Lang.Kernels
-import Prl.Lang.Cuda
-import Prl.Lang.Cost
-import Prl.Lang.Exec
-import Prl.Lang.Analysis
-import Prl.Lang.Notation
+import Lang.Core.Prog
+import Lang.Core.Layout
+import Lang.Core.Kernels
+import Lang.Core.Cuda
+import Lang.Core.Cost
+import Lang.Core.Exec
+import Lang.Core.Analysis
+import Lang.Core.Notation
 
 /-! # The surface language, assembled
 

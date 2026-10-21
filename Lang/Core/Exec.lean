@@ -1,4 +1,4 @@
-import Prl.Lang.Core
+import Lang.Core.Prog
 import Paralever.Compile.Exec
 
 /-! # Running a `ParProg` on real threads
@@ -8,7 +8,7 @@ A `ParProg` lowers into `ParM`, so it inherits that. `runTask_eq` is what makes 
 spawned run provably computes the canonical sequential answer whenever `wfB` holds, and
 `runTask_eq_runTaskSeq` makes a benchmark against the single-threaded run fair. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 namespace ParProg
@@ -61,4 +61,4 @@ def evalTask (s : ParProg) (σ : State) (probes : List Loc) : List Val :=
   probes.map σ'
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

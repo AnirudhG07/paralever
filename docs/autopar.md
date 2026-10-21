@@ -1,6 +1,6 @@
 # `autoPar`: proposing a parallelisation, and why registers decide its shape
 
-`Prl/Lang/Analysis.lean` turns a sequential `ParProg` into a forked one. The analysis is **untrusted** —
+`Lang/Core/Analysis.lean` turns a sequential `ParProg` into a forked one. The analysis is **untrusted** —
 it proposes, `wfB` checks — which is `Search/RaceSearch.lean`'s architecture. This note records the
 one thing `wfB` cannot check, and the theorem that covers it.
 
@@ -71,7 +71,7 @@ pairwise notion `dependences` reports with.)
 
 ## The theorem
 
-`Prl/Lang/AutoParSound.lean`, built in three steps.
+`Lang/Core/AutoParSound.lean`, built in three steps.
 
 1. `regs_frame` — a statement changes only the registers in its register write set.
 2. `agree_run_all` — if two files agree on a set `R` covering what the statement reads, it leaves
@@ -122,6 +122,100 @@ the nested shape is the open engineering problem, and the N is also why no *onli
 optimal: a scheduler that forks `i1 ∥ i2` and joins for `i3` has killed `i2`'s thread before `i4`
 arrives.
 
+## Synchronization
+
+A `synchronize` is a statement that ends a phase. Nothing before it and nothing after it is grouped
+into one fork, whatever the dependence analysis thinks. The word is `synchronize` rather than `fence`
+because a fence in common usage is a memory-ordering instruction (`mfence`, `atomic_thread_fence`),
+and this is not one: the program has no relaxed memory to order.
+
+The construct exists because Bernstein is a question about memory, and a programmer's reason for
+ordering two phases need not be one. `Examples/Language/phases.prl` is the minimal case:
+
+```text
+buf A[4] = arange     phase 1: writes B, reads A
+buf B[4]              phase 2: writes C, reads A
+buf C[4]
+                              w₁ ∩ w₂ = B ∩ C = ∅
+for i in 4 {                  w₁ ∩ r₂ = B ∩ A = ∅
+  %0 := A[i]                  w₂ ∩ r₁ = C ∩ A = ∅
+  B[i] := %0 * %0
+}                     so Bernstein accepts one fork of eight,
+                      and without the barrier that is what `autoPar` emits
+synchronize
+
+for i in 4 {
+  %1 := A[i]
+  C[i] := %1 + 1
+}
+```
+
+With the barrier, `autoPar` emits two forks of four and keeps the barrier between them; without it,
+one fork of eight. `Test/Lang.lean` § *Synchronization* pins both numbers, so the construct is
+demonstrably load-bearing rather than decorative.
+
+### What it means, and what it does not
+
+At run time a `synchronize` is a no-op: `execPar .synchronize ρ = .pure ρ`, its footprint is
+`Footprint.empty`, and `wfB .synchronize = true`. It has to be — `par` is a structured fork–join, so
+by the time the next statement runs there is nothing left to wait for. The whole content of the
+statement is the constraint it puts on the parallelizer.
+
+This is the host-side barrier, not `__syncthreads()`. In CUDA's terms it is the
+`cudaDeviceSynchronize()` between two kernel launches, which is why `Lang.Compile.Lower` **refuses**
+one inside a `parallel` thread:
+
+```text
+'synchronize' cannot appear inside a 'parallel' thread: it separates phases of a sequential
+chain, and threads of one fork have no barrier between them
+```
+
+A barrier between siblings of one fork would need a synchronisation node in `ParM`, and `ParM` has
+none — racy programs land in `wrong` by design rather than being ordered by a barrier. A
+`synchronize` in a `for`, `if` or `while` body *is* accepted: those bodies are spliced into the chain
+that encloses them, so their barriers end phases of that chain. `Lower.Site` is the three-way
+distinction — `.file`, `.block`, `.thread` — and `ParProg.noSynchronizeInThread` is the same property
+read off a finished program.
+
+### The mechanism
+
+`ParProg.phases` splits a flattened chain at every barrier and `ParProg.joinPhases` puts it back:
+
+```text
+flatten p   = [s₀ s₁ synchronize s₂ s₃ synchronize s₄]
+phases      = [[s₀ s₁], [s₂ s₃], [s₄]]
+planPhase   ↓          ↓         ↓
+              par[…]     par[…]    s₄
+joinPhases  = [par[…] synchronize par[…] synchronize s₄]
+```
+
+`ParProg.joinPhases_phases` proves `joinPhases (phases us) = us` for every chain, so the
+decomposition loses nothing — which is why the barriers in the autoparallelized output are exactly
+the ones that were written, and the printed result reads back as itself (`Test/Lang.lean`).
+
+`canPar` and `canParSeg` also answer `false` for a barrier before they look at a footprint. They have
+to: its footprints are empty, so Bernstein alone would group it with anything. That is what makes
+`dependences` report a barrier as forcing order against every statement, and it is the one place the
+construct shows up in the analysis besides `phases`.
+
+### The proved route declines
+
+`AutoPar.rewriteOk` requires `synchronizeFree p`, so `AutoPar.rewrite` returns a program with a
+barrier unchanged and `parReport` falls back to `ParProg.autoPar` for it. Two reasons, both recorded
+rather than fixed:
+
+1. `emit pl = block (pl.map fun st => .par (st.map block))` wraps every stage in a `par`, so a
+   barrier reaching the plan ends up inside a thread — a program `Lower` would then reject on
+   re-read, which breaks the round trip the rewrite is supposed to preserve. This is the same missing
+   singleton case as § *The two routes*.
+2. The rewritten program leaves the register file untouched (`execPar (.par ss) ρ` restores `ρ` at
+   the join) while the original chain does not, so composing the per-phase results needs the
+   registers to agree at every barrier — a liveness side condition on the cut, in the shape of
+   `cutOK`, that `rewrite_sound` does not currently state.
+
+So the split is the usual one: the greedy route accepts the barrier and `wfB` checks the result per
+program; the proved route refuses it and keeps `rewrite_sound` hypothesis-free.
+
 ## The two routes
 
 Both survive, because neither dominates. `autoPar` here proposes and `wfB` is `decide`d on the
@@ -143,7 +237,7 @@ of 3 threads at depth 2 — equal to the DAG's lower bound — and `rewriteOk` t
 sequential depth of 6. `noRegFlow` asks that no register written by one thread is read by a later
 one, which is strictly stronger than the liveness `atoms` establishes at each boundary. Weakening it
 means restating `agree_run_all` over a statement list with `liveIn`; removing it means merging the
-children's register files at the join (`Prl/Lang/Core.lean`'s `par` case) under Bernstein on registers,
+children's register files at the join (`Lang/Core/Prog.lean`'s `par` case) under Bernstein on registers,
 with per-thread renaming at emission. Registers admit renaming and memory cells do not — a `Loc` is
 reached by a computed address, so the cell *is* its name.
 

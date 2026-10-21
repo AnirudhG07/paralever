@@ -133,7 +133,7 @@
   /* ── highlighting ───────────────────────────────────────────────────────── */
 
   // `.prl` is this project's own surface syntax, so highlight.js has no grammar
-  // for it. These are the token classes `Prl.highlight` recognizes.
+  // for it. These are the token classes `Lang.highlight` recognizes.
   function registerPrl(hl) {
     hl.registerLanguage("prl", function (h) {
       return {

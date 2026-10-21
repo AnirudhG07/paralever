@@ -1,9 +1,9 @@
 import Paralever.Search.Explain
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.ControlFlow
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 def ρ0 : Regs := fun _ => 0
 def σ0 : State := fun l => if l == 0 then .int 5 else .int 0

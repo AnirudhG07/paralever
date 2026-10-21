@@ -1,5 +1,5 @@
 import Paralever.Search.ExplainHtml
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.Report
@@ -71,7 +71,7 @@ theorem clean_par_seq_eq :
 
 `explainParM` takes any `ParM`, so a `ParProg` explains itself through `execPar`/`execSeq`. -/
 
-open Paralever.Prl
+open Paralever.Lang
 
 def ρ0 : Regs := fun _ => 0
 

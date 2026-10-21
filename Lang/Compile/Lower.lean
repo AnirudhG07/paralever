@@ -1,5 +1,5 @@
-import Prl.Compile.Parse
-import Prl.Lang.Core
+import Lang.Compile.Parse
+import Lang.Core.Prog
 
 /-! # From a `.prl` file to `Layout × ParProg`
 
@@ -12,7 +12,7 @@ and the autoparallelizer apply unchanged.
 approximated: a register in a bare address, a subscript outside its buffer, a live buffer overlapping
 another, a use after `free`, `%` in a value expression. -- ref: `docs/prl.md` -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 /-- What names mean, at one point in the file. -/
@@ -72,6 +72,7 @@ def Stmt.regTokens : Stmt → List String
   | .whileIn c n b => c.regTokens ++ n.regTokens ++ stmtTokens b
   | .decl ds       => ds.filterMap (fun d => match d with | .reg x _ => some x | _ => none)
   | .free _        => []
+  | .synchronize         => []
 
 def stmtTokens : List Stmt → List String
   | []      => []
@@ -257,18 +258,36 @@ def Env.freeBuf (E : Env) (nm : String) : Except String Env := do
 
 /-! ## Statements -/
 
+/-- Where a statement sits. A `for`, `if` or `while` body is spliced into the chain that encloses
+it, so it is a `.block` and not a new thread — which is why a `synchronize` is legal there and
+refused only under a `parallel`. -/
+inductive Site where
+  | file | block | thread
+  deriving BEq, Repr
+
+/-- The site a `for`, `if` or `while` body sits in: inside the file's own chain it becomes a block,
+and inside a thread it stays one. -/
+def Site.inner : Site → Site
+  | .file => .block
+  | s     => s
+
 mutual
 
 /-- One statement, and the environment the next one sees. A `for` splices its unrolled iterations
 into the enclosing chain rather than nesting a block in it, so the chain `AutoPar.flatten` sees is
 the chain that was written. -/
-partial def compileStmt (E : Env) (top : Bool) : Stmt → Except String (List ParProg × Env)
+partial def compileStmt (E : Env) (site : Site) : Stmt → Except String (List ParProg × Env)
   | .decl ds =>
-      if top then do pure ([], ← ds.foldlM Env.addDecl E)
+      if site == .file then do pure ([], ← ds.foldlM Env.addDecl E)
       else .error "a declaration belongs at the top level of the program"
   | .free nm =>
-      if top then do pure ([], ← E.freeBuf nm)
+      if site == .file then do pure ([], ← E.freeBuf nm)
       else .error "'free' belongs at the top level of the program"
+  | .synchronize =>
+      if site == .thread then
+        .error ("'synchronize' cannot appear inside a 'parallel' thread: it separates phases of "
+                ++ "a sequential chain, and threads of one fork have no barrier between them")
+      else pure ([.synchronize], E)
   | .load r a => do
       let i ← E.reg r
       match ← E.place a with
@@ -281,41 +300,42 @@ partial def compileStmt (E : Env) (top : Bool) : Stmt → Except String (List Pa
       | .dyn ar ix => pure ([.storeAt ar ix v], E)
   | .set r e => do pure ([.set (← E.reg r) (← E.aexp e)], E)
   | .par ts nm => do
-      let bodies ← ts.mapM (fun t => do pure (ParProg.block (← compileStmts E false t).1))
+      let bodies ← ts.mapM (fun t => do pure (ParProg.block (← compileStmts E .thread t).1))
       pure ([nm.elim id ParProg.label (.par bodies)], E)
   | .forIn i n body => do
       let k ← E.foldNat n
       let parts ← (List.range k).mapM fun j =>
-        do pure (← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts } false body).1
+        do pure (← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts }
+                    site.inner body).1
       pure (parts.flatten, E)
   | .parfor i n body nm => do
       let k ← E.foldNat n
       let bodies ← (List.range k).mapM fun j => do
         pure (ParProg.block
-          (← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts } false body).1)
+          (← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts } .thread body).1)
       pure ([nm.elim id ParProg.label (.par bodies)], E)
   | .ifElse c t e => do
-      pure ([.ifElse (← E.aexp c) (ParProg.block (← compileStmts E false t).1)
-                                  (ParProg.block (← compileStmts E false e).1)], E)
+      pure ([.ifElse (← E.aexp c) (ParProg.block (← compileStmts E site.inner t).1)
+                                  (ParProg.block (← compileStmts E site.inner e).1)], E)
   | .whileIn c n body => do
       pure ([ParProg.whileAtMost (← E.foldNat n) (← E.aexp c)
-              (ParProg.block (← compileStmts E false body).1)], E)
+              (ParProg.block (← compileStmts E site.inner body).1)], E)
 
-partial def compileStmts (E : Env) (top : Bool) : List Stmt → Except String (List ParProg × Env)
+partial def compileStmts (E : Env) (site : Site) : List Stmt → Except String (List ParProg × Env)
   | []      => .ok ([], E)
   | s :: ss => do
-      let (a, E') ← compileStmt E top s
-      let (b, E'') ← compileStmts E' top ss
+      let (a, E') ← compileStmt E site s
+      let (b, E'') ← compileStmts E' site ss
       pure (a ++ b, E'')
 
 end
 
 /-- **Compile a file.** -/
 def compile (f : File) : Except String Compiled := do
-  let (ss, E) ← compileStmts { regs := assignRegs f } true f.body
+  let (ss, E) ← compileStmts { regs := assignRegs f } .file f.body
   pure ⟨E.layout, ParProg.block ss, E.regs, E.dead⟩
 
 /-- **Read and compile `.prl` text.** -/
 def ofString (src : String) : Except String Compiled := do compile (← parse src)
 
-end Paralever.Prl
+end Paralever.Lang

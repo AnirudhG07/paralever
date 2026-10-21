@@ -1,13 +1,13 @@
-import Prl.Load
-import Prl.Report
+import Lang.Load
+import Lang.Report
 
 /-! # The `.prl` examples, as build gates
 
 Every example reads, compiles, prints back as itself, and carries the verdict its header claims.
 -- ref: `docs/prl.md` -/
 
-namespace Test.Prl
-open Paralever Paralever.Prl
+namespace Test.Lang
+open Paralever Paralever.Lang
 
 /-- One example, with the verdict it is labelled with. -/
 structure Entry where
@@ -25,7 +25,8 @@ def corpus : List Entry :=
   , ⟨"chain",    include_str "../Examples/Language/chain.prl",    true⟩
   , ⟨"race",     include_str "../Examples/Language/race.prl",     false⟩
   , ⟨"scatter",  include_str "../Examples/Language/scatter.prl",  false⟩
-  , ⟨"arena",    include_str "../Examples/Language/arena.prl",    true⟩ ]
+  , ⟨"arena",    include_str "../Examples/Language/arena.prl",    true⟩
+  , ⟨"phases",   include_str "../Examples/Language/phases.prl",   true⟩ ]
 
 private def compiled (e : Entry) : Option Compiled := (ofString e.src).toOption
 
@@ -155,6 +156,42 @@ private def arenaBases (ds : List LDecl) : List Loc := (Arena.of ds).bufs.map (f
 #guard arenaBases [.buf (buf "A" [2]), .free "A", .buf (buf "B" [2]), .free "A", .buf (buf "C" [2])]
          == [0, 0, 2]
 
+/-! ## Synchronization
+
+A `synchronize` ends a phase: `autoPar` plans each phase on its own and keeps the barrier. The pair
+below is why the construct exists — the two phases write disjoint buffers and only read `A`, so
+Bernstein accepts one fork of eight, and the barrier is the only thing that splits it.
+-- ref: `docs/autopar.md` § Synchronization -/
+
+private def phasesSrc : String := include_str "../Examples/Language/phases.prl"
+private def withoutSynchronize : String :=
+  "buf X[2]\nbuf Y[2]\nX[0] := 1\nX[1] := 2\nY[0] := 3\nY[1] := 4\n"
+private def withSynchronize : String :=
+  "buf X[2]\nbuf Y[2]\nX[0] := 1\nX[1] := 2\nsynchronize\nY[0] := 3\nY[1] := 4\n"
+
+private def forkSizes (src : String) : Option (List Nat) :=
+  (ofString src).toOption.map (fun c =>
+    (ParProg.flatten (ParProg.autoPar c.prog)).map fun s =>
+      match s with | .par ts => ts.length | _ => 1)
+
+-- one fork of four without the barrier, two of two with it
+#guard forkSizes withoutSynchronize == some [4]
+#guard forkSizes withSynchronize == some [2, 1, 2]
+-- …and the proposal still passes the proved check
+#guard (ofString withSynchronize).toOption.all (fun c => ParProg.wfB (ParProg.autoPar c.prog))
+
+-- the two phases of `phases.prl`, eight statements each
+#guard (ofString phasesSrc).toOption.map
+         (fun c => (ParProg.phases (ParProg.flatten c.prog)).map List.length) == some [8, 8]
+-- the barrier survives autoparallelization, and the printed result reads back as itself
+#guard (ofString phasesSrc).toOption.all
+         (fun c => !ParProg.synchronizeFree (ParProg.autoPar c.prog))
+#guard (ofString phasesSrc).toOption.all
+         (fun c => roundTrips (print { c with prog := ParProg.autoPar c.prog }))
+-- splitting into phases and joining them back is the identity on the chain, for every chain
+example (us : List ParProg) : ParProg.joinPhases (ParProg.phases us) = us :=
+  ParProg.joinPhases_phases us
+
 /-! ## What is rejected -/
 
 private def rejected (src : String) : Bool := (ofString src).toOption.isNone
@@ -177,6 +214,9 @@ private def rejected (src : String) : Bool := (ofString src).toOption.isNone
 #guard rejected "free A"
 -- a declaration or a `free` inside a thread, where only part of the program would see it
 #guard rejected "buf A[4]\nparallel { free A } | { A[0] := 1 }"
+-- a `synchronize` inside a thread: threads of one fork have no barrier between them
+#guard rejected "buf A[4]\nparallel { synchronize } | { A[0] := 1 }"
+#guard rejected "buf A[4]\nparfor i in 2 { synchronize }"
 #guard rejected "parallel { buf A[4] } | { [0] := 1 }"
 -- a name declared twice
 #guard rejected "buf A[4]\nbuf A[2]\nA[0] := 1"
@@ -199,6 +239,9 @@ private def rejected (src : String) : Bool := (ofString src).toOption.isNone
 #guard !rejected "const n = 2\nbuf A[n, n]\nA[1, 1] := 1"
 #guard !rejected "buf A[4]\nbuf B[4] at 100\nA[0] := 1"
 #guard !rejected "[0] := 3; [1] := 4"
+-- a synchronize in a `for`, `if` or `while` body is fine: those are spliced into the chain
+#guard !rejected "buf A[4]\nfor i in 2 { A[i] := 1\nsynchronize }"
+#guard !rejected "buf A[4]\nif 1 { A[0] := 1\nsynchronize } else { A[1] := 2 }"
 #guard !rejected "paralever {\n  [0] := 3;\n  parallel { [1] := 1 } | { [2] := 2 }\n}"
 
-end Test.Prl
+end Test.Lang

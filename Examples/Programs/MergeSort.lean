@@ -1,7 +1,7 @@
 import Paralever.Lib.TouchesOnly
 import Paralever.Lib.Notation
 import Paralever.Lib.Cost
-import Prl.Lang.Imp
+import Lang.Core.Imp
 
 
 namespace Paralever.Examples.MergeSort
@@ -619,7 +619,7 @@ obligation stays a `Bool`. The parallelism is nested — `wfB` checks Bernstein 
 block of the recursion tree, at every depth. -/
 
 namespace Surface
-open Paralever.Prl
+open Paralever.Lang
 
 /-- A no-op. -/
 def skipP : ParProg := ParProg.block []

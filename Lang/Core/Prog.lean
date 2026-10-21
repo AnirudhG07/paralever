@@ -9,7 +9,7 @@ past a `read` and the arithmetic a thread performs is invisible. This file makes
 all the way down*: `ParProg` is first-order, `execPar` lowers it into `ParM`, and the three
 properties that follow are what the rest of `Lang/` builds on —
 
-* **it prints**, computations included (`Prl/Lang/Notation.lean`);
+* **it prints**, computations included (`Lang/Core/Notation.lean`);
 * **its footprint is computed** by a fold (`footprintOf`, `execPar_accesses`);
 * **its obligation is decidable** (`wfB`, `wfB_wellFormed`, `par_seq_eq`).
 
@@ -19,7 +19,7 @@ independence obligation is about memory alone, and it matches how a GPU kernel i
 
 Rationale: `docs/block-ir.md`. -/
 
-namespace Paralever.Prl
+namespace Paralever.Lang
 open Paralever
 
 /-! ## Syntax -/
@@ -48,6 +48,10 @@ inductive ParProg where
   /-- `if c then t else e`. `0` is false; the footprint is the union of both branches, since which
   one runs is not known statically. -/
   | ifElse : AExp → ParProg → ParProg → ParProg
+  /-- `synchronize` — a barrier the parallelizer may not cross. A no-op at run time: `par` already
+  joins its threads, so there is nothing left to wait for. Its content is the constraint it puts on
+  `autoPar`, which plans each phase on its own. -- ref: `docs/autopar.md` § Synchronization -/
+  | synchronize : ParProg
   deriving Repr, Inhabited
 
 namespace ParProg
@@ -88,6 +92,7 @@ def execPar : ParProg → Regs → ParM Regs
                            (fun v => .pure (ρ.set r v))
   | .storeAt a e v, ρ => ParM.bind (writeAs (a.addr (e.eval ρ)) (v.eval ρ)) (fun _ => .pure ρ)
   | .ifElse c t e,  ρ => if c.eval ρ != 0 then execPar t ρ else execPar e ρ
+  | .synchronize,     ρ => .pure ρ
 
 /-- Each thread, lowered from the same starting register file. -/
 def execParAll : List ParProg → Regs → List (ParM Regs)
@@ -110,6 +115,7 @@ def execSeq : ParProg → Regs → ParM Regs
                            (fun v => .pure (ρ.set r v))
   | .storeAt a e v, ρ => ParM.bind (writeAs (a.addr (e.eval ρ)) (v.eval ρ)) (fun _ => .pure ρ)
   | .ifElse c t e,  ρ => if c.eval ρ != 0 then execSeq t ρ else execSeq e ρ
+  | .synchronize,     ρ => .pure ρ
 
 def execSeqAll : List ParProg → Regs → List (ParM Regs)
   | [],      _ => []
@@ -136,6 +142,7 @@ def footprintExact : ParProg → Bool
   | .loadAt _ _ _  => false
   | .storeAt _ _ _ => false
   | .ifElse _ _ _  => false
+  | .synchronize         => true
 
 def footprintExactAll : List ParProg → Bool
   | []      => true
@@ -157,6 +164,7 @@ def footprintOf : ParProg → Footprint
   | .storeAt a _ _ => ⟨[], a.cells⟩
   -- only one branch runs, but which is not known until the run
   | .ifElse _ t e  => Footprint.union (footprintOf t) (footprintOf e)
+  | .synchronize         => .empty
 
 def footprintsOf : List ParProg → Footprint
   | []      => .empty
@@ -187,6 +195,7 @@ def wfB : ParProg → Bool
   | .storeAt _ _ _ => true
   -- either branch may run, so both must be well-formed
   | .ifElse _ t e  => wfB t && wfB e
+  | .synchronize         => true
 
 def wfAllB : List ParProg → Bool
   | []      => true
@@ -211,6 +220,7 @@ theorem mutualInduction
     (hloadAt  : ∀ r a e, motive1 (.loadAt r a e))
     (hstoreAt : ∀ a e v, motive1 (.storeAt a e v))
     (hifElse  : ∀ c t e, motive1 t → motive1 e → motive1 (.ifElse c t e))
+    (hsynchronize : motive1 .synchronize)
     (hnil   : motive2 [])
     (hcons  : ∀ s ss, motive1 s → motive2 ss → motive2 (s :: ss)) :
     (∀ s, motive1 s) ∧ (∀ ss, motive2 ss) := by
@@ -218,7 +228,7 @@ theorem mutualInduction
     ParProg.rec (motive_1 := motive1) (motive_2 := motive2)
       hload hstore hset (fun a b ia ib => hseq a b ia ib) (fun ss ih => hpar ss ih)
       (fun nm s ih => hlabel nm s ih) hloadAt hstoreAt
-      (fun c t e it ie => hifElse c t e it ie)
+      (fun c t e it ie => hifElse c t e it ie) hsynchronize
       hnil (fun s ss i1 i2 => hcons s ss i1 i2) s
   refine ⟨h1, ?_⟩
   intro ss
@@ -237,7 +247,7 @@ so widening a read set never manufactures a conflict. -- ref: `docs/block-ir.md`
 theorem execPar_accesses_sub_all :
     (∀ s ρ σ, (accesses (execPar s ρ) σ).Sub (footprintOf s)) ∧
     (∀ ss ρ σ, (accesses (ParM.parAll (execParAll ss ρ)) σ).Sub (footprintsOf ss)) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ
     refine Footprint.Sub.of_eq ?_
     show accesses (ParM.bind (readAs l (0 : Int)) _) σ = _
@@ -285,6 +295,7 @@ theorem execPar_accesses_sub_all :
       exact Footprint.Sub.trans (it ρ σ) (Footprint.Sub.left _ _)
     · rw [ite_eq_right h]
       exact Footprint.Sub.trans (ie ρ σ) (Footprint.Sub.right _ _)
+  · intro ρ σ; exact Footprint.Sub.rfl' _
   · intro ρ σ; exact Footprint.Sub.rfl' _
   · intro s ss i1 i2 ρ σ
     show (accesses (ParM.parAll (execPar s ρ :: execParAll ss ρ)) σ).Sub _
@@ -363,7 +374,7 @@ theorem execPar_accesses_all :
     (∀ s, footprintExact s = true → ∀ ρ σ, accesses (execPar s ρ) σ = footprintOf s) ∧
     (∀ ss, footprintExactAll ss = true → ∀ ρ σ,
       accesses (ParM.parAll (execParAll ss ρ)) σ = footprintsOf ss) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l _ ρ σ
     show accesses (ParM.bind (readAs l (0 : Int)) _) σ = _
     rw [accesses_bind, readAs_accesses, readAs_runSeq]
@@ -386,6 +397,7 @@ theorem execPar_accesses_all :
   · intro r a e h _ _; simp [footprintExact] at h
   · intro a e v h _ _; simp [footprintExact] at h
   · intro c t e _ _ h _ _; simp [footprintExact] at h
+  · intro _ ρ σ; rfl
   · intro _ ρ σ; rfl
   · intro s ss i1 i2 h ρ σ
     simp only [footprintExactAll, Bool.and_eq_true] at h
@@ -420,7 +432,7 @@ theorem threadFootprints_eq : ∀ (ss : List ParProg), footprintExactAll ss = tr
 theorem wfB_wellFormed_all :
     (∀ s, wfB s = true → ∀ ρ σ, WellFormed (execPar s ρ) σ) ∧
     (∀ ss, wfAllB ss = true → ∀ ρ σ, WellFormedChilds (ParM.childsOf (execParAll ss ρ)) σ) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l _ ρ σ; trivial
   · intro l e _ ρ σ; trivial
   · intro r e _ ρ σ; trivial
@@ -444,6 +456,7 @@ theorem wfB_wellFormed_all :
     · rw [ite_eq_left hc]; exact it h.1 ρ σ
     · rw [ite_eq_right hc]; exact ie h.2 ρ σ
   · intro _ ρ σ; trivial
+  · intro _ ρ σ; trivial
   · intro s ss i1 i2 h ρ σ
     rw [wfAllB, Bool.and_eq_true] at h
     exact ⟨i1 h.1 ρ σ, i2 h.2 ρ _⟩
@@ -460,7 +473,7 @@ theorem execPar_runSeq_all :
     (∀ s ρ σ, runSeq (execPar s ρ) σ = runSeq (execSeq s ρ) σ) ∧
     (∀ ss ρ σ, runSeq (ParM.seqAll (execParAll ss ρ)) σ
              = runSeq (ParM.seqAll (execSeqAll ss ρ)) σ) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ; rfl
   · intro l e ρ σ; rfl
   · intro r e ρ σ; rfl
@@ -482,6 +495,7 @@ theorem execPar_runSeq_all :
     · rw [ite_eq_left hc, ite_eq_left hc]; exact it ρ σ
     · rw [ite_eq_right hc, ite_eq_right hc]; exact ie ρ σ
   · intro ρ σ; rfl
+  · intro ρ σ; rfl
   · intro s ss i1 i2 ρ σ
     show runSeq (ParM.seqAll (execPar s ρ :: execParAll ss ρ)) σ
        = runSeq (ParM.seqAll (execSeq s ρ :: execSeqAll ss ρ)) σ
@@ -491,7 +505,7 @@ theorem execPar_runSeq_all :
 theorem wfB_wellFormedSeq_all :
     (∀ s, wfB s = true → ∀ ρ σ, WellFormed (execSeq s ρ) σ) ∧
     (∀ ss, wfAllB ss = true → ∀ ρ σ, WellFormed (ParM.seqAll (execSeqAll ss ρ)) σ) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l _ ρ σ; trivial
   · intro l e _ ρ σ; trivial
   · intro r e _ ρ σ; trivial
@@ -514,6 +528,7 @@ theorem wfB_wellFormedSeq_all :
     by_cases hc : c.eval ρ != 0
     · rw [ite_eq_left hc]; exact it h.1 ρ σ
     · rw [ite_eq_right hc]; exact ie h.2 ρ σ
+  · intro _ ρ σ; trivial
   · intro _ ρ σ; trivial
   · intro s ss i1 i2 h ρ σ
     rw [wfAllB, Bool.and_eq_true] at h
@@ -554,6 +569,7 @@ def hasPar : ParProg → Bool
   | .loadAt _ _ _  => false
   | .storeAt _ _ _ => false
   | .ifElse _ t e  => hasPar t || hasPar e
+  | .synchronize         => false
 
 /-- **A program with no `parallel` block is trivially well-formed.** There is nothing to check,
 because there is nothing running concurrently — the parallel and sequential readings coincide. -/
@@ -579,6 +595,7 @@ theorem wfB_of_parFree : ∀ s : ParProg, hasPar s = false → wfB s = true := b
       rw [hasPar, Bool.or_eq_false_iff] at h
       rw [wfB, Bool.and_eq_true]
       exact ⟨it h.1, ie h.2⟩
+  | synchronize => intro _; rfl
   | nil => rfl
   | cons t ts i1 i2 =>
       rename_i h
@@ -633,4 +650,4 @@ theorem pipeline_par_seq_eq (phases : List ParProg)
   par_seq_eq (wfB_block phases h) ρ σ
 end ParProg
 
-end Paralever.Prl
+end Paralever.Lang

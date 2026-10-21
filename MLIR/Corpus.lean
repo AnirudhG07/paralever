@@ -205,28 +205,28 @@ A `#guard` on `verdict` says the obligation was discharged; these say what disch
 `mlir_prog` quotes the lowered program, so `decide` sees a `ParProg` literal and `par_seq_eq`
 applies to it with nothing further to supply. -/
 
-def doall : Prl.ParProg           := mlir_prog "../Examples/Mlir/doall-no.mlir"
-def reductionSplit : Prl.ParProg  := mlir_prog "../Examples/Mlir/reduction-split-no.mlir"
-def stencil : Prl.ParProg         := mlir_prog "../Examples/Mlir/stencil-f64-no.mlir"
-def nested2d : Prl.ParProg        := mlir_prog "../Examples/Mlir/nested-2d-no.mlir"
+def doall : Lang.ParProg           := mlir_prog "../Examples/Mlir/doall-no.mlir"
+def reductionSplit : Lang.ParProg  := mlir_prog "../Examples/Mlir/reduction-split-no.mlir"
+def stencil : Lang.ParProg         := mlir_prog "../Examples/Mlir/stencil-f64-no.mlir"
+def nested2d : Lang.ParProg        := mlir_prog "../Examples/Mlir/nested-2d-no.mlir"
 
 theorem doall_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar doall ρ) (Prl.ParProg.execSeq doall ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar doall ρ) (Lang.ParProg.execSeq doall ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 
 theorem reductionSplit_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar reductionSplit ρ) (Prl.ParProg.execSeq reductionSplit ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar reductionSplit ρ) (Lang.ParProg.execSeq reductionSplit ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 
 /-- The `f64` window. Values are approximated in `Int` (`exactValues = false`); the verdict and
 therefore this theorem are unaffected, because no footprint inspects a `Val`. -/
 theorem stencil_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar stencil ρ) (Prl.ParProg.execSeq stencil ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar stencil ρ) (Lang.ParProg.execSeq stencil ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 
 theorem nested2d_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar nested2d ρ) (Prl.ParProg.execSeq nested2d ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar nested2d ρ) (Lang.ParProg.execSeq nested2d ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 
 -- The three racy pilots have no such theorem: `wfB` refuses each of them, which is the `tp = 3`
 -- of the confusion count above.

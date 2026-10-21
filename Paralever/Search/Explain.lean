@@ -55,7 +55,7 @@ private def rule (c : String) (w : Nat) : String :=
   String.join (List.replicate w c)
 
 /-- How a report prints an address. `rawName` is the bare location; a layout supplies `W2[0, 3]`
-(`Prl/Lang/Layout.lean`). A function rather than a `Layout` so `Search/` need not know layouts exist. -/
+(`Lang/Core/Layout.lean`). A function rather than a `Layout` so `Search/` need not know layouts exist. -/
 abbrev LocName := Loc → String
 
 /-- Addresses as plain numbers. -/

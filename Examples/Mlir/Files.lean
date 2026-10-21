@@ -1,5 +1,5 @@
 import MLIR.Corpus
-import Prl.Report
+import Lang.Report
 
 namespace Paralever.Examples.Mlir
 open Paralever Paralever.MLIR
@@ -13,7 +13,7 @@ open Paralever Paralever.MLIR
 footprint function, which is why the lowering is a translation rather than an analysis. -/
 
 -- ANCHOR: site-mlir-doall
-def doall : Prl.Compiled := ⟨mlir_layout "doall-no.mlir", mlir_prog "doall-no.mlir", [], []⟩
+def doall : Lang.Compiled := ⟨mlir_layout "doall-no.mlir", mlir_prog "doall-no.mlir", [], []⟩
 -- ANCHOR_END: site-mlir-doall
 
 -- the eight iterations become eight threads of one fork, printed back in the surface language
@@ -57,7 +57,7 @@ parallel {
 }
 -/
 #guard_msgs in
-#eval IO.println (Prl.print doall)
+#eval IO.println (Lang.print doall)
 
 /--
 info: doall-no.mlir
@@ -69,20 +69,24 @@ info: doall-no.mlir
   verdict   independent — par = seq under every schedule (wfB = true)
 -/
 #guard_msgs in
-#eval IO.println (Prl.checkReport "doall-no.mlir" doall)
+#eval IO.println (Lang.checkReport "doall-no.mlir" doall)
 
 /--
-info: A [8] @0  [1, 2, 3, 4, 5, 6, 7, 8]
+info: heap after the run — a .prl program has no print statement, so this is its output
+24 cells in 3 buffers, addressed 0 to 23
+NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
+
+A [8] @0  [1, 2, 3, 4, 5, 6, 7, 8]
 B [8] @8  [10, 20, 30, 40, 50, 60, 70, 80]
 C [8] @16  [11, 22, 33, 44, 55, 66, 77, 88]
 -/
 #guard_msgs in
-#eval IO.println (Prl.runReport doall false)
+#eval IO.println (Lang.runReport doall false)
 
 -- ANCHOR: site-mlir-theorem
 theorem doall_ok (ρ : Regs) (σ : State) :
-    ParSeqEq (Prl.ParProg.execPar doall.prog ρ) (Prl.ParProg.execSeq doall.prog ρ) σ :=
-  Prl.ParProg.par_seq_eq (by decide) ρ σ
+    ParSeqEq (Lang.ParProg.execPar doall.prog ρ) (Lang.ParProg.execSeq doall.prog ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
 -- ANCHOR_END: site-mlir-theorem
 
 /-! ## 2 · A file that is refused
@@ -95,7 +99,7 @@ takes the canonical schedule and gets 36; the threaded run of the lowered progra
 #guard Corpus.refOf "reduction-yes" "sum" == some [.int 36]
 #guard Corpus.refOf "reduction-yes" "sum" != Corpus.progOf "reduction-yes" "sum"
 
-example : Prl.ParProg.wfB (mlir_prog "reduction-yes.mlir") = false := by decide
+example : Lang.ParProg.wfB (mlir_prog "reduction-yes.mlir") = false := by decide
 
 /-! ## 3 · All seven pilots
 

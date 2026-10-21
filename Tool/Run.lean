@@ -6,12 +6,12 @@ One program per file, four things to do with it: check it, run it, parallelize i
 two front ends are interchangeable here — a `.prl` file and a `.mlir` module both compile to a
 `Layout` and a `ParProg`, and every command below takes whichever it is given.
 
-Nothing in this module decides anything about a program. Every verdict is `Prl.Report`'s, every
-proof is the generated file's, and the conversions are `Prl.Compile.Print` and `MLIR.Emit`.
+Nothing in this module decides anything about a program. Every verdict is `Lang.Report`'s, every
+proof is the generated file's, and the conversions are `Lang.Compile.Print` and `MLIR.Emit`.
 -- ref: `docs/cli.md` -/
 
 namespace Paralever.Tool
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-- What the command line asked for. -/
 structure Opts where
@@ -26,13 +26,17 @@ structure Opts where
   autopar : Bool := false
   /-- `prove`: typecheck the generated file with `lake env lean`. -/
   check   : Bool := false
+  /-- No command: write the proof module there as well as printing the verdict. -/
+  proof   : Option String := none
 
 def usage : String :=
   "paralever — parallel programs that agree with their sequential reading, and the proof of it
 
-usage: paralever <command> FILE [options]
+usage: paralever [command] FILE [options]
 
 FILE is a `.prl` file or a `.mlir` module in generic form; both compile to the same program.
+With no command, `paralever FILE` checks it and then shows the evidence: the theorem that holds,
+or the interleaving that breaks it.
 
 commands
   check     FILE               memory, footprint, thread count, rounds, and the verdict
@@ -49,10 +53,11 @@ options
   --threads                    `run`: one Task per thread, on real cores
   --autopar                    `prove`, `to-mlir`, `to-lean`: take the parallelized program
   --check                      `prove`: typecheck the generated file with `lake env lean`
+  --prove PATH                 no command: write the proof module there too, beside the verdict
   --colour                     `to-prl`: ANSI colour
   --help, --version
 
-`check` exits 1 when the program has a race, so a build can gate on it.
+`check` and the no-command form exit 1 when the program has a race, so a build can gate on it.
 "
 
 /-- The command line, as options. Flags may come in any order; the first two bare words are the
@@ -67,10 +72,16 @@ where
     | "--threads" :: as, o => go as { o with threads := true }
     | "--autopar" :: as, o => go as { o with autopar := true }
     | "--check" :: as,   o => go as { o with check := true }
+    | "--prove" :: p :: as, o => go as { o with proof := some p }
+    | "--prove" :: [],      _ => .error "--prove needs a path"
+
     | "--colour" :: as,  o => go as { o with colour := true }
     | "--color" :: as,   o => go as { o with colour := true }
     | a :: as,           o =>
         if a.startsWith "-" then .error s!"unknown option '{a}'"
+        -- a bare word that names a file is the file, so `paralever FILE` needs no command
+        else if o.file.isEmpty && (a.endsWith ".prl" || a.endsWith ".mlir") then
+          go as { o with file := a }
         else if o.cmd.isEmpty then go as { o with cmd := a }
         else if o.file.isEmpty then go as { o with file := a }
         else .error s!"'{a}': one file at a time"
@@ -83,7 +94,7 @@ reader gave up on the way, which is printed as comments rather than dropped. -/
 /-- A compiled program, the front end it came through, and the approximations the reader made. -/
 def loadAny (path : String) : IO (Compiled × Kind × List String) := do
   if path.endsWith ".prl" then
-    pure (← Paralever.Prl.load path, .prl, [])
+    pure (← Paralever.Lang.load path, .prl, [])
   else if path.endsWith ".mlir" then
     match MLIR.lowerText (← IO.FS.readFile path) with
     | .error e => throw (IO.userError s!"{path}: {e}")
@@ -114,17 +125,23 @@ def pathFrom (out : Option String) (src : String) : IO String := do
         else pure ("/".intercalate (List.replicate (ds.length - common) ".." ++ ss.drop common))
       catch _ => pure srcAbs.toString
 
-/-- Standard output, or the file `-o` named. -/
+/-- Standard output, or the file `-o` named. Always ends in a newline: a shell marks output that
+does not (zsh prints a reverse-video `%`), which read as part of the report. -/
 def put (o : Option String) (s : String) : IO Unit := do
+  let s := if s.endsWith "\n" then s else s ++ "\n"
   match o with
   | none   => IO.print s
   | some p => do
       IO.FS.writeFile p s
       IO.eprintln s!"written to {p}"
 
-/-- The reader's approximations, as `.prl` comments. -/
+/-- The reader's approximations, as `.prl` comments: for output that is source. -/
 def noteLines (notes : List String) : String :=
   if notes.isEmpty then "" else "\n".intercalate (notes.map (fun n => "-- " ++ n)) ++ "\n\n"
+
+/-- The same, for a report: a report is read, not elaborated, so it carries no comment markers. -/
+def notePlain (notes : List String) : String :=
+  if notes.isEmpty then "" else "\n".intercalate notes ++ "\n\n"
 
 /-! ## The commands -/
 
@@ -161,20 +178,43 @@ def run (o : Opts) : IO UInt32 := do
   let (c, k, notes) ← loadAny o.file
   match o.cmd with
   | "check"   => do
-      IO.print (noteLines notes ++ checkReport o.file c)
+      put o.out (notePlain notes ++ checkReport o.file c)
       pure (if ParProg.wfB c.prog
               || (raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state).isEmpty
             then 0 else 1)
+  -- no command: the question a file arrives with. Check it, then show the evidence either way —
+  -- the theorem that holds, or the interleaving that breaks it. -- ref: docs/cli.md
+  | ""        => do
+      let sites := raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state
+      let how := match o.proof with
+        | some p => s!"Lean module written to {p}; it re-reads this file as it elaborates.\n"
+        | none   => s!"A Lean module stating and proving that: paralever prove {o.file} -o Proof.lean\n"
+      let verdict :=
+        if ParProg.wfB c.prog then
+          "\nPROVED. Bernstein holds at every fork, so par_seq_eq applies: every schedule of this\n"
+            ++ "program leaves the heap its sequential reading leaves.\n" ++ how
+        else if sites.isEmpty then
+          "\nNO RACE FOUND, BUT NOT PROVED. No schedule reaches wrong at the heap this file\n"
+            ++ "declares, yet wfB says no: the syntactic footprint over-approximates a computed\n"
+            ++ "address (docs/block-ir.md), so what holds is the equivalence at this heap alone.\n"
+            ++ how
+        else
+          "\nRACY. The interleaving below reaches wrong, so no equivalence is available; what is\n"
+            ++ "provable is the pair of refusals.\n" ++ how ++ "\n" ++ raceReport c ++ "\n"
+      put o.out (notePlain notes ++ checkReport o.file c ++ verdict)
+      -- a `--check` that Lean refused is the tool's answer too, so its code is passed on
+      let rc ← if o.proof.isSome then prove { o with out := o.proof } c k else pure 0
+      pure (if sites.isEmpty then rc else 1)
   | "run"     => do
       -- a racy program has no single heap to print: what a run leaves is one schedule's answer
       let sites := raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state
       let warn :=
         if sites.isEmpty then ""
-        else "-- this program has a race, so what follows is what one schedule left, not what\n"
-               ++ "-- it computes: `paralever race` prints an interleaving that disagrees\n"
+        else "this program has a race, so what follows is what one schedule left, not what it\n"
+               ++ "computes: paralever race prints an interleaving that disagrees\n\n"
       put o.out (warn ++ runReport c o.threads)
       pure 0
-  | "race"    => do IO.print (raceReport c); pure 0
+  | "race"    => do put o.out (raceReport c); pure 0
   | "autopar" => do put o.out (noteLines notes ++ parReport c); pure 0
   | "prove"   => prove o c k
   | "to-prl"  => do
@@ -200,7 +240,8 @@ def main (args : List String) : IO UInt32 := do
   | .error e => do IO.eprintln s!"{e}\n\n{usage}"; pure 2
   | .ok o    =>
       if o.file.isEmpty then do
-        IO.eprintln s!"{o.cmd}: no file given\n\n{usage}"
+        let who := if o.cmd.isEmpty then "paralever" else o.cmd
+        IO.eprintln s!"{who}: no file given\n\n{usage}"
         pure 2
       else
         try run o

@@ -1,10 +1,10 @@
 import Paralever.Search.ExplainHtml
-import Prl.Lang.Core
+import Lang.Core.Prog
 import Paralever.Lib.ArrRef
 
 
 namespace Paralever.Examples.Pointers
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 -- `rfl` and `decide` here reduce a lowered `ParProg` against a concrete heap; the default depth is
 -- not enough to unfold `runSeq`/`follow` through `readAs`/`writeAs`.

@@ -18,7 +18,7 @@ has the same memory, the same footprint, the same verdict and leaves the same he
 -- ref: `docs/mlir.md` § Generic form out -/
 
 namespace Paralever.MLIR
-open Paralever Paralever.Prl
+open Paralever Paralever.Lang
 
 /-- The element type every cell is emitted at. `Val` is an `Int`, so one width serves. -/
 def cellTy : MTy := .int 64
@@ -182,6 +182,10 @@ partial def stmtOps (L : Layout) : ParProg → E (List Op)
   | .ifElse _ _ _ =>
       throw "if/else has no spelling in the op set the reader supports, so a file with one \
              cannot be emitted as MLIR"
+  | .synchronize => do
+      note ("synchronize needs no operation: every fork is already closed by the async.await_all "
+            ++ "that joins it, so the phases MLIR sees are the phases the barrier marks")
+      pure []
 
 /-- A fork: one `async.execute` per thread, then the `async.await_all` that joins them. The token
 is named before its body is emitted, because that is the order the names are defined in. -/
