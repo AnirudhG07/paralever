@@ -21,7 +21,7 @@ theorem time_execPar_le_all :
     (∀ s ρ σ, wfB s = true → time (execPar s ρ) σ ≤ time (execSeq s ρ) σ) ∧
     (∀ ss ρ σ, wfAllB ss = true →
       time (ParM.seqAll (execParAll ss ρ)) σ ≤ time (ParM.seqAll (execSeqAll ss ρ)) σ) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ _; exact Nat.le_refl _
   · intro l e ρ σ _; exact Nat.le_refl _
   · intro r e ρ σ _; exact Nat.le_refl _
@@ -82,6 +82,21 @@ theorem time_execPar_le_all :
     rw [time_seqAll_cons _ _ σ hwp, time_seqAll_cons _ _ σ hws,
         execPar_runSeq_all.1 s ρ σ]
     exact Nat.add_le_add (i1 ρ σ h.1) (i2 _ _ h.2)
+  · intro _ ρ σ _; exact Nat.le_refl _
+  · -- the nest: the same children both ways, so `time_parAll_le_seqAll` is the whole step
+    intro n ρ σ h
+    simp only [wfB] at h
+    have hwfPar : WellFormed (ParM.parAll (n.threads ρ)) σ := LoopNest.wellFormed_threads h ρ σ
+    have hsq : WellFormed (ParM.seqAll (n.threads ρ)) σ := n.wellFormed_seqAll ρ σ
+    show time (ParM.bind (ParM.parAll (n.threads ρ)) _) σ
+       ≤ time (ParM.bind (ParM.seqAll (n.threads ρ)) _) σ
+    rw [time_bind_add _ _ σ (by rw [WellFormed_bind]; exact ⟨hwfPar, trivial⟩),
+        time_bind_add _ _ σ (by rw [WellFormed_bind]; exact ⟨hsq, trivial⟩)]
+    have h1 : time (ParM.parAll (n.threads ρ)) σ ≤ time (ParM.seqAll (n.threads ρ)) σ :=
+      time_parAll_le_seqAll _ σ hwfPar
+    have hz : ∀ (τ : State) (r : Regs), time (ParM.pure r) τ = 0 := fun _ _ => rfl
+    rw [hz, hz]
+    omega
 
 /-- **Par ≤ Seq, in rounds.** For every program the check accepts, the parallel reading needs no
 more rounds than the sequential one — the cost counterpart of `par_seq_eq`, from the same `Bool`. -/

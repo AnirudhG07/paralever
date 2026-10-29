@@ -325,11 +325,43 @@ Non-step-indexed Iris variant, language-agnostic.
 
 **What to take:** "DRF source ⇒ transformation is sound" is a generalization of our theorem, and it
 shows how ownership lets you do thread-local proofs of a whole-program refinement. Also the precedent
-that a **non-step-indexed** Iris variant is a sensible thing to build — relevant to our BI instance.
+that a **non-step-indexed** Iris variant is a sensible thing to build — which the iris-lean spike
+confirmed is free, and beside the point (`docs/theory.md` § 8).
 
 Predecessor, if we want two-sided equivalence (parallel terminates iff sequential does):
 Tassarotti, Jung, Harper, *A Higher-Order Logic for Concurrent Termination-Preserving Refinement*,
 ESOP 2017 — <https://arxiv.org/pdf/1701.05888>
+
+### 7.3 ★ Pnueli, Siegel, Singerman, *Translation Validation* — TACAS 1998
+<https://link.springer.com/chapter/10.1007/BFb0054170>
+
+Complement: Necula, *Translation Validation for an Optimizing Compiler*, PLDI 2000 —
+<https://people.eecs.berkeley.edu/~necula/Papers/tv_pldi00.pdf>
+
+**Do not verify the translator; validate the translation.** For each run of a compiler, generate a
+refinement condition relating *this* source to *this* target and discharge it with a decision
+procedure. Cheap per instance, and it needs no model of the transformation at all.
+
+**What to take:** this is exactly the shape of `assert f(…) == g(…)` (`docs/equivalence.md`). The
+parallelization a user writes by hand is a translation whose translator is a person, so there is no
+pass to verify — only the pair in front of us. Where we differ: their condition is discharged by a
+solver, while ours splits into two halves, the parallel one proved once in Lean (`par_seq_eq` on each
+side) and the sequential one decided by running both programs on the declared heap. Necula's
+symbolic-evaluation half is the template if that second half is ever lifted to every heap.
+
+Also the right citation for why the two-program claim is *not* a relational logic: translation
+validation establishes an equality of outcomes per instance, which is what a reader comparing two
+programs asked for, rather than contextual refinement.
+
+### 7.4 Benton, *Simple Relational Correctness Proofs for Static Analyses and Program Transformations* — POPL 2004
+<https://dl.acm.org/doi/10.1145/964001.964003>
+
+Relational Hoare logic: judgments over *pairs* of programs, with the transformation's correctness as
+a relational triple. The clean formulation of "these two programs agree on these variables".
+
+**What to take:** the template if `AgreeOn` is ever generalized from the declared heap to every heap
+— a relational judgment is how that statement is proved by hand rather than decided. Read for the
+*shape* of the judgment; the logic itself is sequential, so it says nothing about our fork.
 
 ---
 
@@ -384,8 +416,10 @@ structured, and worth engaging with honestly in related work.
   packaging for Bernstein conditions.
 - **iris-lean** — <https://github.com/leanprover-community/iris-lean>. Note the README is badly stale;
   `master` has far more than it advertises. The parts we care about:
-  - `Iris/Iris/BI/*` and `Iris/Iris/ProofMode/*` — the BI interface and the proof mode we instantiate.
-    Tactic list: `Iris/tactics.md`.
+  - `Iris/Iris/BI/*` and `Iris/Iris/ProofMode/*` — the BI interface and the proof mode. Read, not
+    imported: the spike that instantiated them is gone and the dependency with it, because the `∗`
+    they give is exclusive and `Indep` permits shared reads (`docs/theory.md` § 8). Tactic list:
+    `Iris/tactics.md`.
   - `Iris/Iris/Algebra/{Heap, HeapView, GenMap, Frac, DFrac}.lean` — heap model, fractional/read
     permissions.
   - `Iris/Iris/HeapLang/Lib/{Par, Spawn, Quicksort}.lean` and `Iris/Tests/HeapLang/Par.lean` — read as
@@ -397,6 +431,20 @@ structured, and worth engaging with honestly in related work.
   - Zulip: <https://leanprover.zulipchat.com/#narrow/channel/490604-iris-lean>
 - **Coq Iris `par` / `spawn`** — <https://plv.mpi-sws.org/coqdoc/iris/iris.heap_lang.lib.par.html>.
   The `par_spec` / `wp_par` statements, to compare against what we prove.
+- **de Medeiros et al., *Iris in Lean*** — <https://arxiv.org/abs/2609.24252> (Sep 2026). The port's
+  own account: a reimplementation of the logic and proof mode, setoid equivalences replaced by
+  quotient types, a Diaframe variant, Mathlib integration, one probabilistic logic. Useful as
+  negative evidence for the related-work section: `Simuliris`, `Bernstein`, `sequentializ`,
+  `data race` and `fork` occur **zero** times in it, and `refinement`/`relational`/`contextual` only
+  in its bibliography — the paper proves no theorem about any program, and its one program-level
+  artifact is a unary HeapLang safety proof. § 5.2 names porting program logics as future work.
+- **Barrett et al., *CSLib: The Lean Computer Science Library*** — <https://arxiv.org/abs/2602.04846>.
+  Two pillars: formalized CS in Lean (today: operational semantics, program equivalences, automata,
+  a linear logic, labelled transition systems with `LTS.IsBisimulation`), and Boole, a verification
+  IL over Strata emitting Lean verification conditions for SMT. Its roadmap puts **concurrency and
+  separation logic in 2027**, so there is nothing here to depend on yet. Watch `LTS` and the program
+  equivalences; note that bisimulation is finer than outcome-set equality, so its lemmas would not
+  give `par_seq_eq` even once they exist.
 - **Ideas to steal without importing:**
   - `verse-lab/velvet` (`Velvet/Syntax.lean`) — how to build a Dafny-style DSL in Lean:
     `declare_syntax_cat` for `requires`/`ensures`/`invariant`, `macro_rules` for binders,

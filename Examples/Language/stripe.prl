@@ -1,0 +1,17 @@
+-- Two threads stripe one buffer: even cells and odd cells. Both indices come from memory, so the
+-- footprint read off the syntax is every cell of A and `wfB` refuses. The addresses are provably
+-- distinct — 2k is never 2m+1 — so this is the obligation `paralever vc` hands to a solver, and
+-- the one it discharges that `check` cannot. -- ref: docs/smt-vc.md
+
+buf A[8]
+buf k[2] = 0, 1
+
+parallel {
+  %p := k[0]
+  A[2 * %p] := 1
+} | {
+  %q := k[1]
+  A[2 * %q + 1] := 2
+}
+
+print k

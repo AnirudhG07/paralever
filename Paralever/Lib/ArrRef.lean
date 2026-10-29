@@ -54,6 +54,34 @@ theorem ArrRef.addr_inRange (a : ArrRef) (h : 0 < a.len) (i : Int) : a.InRange (
   rw [this]
   exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ h) a.base⟩
 
+/-- **Distinct in-range indices address distinct cells.** `footprintOf` widens `A[e]` to all of `A`
+because `e` is unknown (`docs/block-ir.md`), so two computed subscripts are refused however
+obviously they differ. This is what recovers the precision once something *is* known about them, and
+it is the obligation an independence check over computed addresses reduces to.
+
+The wrap is rewritten away first — in range, `i.toNat % max len 1` is `i.toNat` — and then `grind`
+closes it. `omega` cannot: at that goal it drops `i ≠ j` and reports no usable constraints.
+-- ref: `docs/smt-vc.md` -/
+theorem ArrRef.addr_ne (a : ArrRef) {i j : Int}
+    (hi : 0 ≤ i) (hi' : i < (a.len : Int)) (hj : 0 ≤ j) (hj' : j < (a.len : Int)) (h : i ≠ j) :
+    a.addr i ≠ a.addr j := by
+  have hlen : 0 < a.len := by omega
+  unfold ArrRef.addr
+  rw [Nat.max_eq_left hlen, Nat.mod_eq_of_lt (by omega : i.toNat < a.len),
+      Nat.mod_eq_of_lt (by omega : j.toNat < a.len)]
+  grind
+
+/-- The contrapositive, which is the direction a footprint argument uses: one cell reached by two
+in-range indices means the indices were equal. -/
+theorem ArrRef.eq_of_addr_eq (a : ArrRef) {i j : Int}
+    (hi : 0 ≤ i) (hi' : i < (a.len : Int)) (hj : 0 ≤ j) (hj' : j < (a.len : Int))
+    (h : a.addr i = a.addr j) : i = j := by
+  have hlen : 0 < a.len := by omega
+  unfold ArrRef.addr at h
+  rw [Nat.max_eq_left hlen, Nat.mod_eq_of_lt (by omega : i.toNat < a.len),
+      Nat.mod_eq_of_lt (by omega : j.toNat < a.len)] at h
+  grind
+
 /-- The sub-range `[lo, hi)` as an `ArrRef`, so two halves of one array are two `ArrRef`s. -/
 def ArrRef.slice (a : ArrRef) (lo hi : Nat) : ArrRef := ⟨a.base + lo, hi - lo⟩
 

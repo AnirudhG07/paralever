@@ -1,0 +1,20 @@
+-- Two threads whose writes are mirror images of one branch. `footprintOf` unions both arms of an
+-- `if`, because which arm runs is not known statically, so `wfB` sees each thread touching both
+-- cells and refuses. Only one arm runs, and whichever it is the two threads write different cells:
+-- `par = seq` at every heap, and the checker proves it at none of them.
+--
+-- This is the third verdict's witness — `Inconclusive` for a general heap — and the one shape where
+-- the gap is a *branch* rather than a computed index. -- ref: docs/general-heap.md
+
+buf A[2]
+buf c[1] = 1
+
+%g := c[0]
+
+parallel {
+  if %g { A[0] := 1 } else { A[1] := 1 }
+} | {
+  if %g { A[1] := 2 } else { A[0] := 2 }
+}
+
+print A

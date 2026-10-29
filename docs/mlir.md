@@ -145,6 +145,47 @@ and truncates. On the `stencil-f64-no` pilot the reference run gives
 `B = [7/4, 11/4, 15/4, 19/4, 23/4, 27/4]` and the `Int` lowering gives `[0, 2, 3, 4, 4, 6]`, while
 both give the verdict `race-free`.
 
+## Conditions
+
+`arith.cmpi` crosses in both directions, and it is the one place where a width has to be mentioned:
+a comparison answers in `i1`, and a Paralever cell holds an integer.
+
+**Reading.** `MLIR/Lower.lean` maps MLIR's own predicate numbering onto the six surface comparisons:
+
+| predicate | MLIR | `AExp` |
+|---|---|---|
+| 0 | `eq` | `AExp.eq` |
+| 1 | `ne` | `AExp.ne` |
+| 2 | `slt` | `AExp.lt` |
+| 3 | `sle` | `AExp.le` |
+| 4 | `sgt` | `AExp.gt` |
+| 5 | `sge` | `AExp.ge` |
+
+Predicates 6 through 9 are the unsigned comparisons, and they are **refused** with a message naming
+the predicate: a cell holds a signed integer with no width, so `ult` is not a comparison we can
+model and pretending otherwise would be the silent approximation this front end does not make
+(§ *What it refuses, and why*). The `arith.extui` that MLIR puts after a comparison to widen `i1`
+needs no case of its own — it is already in the list of casts read as the identity, because the only
+width Paralever has is unbounded.
+
+**Emitting.** The three `AExp` primitives go out as two ops each: the comparison, then the widening.
+
+```mlir
+%c = "arith.cmpi"(%a, %b) {predicate = 2 : i64} : (i64, i64) -> i1
+%r = "arith.extui"(%c) : (i1) -> i64
+```
+
+`not a` emits as `a == 0` rather than as a negated comparison — one op fewer, and it reads back as
+the same `AExp` the emitter was handed, which is what the round-trip guard needs. The derived forms
+never reach the emitter: `le`, `gt`, `ge`, `ne`, `and` and `or` are definitions over `lt`/`eq`/`not`
+(`docs/block-ir.md` § *Conditions*), so a `>=` written in `.prl` emits as `slt` under an `extui`
+under a comparison against zero. That is longer than emitting `sge` directly, and it is the price of
+three constructors instead of nine — paid in the emitted text, not in the proofs.
+
+The asymmetry is deliberate: we **read** all six predicates and **write** two. A module that came
+from `mlir-opt` keeps its `sge`, because the reader recognizes it; a module we generate uses the
+smallest set that round-trips.
+
 ## Why in Lean
 
 `MLIR.lower` is a Lean *function*, so the translation is an object we can state theorems about. The
@@ -360,21 +401,21 @@ pilots, at a size no pilot reaches.
 
 | program | `.mlir` lines | threads | statements | `check` from `.prl` | `check` from `.mlir` |
 |---|---|---|---|---|---|
-| matmul 8×8 | 4,391 | 8 | 1,088 | 0.05 s | 1.8 s |
-| matmul 12×12 | 14,451 | 12 | 3,600 | 0.22 s | 21 s |
-| matmul 16×16 | 33,855 | 16 | 8,448 | 0.81 s | 128 s |
+| matmul 8×8 | 4,391 | 8 | 1,088 | 0.08 s | 0.11 s |
+| matmul 12×12 | 14,451 | 12 | 3,600 | 0.19 s | 0.40 s |
+| matmul 16×16 | 33,855 | 16 | 8,448 | 0.84 s | 1.35 s |
 
-Two separate costs are visible there. Reading generic form is linear and cheap — `to-mlir` writes
-the 14,451-line file in 0.03 s — but the `.mlir` column also pays for the *unrolled* program:
-12×12 `.prl` source text is twenty lines whichever size `n` is, while the module names all 3,600
-statements. The superlinear part is `raceSites`, which compares every pair of threads, and
-`checkReport` calls it to separate a race from an over-approximated footprint.
+Reading generic form is linear — `to-mlir` writes the 14,451-line file in 0.02 s, and reading it back
+costs about twice what reading the twenty-line `.prl` costs, which is the price of naming all 3,600
+statements rather than the shape that generates them. These three columns were 1.8 s, 21 s and 128 s
+until the reader stopped rebuilding an error message at every backtracked alternative;
+`docs/scale.md` has the before-and-after and the two costs that are still superlinear.
 
 The in-Lean reader costs more than the command line, and the first thing it hits is not `decide`.
 `mlir_prog` quotes the lowered program into the elaborator, and on this file that alone exceeds
 Lean's default 200,000 heartbeats — which is why the module `paralever prove` writes lifts the
 limit. With it lifted, Lean elaborates the module and proves `par_seq_eq` for the 14,451-line file
-in **78 s**, `by decide` on `wfB` included:
+in **34.65 s**, `by decide` on `wfB` included:
 
 ```console
 $ paralever Examples/Scale/matmul12.mlir --prove Big12.lean --check
@@ -384,28 +425,17 @@ Big12.lean: Lean accepts it
 ```
 
 `Examples/Scale/` still has no Lean module of its own, because a module in the tree is elaborated
-by every `lake build`, and 78 s is not a price the build should pay to repeat what the command line
+by every `lake build`, and 35 s is not a price the build should pay to repeat what the command line
 shows on demand.
 
 ### An MLIR file from somewhere else
 
-Real-world MLIR is not in generic form. The three largest affine and memref test files in
-`llvm/llvm-project` — `mlir/test/Dialect/Affine/canonicalize.mlir` (2,691 lines),
-`Affine/loop-fusion.mlir` (1,600) and `Affine/memref-dependence-check.mlir` (1,168) — are all
-pretty form with `// RUN:` directives and `-split-input-file` separators, so the reader stops at the
-first operation:
-
-```console
-$ paralever to-prl upstream-canonicalize.mlir
-expected a quoted string (offset 464, near: func.func @compose_affine_maps_1dto2d_no_symbols)
-```
-
-which is accurate: generic form spells that operation `"func.func"() ({ … })`. Translating one form
-to the other is `mlir-opt --mlir-print-op-generic`, and `mlir-opt` is the toolchain this project
-does not depend on (`CLAUDE.md` § *Dependencies*), so a file from outside is readable exactly where
-an MLIR build is installed. Two consequences worth stating rather than discovering: the offset in
-that message is a byte count and not a `line:column`, and a `-split-input-file` file is several
-modules in one, which the reader has no notion of.
+Real-world MLIR is not in generic form: every file in `llvm/llvm-project`, in a bug report or in a
+compiler's output is in *custom* form, `affine.for %i = 0 to 8 { … }`. That is what
+`MLIR/Pretty.lean` reads, and `docs/mlir-pretty.md` is its design note — the desugaring table, the
+vocabulary, what is kept verbatim, and the twenty-function tally on MLIR's own
+`-affine-parallelize` test input. `MLIR.parseAny` picks the reader by looking at the first
+operation, so every command takes either form and nothing downstream knows the difference.
 
 ## Status, and what is next
 

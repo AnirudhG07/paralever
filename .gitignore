@@ -6,3 +6,6 @@
 # `web/build-snippets.sh` writes the module `paralever prove` generates here, builds
 # its highlighted facet and deletes it again. Never a source file.
 /Snippet.lean
+
+# paralever-bench --prove writes the generated modules and their sources here
+/bench-proofs/

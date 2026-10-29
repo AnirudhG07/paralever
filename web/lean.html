@@ -86,7 +86,7 @@ lake exe paralever --help        # the command line</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
           The toolchain is pinned to <code>leanprover/lean4:v4.34.0</code>, with
-          Mathlib and iris-lean at the same tag. Mathlib is never imported through
+          Mathlib at the same tag. Mathlib is never imported through
           an umbrella file: a lemma is imported from the module it actually lives
           in, which is what keeps a standalone <code>lean &lt;file&gt;</code> check
           viable on the files that matter most.
@@ -282,10 +282,20 @@ lake exe paralever --help        # the command line</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Dependencies, and what is deliberately absent</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Mathlib and iris-lean, and nothing else. From iris-lean the library takes
-          its propositional interface and proof mode: instantiating that interface
-          at this project's own <code>State → Prop</code> buys a few dozen
-          proof-mode tactics for one instance declaration.
+          Mathlib, and nothing else.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <strong>No separation-logic library</strong>, which is a decision rather
+          than an omission. A separating conjunction splits the heap into disjoint
+          domains, and the independence relation this project is built on does not:
+          Bernstein's conditions permit two threads to read one cell, so
+          <code>&lowast;</code> is strictly narrower than the relation every theorem
+          here is about. The Hoare-triple layer therefore frames with ordinary
+          conjunction over the footprints the library already computes, which is
+          what makes its parallel rule general — shared reads included — instead of
+          narrowing it to match an imported connective. An earlier dependency on
+          iris-lean existed to test exactly this, and was removed once it had
+          answered: the finding is kept in <code>docs/theory.md</code>&nbsp;§&nbsp;8.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
           <strong>HeapLang is deliberately not imported</strong>, and read only as

@@ -174,7 +174,7 @@ A barrier between siblings of one fork would need a synchronisation node in `Par
 none — racy programs land in `wrong` by design rather than being ordered by a barrier. A
 `synchronize` in a `for`, `if` or `while` body *is* accepted: those bodies are spliced into the chain
 that encloses them, so their barriers end phases of that chain. `Lower.Site` is the three-way
-distinction — `.file`, `.block`, `.thread` — and `ParProg.noSynchronizeInThread` is the same property
+distinction — `.file`, `.block`, `.thread` — and `ParProg.noBarrierInThread` is the same property
 read off a finished program.
 
 ### The mechanism
@@ -194,15 +194,18 @@ decomposition loses nothing — which is why the barriers in the autoparallelize
 the ones that were written, and the printed result reads back as itself (`Test/Lang.lean`).
 
 `canPar` and `canParSeg` also answer `false` for a barrier before they look at a footprint. They have
-to: its footprints are empty, so Bernstein alone would group it with anything. That is what makes
+to: its footprints are empty, so Bernstein alone would group it with anything. `canParSeg` asks
+`isBarrier`, which a `print` answers as well — a print is not a phase boundary, but a group is forked,
+and forking a statement past the point where its value was observed would change the output
+(`docs/print.md` § *Erased, and a barrier*). That is what makes
 `dependences` report a barrier as forcing order against every statement, and it is the one place the
 construct shows up in the analysis besides `phases`.
 
 ### The proved route declines
 
-`AutoPar.rewriteOk` requires `synchronizeFree p`, so `AutoPar.rewrite` returns a program with a
-barrier unchanged and `parReport` falls back to `ParProg.autoPar` for it. Two reasons, both recorded
-rather than fixed:
+`AutoPar.rewriteOk` requires `barrierFree p` — no `synchronize` and no `print` — so
+`AutoPar.rewrite` returns a program with a barrier of either kind unchanged and `parReport` falls back
+to `ParProg.autoPar` for it. Two reasons, both recorded rather than fixed:
 
 1. `emit pl = block (pl.map fun st => .par (st.map block))` wraps every stage in a `par`, so a
    barrier reaching the plan ends up inside a thread — a program `Lower` would then reject on

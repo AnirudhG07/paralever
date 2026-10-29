@@ -97,6 +97,10 @@ inductive MAttr where
   this way, so an op with variadic operand groups cannot be read without it. The element type is
   kept as written, because printing it back is what the round trip compares. -/
   | darr   : String → List Int → MAttr
+  /-- `#llvm.fastmath<none>`, `#sparse<…>` — a dialect attribute no rule reads, kept as the text it
+  is written as so that a file mentioning one still parses and prints back unchanged.
+  -- ref: `docs/mlir-pretty.md` -/
+  | raw : String → MAttr
   /-- `3 : index`, `dense<0> : tensor<8xi32>` — a value with its type annotation. MLIR *requires*
   the annotation on `arith.constant`, so dropping it would print files MLIR cannot read back.
   `Op.attr?` strips it, so no rule has to look through it. -/
@@ -207,6 +211,19 @@ def opNamesOps : List Op → List String
   | o :: os => opNames o ++ opNamesOps os
 
 end
+
+/-- Functions at module level, looking through `builtin.module`. -/
+partial def funcsOf : List Op → List Op
+  | []      => []
+  | o :: os =>
+      let here :=
+        if o.name == "func.func" then [o]
+        else if o.name == "builtin.module" then
+          match o.regions with
+          | [⟨_, inner⟩] => funcsOf inner
+          | _            => []
+        else []
+      here ++ funcsOf os
 
 /-- Every op name in a whole file, deduplicated. -/
 def opNamesOf (ops : List Op) : List String := (opNamesOps ops).eraseDups

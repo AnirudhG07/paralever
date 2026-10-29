@@ -162,11 +162,18 @@ stmt    ::= "buf" name ( "[" exp ("," exp)* "]" )? ("at" exp)? ("=" init)?
           | "parallel" thread ("|" thread)* label?
           | "parfor" name "in" exp thread label?
           | "for" name "in" exp thread
-          | "if" exp thread ("else" thread)?
+          | "if" exp thread ("else" (thread | ifstmt))?
           | "while" exp "in" exp thread
+          | "def" name "(" param ("," param)* ")" thread
+          | name "(" arg ("," arg)* ")"             -- a call, written out where it stands
+          | "assert" call "==" call ("on" name ("," name)*)?  -- the file's claim
 init    ::= "zeros" | "ones" | "eye" | "arange" | "full" exp
           | ("[")? exp ("," exp)* ("]")?
 thread  ::= "{" stmt* "}"
+ifstmt  ::= "if" exp thread ("else" (thread | ifstmt))?
+param   ::= name | "%" reg
+arg     ::= "%" reg | exp
+call    ::= name "(" arg ("," arg)* ")"
 label   ::= "::" string
 addr    ::= "[" exp "]" | name ( "[" exp ("," exp)* "]" )?
 exp     ::= exp ("+"|"-"|"*"|"/"|"%") exp | "-"? number | name | "%" reg
@@ -209,15 +216,38 @@ reg     ::= number | name</code></pre>
           <pre><code class="language-prl">buf A[6] = 1, 2, 3, 4, 5, 6   -- the allocator places it
 buf C[2, 3] = ones
 buf S[4] at 100               -- placed by hand
-const n = 2
+let g = 0                     -- a variable: a scalar, addressed as `g`
+let msg = "hello"             -- one cell per UTF-8 byte, so msg[5]
+slice half = C[0..2]          -- a name for two of C's cells; no memory is placed
+const n = #half               -- 2, folded while the file compiles
+copy half from msg[0..2]      -- cell by cell, in index order
 free C                        -- C's lifetime ends here</code></pre>
         </div>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          A buffer with no <code>at</code> begins where the previous one ended, so
+          <code>let</code> is <code>buf</code> with the shape read off the
+          initializer, and nothing more — a variable is a cell of memory, because
+          there is no second kind of state for one to live in. A buffer with no
+          <code>at</code> begins where the previous one ended, so
           no two <em>live</em> buffers can overlap. A buffer with an
           <code>at</code> was placed by the author, so the compiler checks it
           against every live buffer and names both on failure.
+        </p>
+
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A <code>slice</code> is a name for a range of a buffer's cells, and a
+          view rather than a copy: it compiles to a base and a length, so
+          <code>half[i]</code> <em>is</em> <code>C[i]</code>. That is what makes
+          it more than shorthand. A subscript held in a register is not known
+          until the program runs, so the independence check bounds it by every
+          cell the access could reach — the whole buffer when the range is the
+          whole buffer, and one quarter of it when the range is a quarter. Four
+          threads with a computed index into four disjoint quarters have four
+          disjoint footprints, so a program that is reported
+          <em>over-approximated</em> when written against the whole buffer is
+          reported <em>independent</em> when each thread names the range it owns.
+          It is also the one declaration a thread may make, because it places no
+          cells and ends no lifetime.
         </p>
 
         <p class="text-stone-600 leading-relaxed mb-3">
@@ -401,14 +431,201 @@ while %i in 8 {
 
       <hr class="divider" />
 
+      <!-- 5b functions -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Functions are written out, not called</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>def</code> names a statement list and a call writes it out.
+          <code>ParM</code> has no call constructor and the machine has no stack,
+          so a <code>def</code> is a named piece of program text — closer to a
+          Lean <code>macro</code> than to a C function, and the comparison holds
+          in both directions: it costs nothing at run time, and it cannot recurse.
+          A cycle of calls is refused with the chain that closes it.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">funcs.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">const n = 4
+
+def dot(Out, r, Row, V, m) {
+  %s := 0
+  for j in m {
+    %a := Row[j]
+    %b := V[j]
+    %s := %s + %a * %b
+  }
+  Out[r] := %s
+}
+
+buf M[4, 4] = arange
+buf V[4] = ones
+buf Y[4] = zeros
+
+parfor i in n {
+  slice row = M[i * n .. i * n + n]
+  dot(Y, i, row, V, n)
+} :: "rows"</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A parameter is a name or a register, told apart by its spelling. A name
+          parameter takes a buffer, a slice or a compile-time value, and is
+          substituted wherever the body writes that name — which is why
+          <code>for j in m</code> can unroll inside a body at all. A register
+          parameter is how a result leaves a call without going through memory.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          Every register the body names and did not take as a parameter is renamed
+          per call site, so two calls never share one and a call cannot clobber a
+          register the caller is holding. That is not only tidiness: the
+          parallelizing pass refuses to split a chain whose statements share a
+          register, so three calls that all wrote the body's <code>%v</code> would
+          be sequential by construction, and the rename is what lets the pass put
+          them in one fork. Everything downstream — <code>footprintOf</code>,
+          <code>wfB</code>, <code>par_seq_eq</code>, <code>execTask</code> — sees a
+          program with no trace of a <code>def</code> in it, exactly as it sees no
+          trace of the loops once they are unrolled.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- 5c assert -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two programs, one claim</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Everything above answers a question about <em>one</em> program: read its
+          <code>parallel</code> blocks in parallel, and does it reach the outcomes
+          reading them in order does? A reader who has written a sequential sort
+          and a parallel one is asking something else — do <em>these two
+          programs</em> compute the same thing? <code>assert</code> states that
+          question.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">equiv.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">const n = 8
+
+def cmpswap(A, i, j) {
+  %x := A[i]
+  %y := A[j]
+  if %x &gt; %y { A[i] := %y
+               A[j] := %x } else { A[i] := %x
+               A[j] := %y }
+}
+
+-- every pass compares every adjacent pair, left to right: no parallel block at all
+def bubble(A, m) {
+  for i in m {
+    for j in m - 1 { cmpswap(A, j, j + 1) }
+  }
+}
+
+-- phase p compares the pairs starting at p mod 2, all of them at once
+def oddeven(A, m) {
+  for p in m {
+    parfor q in (m - p % 2) / 2 {
+      cmpswap(A, 2 * q + p % 2, 2 * q + p % 2 + 1)
+    } :: "phase"
+    synchronize
+  }
+}
+
+buf A[8] = 5, 3, 8, 1, 7, 2, 6, 4
+
+assert bubble(A, n) == oddeven(A, n) on A</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The file is compiled twice: once with the left call's body written out
+          where the <code>assert</code> stands, once with the right's. Every
+          declaration and every initializer is shared, so the two programs start
+          from one heap. <code>on A</code> names the buffers compared — a parallel
+          version commonly needs scratch its sequential counterpart does not, and
+          the two will leave that scratch differing while agreeing on everything a
+          reader cares about.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-5">
+          What makes the claim cheap is that the question factors into three, and
+          only the first two are about parallelism. Each side's schedules agree
+          with its own sequential reading — that is the main theorem, applied
+          twice — so what is left is whether two programs with <em>no fork in
+          them</em> compute the same thing. That last question has nothing to do
+          with parallelism, and it is the one a reader comparing two sequential
+          programs would have had anyway.
+        </p>
+        <figure class="dgm">
+        <svg viewBox="0 0 830 272" role="img"
+             aria-label="The claim splits into three checks: wfB on the left program, wfB on the right program, and one run of each sequential reading compared cell by cell.">
+          <defs>
+            <marker id="eq-arw" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
+            </marker>
+          </defs>
+
+          <rect class="box-dash" x="155" y="14" width="520" height="46" rx="8" />
+          <text class="t-lab" x="415" y="36" text-anchor="middle">assert p == q on A</text>
+          <text class="t-note" x="415" y="52" text-anchor="middle">do p and q agree at those cells, under every schedule?</text>
+
+          <path class="edge" d="M415,60 L415,84" />
+          <path class="edge" d="M140,84 L690,84" />
+          <path class="edge" d="M140,84 L140,106" marker-end="url(#eq-arw)" />
+          <path class="edge" d="M415,84 L415,106" marker-end="url(#eq-arw)" />
+          <path class="edge" d="M690,84 L690,106" marker-end="url(#eq-arw)" />
+
+          <rect class="box-acc" x="20" y="112" width="240" height="88" rx="8" />
+          <text class="t-lab" x="140" y="136" text-anchor="middle">wfB p = true</text>
+          <text class="t-note" x="140" y="158" text-anchor="middle">every schedule of p agrees</text>
+          <text class="t-note" x="140" y="174" text-anchor="middle">with p's sequential reading</text>
+          <text class="t-sm t-acc" x="140" y="192" text-anchor="middle">par_seq_eq</text>
+
+          <rect class="box-acc" x="295" y="112" width="240" height="88" rx="8" />
+          <text class="t-lab" x="415" y="136" text-anchor="middle">wfB q = true</text>
+          <text class="t-note" x="415" y="158" text-anchor="middle">every schedule of q agrees</text>
+          <text class="t-note" x="415" y="174" text-anchor="middle">with q's sequential reading</text>
+          <text class="t-sm t-acc" x="415" y="192" text-anchor="middle">par_seq_eq</text>
+
+          <rect class="box" x="570" y="112" width="240" height="88" rx="8" />
+          <text class="t-lab" x="690" y="136" text-anchor="middle">agreeB cells p q</text>
+          <text class="t-note" x="690" y="158" text-anchor="middle">the two sequential readings</text>
+          <text class="t-note" x="690" y="174" text-anchor="middle">agree — one run of each</text>
+          <text class="t-sm" x="690" y="192" text-anchor="middle">no fork in either</text>
+
+          <path class="brace" d="M20,214 L535,214" />
+          <text class="t-sm t-acc" x="277" y="236" text-anchor="middle">about parallelism — proved once, for every program</text>
+          <text class="t-sm" x="690" y="236" text-anchor="middle">not about parallelism at all</text>
+
+          <text class="t-note" x="415" y="262" text-anchor="middle">three decidable checks; the conclusion is AgreeOn cells p q</text>
+        </svg>
+        <figcaption>The claim factors. Two of the three questions are the main theorem applied to
+        each side; the third compares two programs with no fork in them.</figcaption>
+        </figure>
+        <p class="text-stone-600 leading-relaxed">
+          <code>paralever check</code> reports the claim beside the verdict and
+          exits non-zero when it fails; <code>paralever prove</code> writes
+          <code>AgreeOn</code>, which says that every outcome either program
+          reaches, under every schedule of either, holds the same values at the
+          named cells. The third check runs both programs on the heap the file
+          declares, so that is the heap the claim is about — lifting it to every
+          heap is the general program-equivalence question, and
+          <code>docs/equivalence.md</code> records what it would take.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
       <!-- 6 the examples -->
       <section>
-        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Nine files, each for one reason</h2>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Eleven files, each for one reason</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
           <code>Examples/Language/</code> is a build gate. Each file compiles,
           prints back as itself, carries the verdict its header claims, and — for
-          the seven <code>wfB</code> accepts — proves its instance of
-          <code>par_seq_eq</code>.
+          each one <code>wfB</code> accepts — proves its instance of
+          <code>par_seq_eq</code>. The last two state a claim as well, and prove
+          that.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
@@ -423,6 +640,8 @@ while %i in 8 {
               <tr><td><code>arena.prl</code></td><td><code>free</code>, and the next buffer placed on the freed cells</td><td><span class="verdict verdict-ok">independent</span></td></tr>
               <tr><td><code>scatter.prl</code></td><td>a computed address, rejected by over-approximation rather than by a race</td><td><span class="verdict verdict-heap">this heap only</span></td></tr>
               <tr><td><code>race.prl</code></td><td>two threads, one cell: <code>wfB</code> false, and a counterexample</td><td><span class="verdict verdict-race">race</span></td></tr>
+              <tr><td><code>equiv.prl</code></td><td><code>assert</code>: a sequential sort against a parallel one, from one comparator</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>twofold.prl</code></td><td><code>assert</code>: two <em>different</em> parallel sums, agreeing on the cell <code>on</code> names</td><td><span class="verdict verdict-ok">independent</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -560,6 +779,41 @@ buf S[4] at 100                 -- hand placement, clear of everything live
           <code>def mem</code> impossible — the obvious name for a
           <code>Layout</code> — so the notation uses brackets, which reserve
           nothing.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Every constructor has a form on both surfaces, so a file and a block say
+          the same things. Two of the Lean forms are not translations of a
+          <code>.prl</code> spelling, and neither reserves a token:
+          <code>[A, e]</code> names a cell by range and index — the pair
+          <code>loadAt</code> and <code>storeAt</code> take, since Lean cannot
+          spell it <code>A[e]</code>, which is <code>GetElem</code> — and
+          <code>{ … } :: "name"</code> names a region that is not a fork.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th><code>.prl</code></th><th>Lean</th><th><code>ParProg</code></th></tr></thead>
+            <tbody>
+              <tr><td><code>%0 := [4]</code></td><td><code>%0 := [4]</code></td><td><code>load</code></td></tr>
+              <tr><td><code>A[1, 2] := %0</code></td><td><code>[L.at "A" [1, 2]] := %0</code></td><td><code>store</code></td></tr>
+              <tr><td><code>dst[%i] := 1</code></td><td><code>[L.ref "dst", %i] := 1</code></td><td><code>storeAt</code></td></tr>
+              <tr><td><code>parfor i in n {…} :: "name"</code></td><td>the same</td><td><code>label (parFor …)</code></td></tr>
+              <tr><td>—</td><td><code>{ … } :: "name"</code></td><td><code>label</code> around anything</td></tr>
+              <tr><td><code>buf A[6] = 1, 2, 3</code></td><td><code>buf "A" [6] (data [1, 2, 3])</code></td><td>— a <code>Layout</code></td></tr>
+              <tr><td><code>buf S[4] at 100</code>, <code>free A</code></td><td>an explicit <code>base</code>, or <code>Arena.of</code></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>paralever to-lean FILE</code> prints that pair for any file, and
+          the layout it prints keeps the file's addresses: <code>Layout.of</code>
+          allocates consecutively from 0, so a file that placed a buffer with
+          <code>at</code> or freed one — where <code>arena.prl</code>'s
+          <code>out</code> and <code>tmp</code> share base 4 — gets its bases
+          written out instead. A layout that moved an address would be a different
+          program. <code>Test/LeanForm.lean</code> writes three files out by hand
+          and gates each against the compiled file: same addresses, same initial
+          cells, same program up to the associativity of <code>;</code>, same heap
+          after a run.
         </p>
         <p class="text-stone-600 leading-relaxed">
           Reading a file from Lean is three lines, and the theorem is the fourth:

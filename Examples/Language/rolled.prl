@@ -1,0 +1,21 @@
+-- A **rolled** nest: 12 x 12 = 144 points, above the unrolling threshold, so the front end
+-- carries it as one `ParProg.loop` instead of 144 statements. The certificate is over the two
+-- subscript maps, not over the iteration space, so `wfB` costs the same here as at 1000 x 1000.
+--
+-- `i` is forked and `j` is sequential, which is the shape most of PolyBench is written in: the
+-- write `C[i, j]` depends on the sequential coordinate and is still injective across threads,
+-- because thread `i` owns the twelve consecutive cells `C[i, 0..12)`.
+--
+-- Gated by `Test/Roll.lean`. -- ref: `docs/loops.md`
+
+buf A[12, 12] = 3
+buf B[12, 12] = 4
+buf C[12, 12]
+
+parfor i in 12 {
+  for j in 12 {
+    %a := A[i, j]
+    %b := B[i, j]
+    C[i, j] := %a + %b
+  }
+}

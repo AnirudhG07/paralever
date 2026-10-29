@@ -33,12 +33,18 @@
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* ---------- base ---------- */
+/* ---------- base ----------
+   Every length here is in px against reveal's own 1280×720 slide box, which it
+   then scales to the window. A `vh`/`vw` length measures the *window* instead,
+   so it is multiplied by that scale a second time and the text grows or shrinks
+   with the window's aspect ratio: 3.4vh is 24.5 slide-px on a 16:9 window and
+   27.2 on a 16:10 one, which is enough to push a full slide off the bottom edge
+   on one machine and not another.  1vh = 7.2px, 1vw = 12.8px. */
 .reveal {
   font-family: var(--sans);
   font-weight: 300;
   color: var(--ink);
-  font-size: 3.4vh;
+  font-size: 24.5px;
 }
 .reveal .slides {
   text-align: left;
@@ -58,13 +64,13 @@
    true`) wraps its sub-slides in an extra <section> that reveal.js tags
    `.stack`; without this exclusion that wrapper ALSO gets the padding and it
    stacks on top of the child's padding — pushing content right and down.
-   Less left padding (3vw) than right (5vw) so content sits closer to the left.
+   Less left padding than right so content sits closer to the left.
    These are vars because the header slots measure against them (see --author). */
 :root {
-  --pad-t: 4vh;
-  --pad-r: 5vw;
-  --pad-b: 4vh;
-  --pad-l: 3vw;
+  --pad-t: 28.8px;
+  --pad-r: 64px;
+  --pad-b: 28.8px;
+  --pad-l: 38.4px;
 }
 .reveal .slides section:not(.stack) {
   padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad-l);
@@ -119,7 +125,7 @@
 :root {
   --project: "Lean";
   --name-w: 3.4em;
-  --rule-end: 4vw; /* right inset of the blue header rule → white space before the edge */
+  --rule-end: 51.2px; /* right inset of the blue header rule → white space before the edge */
 }
 .reveal h2 {
   position: relative;
@@ -177,7 +183,7 @@
 .reveal .slides section:not(.stack):not([data-state="title"]):not(:has(.section-break)):not(:has(.title-slide))::after {
   content: var(--author);
   position: absolute;
-  top: 2.4vh; /* just above the rule — leaves a ~0.5vh gap under the text */
+  top: 17.3px; /* just above the rule — leaves a ~4px gap under the text */
   /* The rule is on h2::after, so its `right: --rule-end` is measured from inside
      the section's padding. This slot is on the SECTION, so it must add that
      padding back to end flush with the rule instead of overhanging it. */
@@ -200,7 +206,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 6vh 7vw;
+  padding: 43.2px 89.6px;
 }
 .reveal section[data-state="title"]::before {
   /* gradient accent bar */
@@ -323,7 +329,7 @@
   margin-bottom: 0.6em;
 }
 .reveal .slide-header img {
-  height: 6vh;
+  height: 43.2px;
   flex-shrink: 0;
 }
 .reveal .slide-header .h {
@@ -349,7 +355,7 @@
   padding: 1.4em 1.6em 0.8em;
 }
 .reveal .title-slide .logo {
-  height: 15vh;
+  height: 108px;
 }
 .reveal .title-slide .blue-band {
   flex: 1;
@@ -449,7 +455,7 @@
 .reveal pre code {
   display: block;
   padding: 0.9em 1.1em;
-  max-height: 68vh;
+  max-height: 489.6px;
   background: transparent;
   border-radius: 8px;
   line-height: 1.5;

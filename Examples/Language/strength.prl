@@ -1,0 +1,38 @@
+-- A claim at the metatheorem's own strength. `logged` and `quiet` fork the same way and leave the
+-- same two registers after the barrier; `logged` also writes a debug cell. Compared on S the two
+-- agree in memory and in the register file, so `assertParSeq` states both halves — and compared
+-- over every cell they differ at D, which is what `on` is for. docs/equivalence.md
+
+const n = 4
+
+def logged(Out, Dbg, P, In, m) {
+  parfor t in m / 2 {
+    %a := In[2 * t]
+    %b := In[2 * t + 1]
+    P[t] := %a + %b
+  } :: "pairs"
+  synchronize
+  %x := P[0]
+  %y := P[1]
+  Out[0] := %x + %y
+  Dbg[0] := %x
+}
+
+def quiet(Out, Dbg, P, In, m) {
+  parfor t in m / 2 {
+    %a := In[2 * t]
+    %b := In[2 * t + 1]
+    P[t] := %a + %b
+  } :: "pairs"
+  synchronize
+  %x := P[0]
+  %y := P[1]
+  Out[0] := %x + %y
+}
+
+buf X[4] = 1, 2, 3, 4
+buf P[2] = zeros
+buf S[1] = zeros
+buf D[1] = zeros
+
+assertParSeq logged(S, D, P, X, n) == quiet(S, D, P, X, n) on S

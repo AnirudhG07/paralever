@@ -1,251 +1,237 @@
-{"99":
- "<code>Paralever.Examples.SumArray.sumRangePar (chunks : ChunkPlan) : ParM (List Int)</code>",
- "98":
- "<code>Paralever.Examples.SumArray.sumRange : List Loc → ParM Int</code>",
+{"99": "<code>WellFormed (ParM.parAll ps) σ</code>",
+ "98": "<code>List (ParM τ)</code>",
  "97":
- "<code>List.map.{u_1, u_2} {α : Type u_1} {β : Type u_2} (f : α → β) (l : List α) : List β</code><span class=\"sep\"></span><code class=\"docstring\">Applies a function to each element of the list, returning the resulting list of values.\n\n`O(|l|)`.\n\nExamples:\n* `[a, b, c].map f = [f a, f b, f c]`\n* `[].map Nat.succ = []`\n* `[\"one\", \"two\", \"three\"].map (·.length) = [3, 3, 5]`\n* `[\"one\", \"two\", \"three\"].map (·.reverse) = [\"eno\", \"owt\", \"eerht\"]`\n</code>",
- "96":
- "<code>Paralever.ParM.seqAll {α : Type} : List (ParM α) → ParM (List α)</code><span class=\"sep\"></span><code class=\"docstring\">Sequential counterpart of `parAll`: run the list left to right, collecting the results. </code>",
+ "<code>Paralever.parAll_par_seq_eq {τ : Type} (ps : List (ParM τ)) (σ : State) (h : WellFormed (ParM.parAll ps) σ) :\n  ParSeqEq (ParM.parAll ps) (ParM.seqAll ps) σ</code><span class=\"sep\"></span><code class=\"docstring\">**The metatheorem for a list of branches**: running `ps` all in parallel reaches exactly the\noutcomes running them one after another does, under every schedule, given well-formedness. Now a\ngenuine N-ary statement about one `par` node, not a corollary of nesting. This is what\n`#parallel_for` and every chunked example ultimately appeals to. </code>",
+ "96": "<code>α</code>",
  "95":
- "<code>Int : Type</code><span class=\"sep\"></span><code class=\"docstring\">The integers.\n\nThis type is special-cased by the compiler and overridden with an efficient implementation. The\nruntime has a special representation for `Int` that stores “small” signed numbers directly, while\nlarger numbers use a fast arbitrary-precision arithmetic library (usually\n[GMP](https://gmplib.org/)). A “small number” is an integer that can be encoded with one fewer bits\nthan the platform's pointer size (i.e. 63 bits on 64-bit architectures and 31 bits on 32-bit\narchitectures).\n</code>",
- "94":
- "<code>List.{u} (α : Type u) : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Linked lists: ordered lists, in which each element has a reference to the next element.\n\nMost operations on linked lists take time proportional to the length of the list, because each\nelement must be traversed to find the next element.\n\n`List α` is isomorphic to `Array α`, but they are useful for different things:\n* `List α` is easier for reasoning, and `Array α` is modeled as a wrapper around `List α`.\n* `List α` works well as a persistent data structure, when many copies of the tail are shared. When\n  the value is not shared, `Array α` will have better performance because it can do destructive\n  updates.\n</code>",
- "93":
- "<code>Paralever.Examples.SumArray.ChunkPlan : Type</code><span class=\"sep\"></span><code class=\"docstring\">One entry per chunk, each an independently-sized list of locations. </code>",
- "92": "<code>ChunkPlan</code>",
- "91":
- "<code>Paralever.Examples.SumArray.sumRangeSeq (chunks : ChunkPlan) : ParM (List Int)</code>",
- "90":
- "<code>Paralever.Examples.Report.σ0 : State</code><span class=\"sep\"></span><code class=\"docstring\">Everything starts at `0`. </code>",
- "9":
- "<code>Paralever.WellFormed {τ : Type} : ParM τ → State → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Bernstein independence checked at *every* `par` node, each against the heap that node sees along\nthe canonical run. The outermost check alone would be unsound — `docs/decomposition.md` has the\ncounterexample. </code>",
- "89":
- "<code>Paralever.explainProg (p : Prog) (σ : State) : String</code><span class=\"sep\"></span><code class=\"docstring\">The counterexample for a `Prog`. </code>",
- "88":
- "<code>IO.println.{u_1} {α : Type u_1} [ToString α] (s : α) : IO Unit</code><span class=\"sep\"></span><code class=\"docstring\">Converts `s` to a string using its `ToString α` instance, and prints it with a trailing newline to\nthe current standard output (as determined by `IO.getStdout`).\n</code>",
- "87":
- "<code class=\"docstring\">`#eval e` evaluates the expression `e` by compiling it and running the compiled code. It then\nprints the resulting value.\n\n* The command attempts to use `ToExpr`, `Repr`, or `ToString` instances to print the result.\n* If `e` is a monadic value of type `m ty`, then the command tries to adapt the monad `m`\n  to one of the monads that `#eval` supports, which include `IO`, `CoreM`, `MetaM`, `TermElabM`, and `CommandElabM`.\n  Users can define `MonadEval` instances to extend the list of supported monads.\n\nThe `#eval` command gracefully degrades in capability depending on what is imported.\nImporting the `Lean.Elab.Command` module provides full capabilities.\n\nDue to unsoundness, `#eval` refuses to evaluate expressions that depend on `sorry`, even indirectly,\nsince the presence of `sorry` can lead to runtime instability and crashes.\nThis check can be overridden with the `#eval! e` command.\n\nOptions:\n* If `eval.pp` is true (default: true) then tries to use `ToExpr` instances to make use of the\n  usual pretty printer. Otherwise, only tries using `Repr` and `ToString` instances.\n* If `eval.type` is true (default: false) then pretty prints the type of the evaluated value.\n* If `eval.derive.repr` is true (default: true) then attempts to auto-derive a `Repr` instance\n  when there is no other way to print the result.\n\nSee also: `#reduce e` for evaluation by term reduction.\n</code>",
- "86": "<code>Int</code>",
- "85": "<code>Paralever.Prog.wr : Loc → Int → Prog</code>",
- "84": "<code>Paralever.Prog.seq : Prog → Prog → Prog</code>",
- "83": "<code>Paralever.Prog.par : Prog → Prog → Prog</code>",
- "82":
- "<code>Paralever.Prog : Type</code><span class=\"sep\"></span><code class=\"docstring\">A first-order program tree: the input language for the search. </code>",
- "81": "<code>Paralever.Examples.Report.late : Prog</code>",
- "80":
- "<code>Paralever.Lang.ParProg.time_execPar_le_all :\n  (∀ (s : ParProg) (ρ : Regs) (σ : State), s.wfB = true → time (s.execPar ρ) σ ≤ time (s.execSeq ρ) σ) ∧\n    ∀ (ss : List ParProg) (ρ : Regs) (σ : State),\n      wfAllB ss = true → time (ParM.seqAll (execParAll ss ρ)) σ ≤ time (ParM.seqAll (execSeqAll ss ρ)) σ</code>",
- "8": "<code>Paralever.Footprint.reads (self : Footprint) : List Loc</code>",
- "79":
- "<code>Paralever.time {τ : Type} (p : ParM τ) (σ : State) : Nat</code><span class=\"sep\"></span><code class=\"docstring\">**The number of parallel rounds `p` needs from `σ`** — the span, as opposed to `work`'s total\noperation count. This is the measure parallelism actually reduces.\n\nA round performs at least one operation while the program is unfinished, so `work p σ` rounds always\nsuffice and the fuel is never the binding constraint; the `+ 1` is slack. Rounds are counted on an\nidealised machine with unlimited cores and unit-cost operations — `docs/cost.md` says what that does\nand does not claim about wall-clock time. </code>",
- "78":
- "<code>Paralever.Lang.ParProg.time_le {s : ParProg} (h : s.wfB = true) (ρ : Regs) (σ : State) :\n  time (s.execPar ρ) σ ≤ time (s.execSeq ρ) σ</code><span class=\"sep\"></span><code class=\"docstring\">**Par ≤ Seq, in rounds.** For every program the check accepts, the parallel reading needs no\nmore rounds than the sequential one — the cost counterpart of `par_seq_eq`, from the same `Bool`. </code>",
- "77":
- "<code>Paralever.Lang.ParProg.wfB_wellFormed_all :\n  (∀ (s : ParProg), s.wfB = true → ∀ (ρ : Regs) (σ : State), WellFormed (s.execPar ρ) σ) ∧\n    ∀ (ss : List ParProg),\n      wfAllB ss = true → ∀ (ρ : Regs) (σ : State), WellFormedChilds (ParM.childsOf (execParAll ss ρ)) σ</code>",
- "76":
- "<code>Paralever.Lang.ParProg.wfB_wellFormed {s : ParProg} (h : s.wfB = true) (ρ : Regs) (σ : State) :\n  WellFormed (s.execPar ρ) σ</code><span class=\"sep\"></span><code class=\"docstring\">**A decidable check discharges the obligation.** `wfB` is read off the syntax; this says the\nlowered program is well-formed whenever it holds — provided the addresses are literal, so that the\nfootprints `wfB` compared are the ones the program actually has. </code>",
- "75":
- "<code>Paralever.wellFormed_canonical_all :\n  (∀ {τ : Type} (p : ParM τ) (σ : State) (r : τ) (σ' : State),\n      WellFormed p σ → (Reaches (Conf.run p σ) (Conf.run (ParM.pure r) σ') ↔ (r, σ') = runSeq p σ)) ∧\n    ∀ {αs : List Type} (cs : Childs ParM αs) (σ : State),\n      WellFormedChilds cs σ →\n        IndepAll (childFootprints cs σ) → ReachesChilds cs σ (pureChilds αs (runChilds cs σ).fst) (runChilds cs σ).snd</code><span class=\"sep\"></span><code class=\"docstring\">**A well-formed program has exactly one outcome, and it is the canonical one.** Whatever the\nschedule, the only `(result, final-state)` pair the real nondeterministic `step`/`Reaches` relation\ncan reach from `p` and `σ` is `runSeq p σ` — and that pair is always reachable. Both directions, as an\n`↔`.\n\nThis is Brookes' Parallel Decomposition Lemma for this operational semantics, and the whole content of\nthe project: `par_seq_eq` and `parAll_par_seq_eq` are this theorem applied to both sides of an\nequivalence plus a definitional bridge. `pure`/`read`/`write` are immediate; the `par` case is the\nproof, assembled from `runSeq_invariant_chain` (→) and the explicitly constructed \"run `p` fully, then\n`q`, then step into `k`\" schedule (←).\n\n`WellFormed` cannot be weakened to top-level `Indep`: independence has to hold at every nested `par`\nnode, since a program can race with *itself* inside one branch while the two branches' total\nfootprints stay disjoint.\n\nThe second component is the children-level witness the `par` case needs: every child can be run to\ncompletion, left to right — the N-ary form of \"run `p` fully, then `q`\". Its `cons` case is the\n2-to-N step, and it is mutual with the theorem itself, because running a child to completion *is*\nthis theorem one level down. -- ref: Brookes CONCUR'04 §5–7; `docs/decomposition.md` </code>",
- "74":
- "<code>Paralever.runSeq {τ : Type} : ParM τ → State → τ × State</code><span class=\"sep\"></span><code class=\"docstring\">Run `p` from `σ` under the canonical left-to-right schedule, returning its result and the final\nheap. This is the *reference* execution: `accesses` and `WellFormed` are stated against it, and\n`wellFormed_canonical` proves every real interleaving of a well-formed program agrees with it. </code>",
- "73": "<code>Paralever.Conf.run {α : Type} : ParM α → State → Conf α</code>",
- "72":
- "<code>Paralever.Reaches {α : Type} : Conf α → Conf α → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Reflexive-transitive closure of `stepC`: \"`c` can execute to `c'` under some schedule.\" Every statement about *all* interleavings is a statement about this relation. </code>",
- "71": "<code>τ</code>",
- "70": "<code>ParM τ</code>",
- "7": "<code>Paralever.Footprint.writes (self : Footprint) : List Loc</code>",
- "69":
- "<code>Paralever.wellFormed_canonical {τ : Type} (p : ParM τ) (σ : State) (r : τ) (σ' : State) :\n  WellFormed p σ → (Reaches (Conf.run p σ) (Conf.run (ParM.pure r) σ') ↔ (r, σ') = runSeq p σ)</code>",
- "68":
- "<code>Paralever.Lang.ParProg.synchronize : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`synchronize` — a barrier the parallelizer may not cross. A no-op at run time: `par` already\njoins its threads, so there is nothing left to wait for. Its content is the constraint it puts on\n`autoPar`, which plans each phase on its own. -- ref: `docs/autopar.md` § Synchronization </code>",
- "67":
- "<code>Paralever.Lang.ParProg.ifElse : AExp → ParProg → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`if c then t else e`. `0` is false; the footprint is the union of both branches, since which\none runs is not known statically. </code>",
- "66":
- "<code>Paralever.Lang.ParProg.storeAt : ArrRef → AExp → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`A[e] := e'` — a data-dependent store. </code>",
- "65":
- "<code>Paralever.Lang.ParProg.loadAt : Reg → ArrRef → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := A[e]` — a **data-dependent** load. The index wraps on `A.len`, so the access is\nconfined to `A` by construction (`ArrRef.addr_mem_cells`). </code>",
- "64":
- "<code>Paralever.Lang.ParProg.label : String → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`s :: name` — a named region. Semantically transparent: `execPar` ignores it. It exists so a\nregion can be *referred to*, proved about on its own, and found again inside a larger program. </code>",
- "63": "<code>Paralever.Lang.ParProg.wfAllB : List ParProg → Bool</code>",
- "62":
- "<code>Paralever.Lang.ParProg.threadFootprints : List ParProg → List Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Each thread's footprint on its own — what the independence check ranges over. </code>",
- "61":
- "<code>Paralever.indepAllB : List Footprint → Bool</code><span class=\"sep\"></span><code class=\"docstring\">Decidable `IndepAll`. </code>",
- "60": "<code>List ParProg</code>",
- "6":
- "<code>Paralever.Disjoint (a b : List Loc) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">No location lies in both lists. </code>",
- "59":
- "<code>Paralever.Lang.ParProg.par : List ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`parallel { … }` with one thread per element </code>",
- "58":
- "<code>Paralever.Lang.ParProg.seq : ParProg → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`a ; b` </code>",
- "57":
- "<code>Paralever.Lang.ParProg.set : Reg → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := e` — pure arithmetic, touches no memory </code>",
- "56":
- "<code>Paralever.Lang.ParProg.store : Loc → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`M[l] := e` </code>",
- "55":
- "<code>Paralever.Lang.ParProg.load : Reg → Loc → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := M[l]` </code>",
- "54":
- "<code>Bool : Type</code><span class=\"sep\"></span><code class=\"docstring\">The Boolean values, `true` and `false`.\n\nLogically speaking, this is equivalent to `Prop` (the type of propositions). The distinction is\npublic important for programming: both propositions and their proofs are erased in the code generator,\nwhile `Bool` corresponds to the Boolean type in most programming languages and carries precisely one\nbit of run-time information.\n</code>",
- "53":
- "<code>And.left {a b : Prop} (self : a ∧ b) : a</code><span class=\"sep\"></span><code class=\"docstring\">Extract the left conjunct from a conjunction. `h : a ∧ b` then\n`h.left`, also notated as `h.1`, is a proof of `a`. </code>",
- "52":
- "<code>Paralever.Lang.ParProg.execPar_accesses_sub_all :\n  (∀ (s : ParProg) (ρ : Regs) (σ : State), (accesses (s.execPar ρ) σ).Sub s.footprintOf) ∧\n    ∀ (ss : List ParProg) (ρ : Regs) (σ : State), (accesses (ParM.parAll (execParAll ss ρ)) σ).Sub (footprintsOf ss)</code><span class=\"sep\"></span><code class=\"docstring\">**The footprint is bounded by the syntax**, at every register file and heap. Containment is all\nthe obligation needs: `Indep` is antitone componentwise (`Indep.of_sub`), and has no `R∩R` clause,\nso widening a read set never manufactures a conflict. -- ref: `docs/block-ir.md` </code>",
- "51": "<code>Paralever.Lang.ParProg.footprintOf : ParProg → Footprint</code>",
- "50":
- "<code>Paralever.Footprint.Sub (f g : Footprint) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">**Componentwise containment.** `f` touches no more than `g` does, read-for-read and\nwrite-for-write. This is what a *syntactic* footprint gives when the address is not known until the\nrun: not the exact set, but a bound. </code>",
- "5":
- "<code class=\"docstring\">The universe of propositions. `Prop ≡ Sort 0`.\n\nEvery proposition is propositionally equal to either `True` or `False`. </code>",
- "49":
- "<code>Paralever.accesses {τ : Type} : ParM τ → State → Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Every location `p` reads or writes along the canonical run from `σ`.\n\nA fold over the same tree `runSeq` walks, which is why it must carry a state: continuations are\nfunctions, so you cannot see what comes after a `read` without supplying the value it returns. Each\nchild is measured from the heap the one before it left; `accesses_runSeq_isolated` shows that\nstaggering vanishes under independence. </code>",
- "48":
- "<code>Paralever.Lang.ParProg.execPar_accesses_sub (s : ParProg) (ρ : Regs) (σ : State) :\n  (accesses (s.execPar ρ) σ).Sub s.footprintOf</code><span class=\"sep\"></span><code class=\"docstring\">`execPar_accesses_sub_all`, for one statement. </code>",
- "47":
- "<code>Eq.{u_1} {α : Sort u_1} : α → α → Prop</code><span class=\"sep\"></span><code class=\"docstring\">The equality relation. It has one introduction rule, `Eq.refl`.\nWe use `a = b` as notation for `Eq a b`.\nA fundamental property of equality is that it is an equivalence relation.\n```\nvariable (α : Type) (a b c d : α)\nvariable (hab : a = b) (hcb : c = b) (hcd : c = d)\n\nexample : a = d :=\n  Eq.trans (Eq.trans hab (Eq.symm hcb)) hcd\n```\nEquality is much more than an equivalence relation, however. It has the important property that every assertion\nrespects the equivalence, in the sense that we can substitute equal expressions without changing the truth value.\nThat is, given `h1 : a = b` and `h2 : p a`, we can construct a proof for `p b` using substitution: `Eq.subst h1 h2`.\nExample:\n```\nexample (α : Type) (a b : α) (p : α → Prop)\n        (h1 : a = b) (h2 : p a) : p b :=\n  Eq.subst h1 h2\n\nexample (α : Type) (a b : α) (p : α → Prop)\n    (h1 : a = b) (h2 : p a) : p b :=\n  h1 ▸ h2\n```\nThe triangle in the second presentation is a macro built on top of `Eq.subst` and `Eq.symm`, and you can enter it by typing `\\t`.\nFor more information: [Equality](https://lean-lang.org/theorem_proving_in_lean4/quantifiers_and_equality.html#equality)\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `=` in identifiers is `eq`.</code>",
- "46":
- "<code class=\"docstring\">`by tac` constructs a term of the expected type by running the tactic(s) `tac`. </code>",
- "45":
- "<code>Paralever.Lang.ParProg.execSeq : ParProg → Regs → ParM Regs</code><span class=\"sep\"></span><code class=\"docstring\">The sequential reading: `parallel` means \"in order\". </code>",
- "44":
- "<code>Paralever.Lang.ParProg.execPar : ParProg → Regs → ParM Regs</code><span class=\"sep\"></span><code class=\"docstring\">Lower a statement, threading the register file. A `parallel` block gives every thread the\n*current* register file and keeps its own afterwards: register updates inside a thread are private\nto it. </code>",
- "43":
  "<code>Paralever.ParSeqEq {α : Type} (p q : ParM α) (σ : State) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">`p` and `q` reach exactly the same outcomes from `σ` — the same reachable\n`(result, final-state)` pairs, regardless of which one actually runs. This is what \"parallel and\nsequential agree\" *means* in this project: every headline theorem below is stated in this\nvocabulary rather than spelling out `Reaches`/`Conf.run`/`ParM.pure` directly. </code>",
- "42":
- "<code>Paralever.Regs : Type</code><span class=\"sep\"></span><code class=\"docstring\">The register file. Registers hold `Int`, are not memory, and never appear in a footprint. </code>",
- "41": "<code>Regs</code>",
- "40":
- "<code>Bool.true : Bool</code><span class=\"sep\"></span><code class=\"docstring\">The Boolean value `true`, not to be confused with the proposition `True`. </code>",
- "4":
- "<code>Paralever.Footprint : Type</code><span class=\"sep\"></span><code class=\"docstring\">The set of locations a computation reads and the set it writes.\n\nLists rather than finite sets: every use is a membership or a disjointness check, so duplicates are\nharmless, and concrete footprints stay `decide`-able. </code>",
- "39":
- "<code>Paralever.Lang.ParProg.wfB : ParProg → Bool</code><span class=\"sep\"></span><code class=\"docstring\">Whether every `parallel` block in the statement has pairwise-independent threads. </code>",
- "38": "<code>s.wfB = true</code>",
- "37":
- "<code>Paralever.Lang.ParProg : Type</code><span class=\"sep\"></span><code class=\"docstring\">The program statements. Addresses are literals, which is what keeps `footprintOf` syntactic; a loop over\nindices is written in Lean, producing one fully-instantiated thread per index. </code>",
- "36": "<code>ParProg</code>",
- "35":
- "<code>Paralever.Lang.ParProg.par_seq_eq {s : ParProg} (h : s.wfB = true) (ρ : Regs) (σ : State) :\n  s.execPar ρ ∥≡ s.execSeq ρ from σ</code><span class=\"sep\"></span><code class=\"docstring\">**Write the program, check one `Bool`, get the theorem.** If every `parallel` block in `s` has\npairwise-independent threads and every address is a literal — one decidable check on the syntax —\nthen running it with all threads at once reaches exactly the outcomes running them in order does,\nunder every schedule.\n\nData-dependent addressing costs *precision*, not soundness: `A[e]`'s syntactic footprint is all of\n`A`, so two threads indexing the same array are rejected even when their indices never meet. When\nthat matters, the exact per-heap check is `wellFormedB` (`Search/RaceSearch.lean`), which is both\nsound and complete. </code>",
- "34":
- "<code>Prod.snd.{u, v} {α : Type u} {β : Type v} (self : α × β) : β</code><span class=\"sep\"></span><code class=\"docstring\">The second element of a pair. </code>",
- "33":
- "<code>Prod.fst.{u, v} {α : Type u} {β : Type v} (self : α × β) : α</code><span class=\"sep\"></span><code class=\"docstring\">The first element of a pair. </code>",
- "32":
- "<code>Paralever.WellFormedChilds {αs : List Type} : Childs ParM αs → State → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Every child is itself well-formed, from the heap the one before it left. </code>",
- "31":
- "<code>Paralever.childFootprints {αs : List Type} : Childs ParM αs → State → List Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Each child's footprint **on its own**, measured from the heap the one before it left. What the\nall-pairs independence check ranges over. </code>",
- "30":
- "<code>Paralever.IndepAll : List Footprint → Prop</code><span class=\"sep\"></span><code class=\"docstring\">**Bernstein between every pair of children.** The N-ary independence obligation, stated flatly\nrather than spread over nesting levels. </code>",
- "3": "<code>Footprint</code>",
- "29":
- "<code>Paralever.runChilds {αs : List Type} : Childs ParM αs → State → Results αs × State</code><span class=\"sep\"></span><code class=\"docstring\">The children, left to right, threading the heap. The reference order a fork is measured against. </code>",
- "28": "<code>Results αs✝ × State</code>",
- "27":
- "<code class=\"docstring\">`let` is used to declare a local definition. Example:\n```\nlet x := 1\nlet y := x + 1\nx + y\n```\nSince functions are first class citizens in Lean, you can use `let` to declare\nlocal functions too.\n```\nlet double := fun x =&gt; 2*x\ndouble (double 3)\n```\nFor recursive definitions, you should use `let rec`.\nYou can also perform pattern matching using `let`. For example,\nassume `p` has type `Nat × Nat`, then you can write\n```\nlet (x, y) := p\nx + y\n```\n\nThe *anaphoric let* `let := v` defines a variable called `this`.\n</code>",
- "26": "<code>Results αs✝ → ParM τ</code>",
- "25": "<code>Childs ParM αs✝</code>",
- "24":
- "<code>Paralever.ParM.par {β : Type} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β</code><span class=\"sep\"></span><code class=\"docstring\">Fork every child at once, then continue with all their results. The only constructor whose\nmeaning Lean does not already fix: `run` interprets it by interleaving, which is what makes the\nsequentialization theorem non-vacuous. </code>",
- "23":
- "<code>Paralever.State.update (σ : State) (l : Loc) (v : Val) : State</code><span class=\"sep\"></span><code class=\"docstring\">`σ` with location `l` set to `v`. </code>",
- "22": "<code>Unit → ParM τ</code>",
- "21": "<code>Val</code>",
- "20":
- "<code>Paralever.ParM.write {α : Type} : Loc → Val → (Unit → ParM α) → ParM α</code>",
- "2":
- "<code>Paralever.Indep (f₁ f₂ : Footprint) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">**Bernstein's conditions**: two computations may run concurrently when neither writes what the\nother touches. Three clauses, not four — there is deliberately no `Disjoint f₁.reads f₂.reads`,\nbecause concurrent *reads* of the same cell are harmless. That omission is load-bearing: matrix\nmultiply writes disjoint output cells but reads overlapping rows and columns, so the stronger\n`∗`-style disjointness would reject it. -- ref: Bernstein 1966; `docs/access.md` </code>",
- "19": "<code>State</code>",
- "18": "<code>Val → ParM τ</code>",
- "17": "<code>Loc</code>",
- "16":
- "<code>Paralever.ParM.read {α : Type} : Loc → (Val → ParM α) → ParM α</code>",
- "15":
- "<code>True : Prop</code><span class=\"sep\"></span><code class=\"docstring\">`True` is a proposition and has only an introduction rule, `True.intro : True`.\nIn other words, `True` is simply true, and has a canonical proof, `True.intro`\nFor more information: [Propositional Logic](https://lean-lang.org/theorem_proving_in_lean4/propositions_and_proofs.html#propositional-logic)\n</code>",
- "147":
- "<code>Paralever.AutoPar.rewrite (p : ParProg) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**The rewrite.** The analysis is untrusted; `rewriteOk` is the proved gate, and a program whose\nplan does not pass it is returned unchanged. </code>",
- "146":
- "<code>Paralever.AutoPar.rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :\n  (runSeq ((rewrite p).execPar ρ) σ).snd = (runSeq (p.execSeq ρ) σ).snd</code><span class=\"sep\"></span><code class=\"docstring\">**`seq = par` for the rewrite, unconditionally.** The rewritten program, read in parallel,\nleaves exactly the heap the original leaves read sequentially — for every program, with no\nhypothesis, because the gate is checked inside `rewrite`. </code>",
- "145":
- "<code>Paralever.Lang.ParProg.outerUpdateK (rows cols wgt errs xs : Nat) (lrDen : Int) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**Outer-product weight update**: `W[i,j] -= lr * e[i] * x[j]`, one SGD step for a dense layer.\n\nThe step is `e[i] * x[j] / lrDen`, so the learning rate is `1 / lrDen` — integer division keeps it\ninside `Int` without a `Float`. Thread `(i,j)` reads and writes `W[i,j]` *in place* and reads\n`e[i]`, `x[j]` which other threads also read. In-place update is fine here precisely because each thread owns its cell — a\nregion-based check would reject the whole kernel. </code>",
- "144": "<code>Paralever.Examples.NeuralNet.E : Nat</code>",
- "143": "<code>Paralever.Examples.NeuralNet.T : Nat</code>",
- "142":
- "<code>Paralever.Lang.ParProg.zipK (n a b out : Nat) (f : AExp → AExp → AExp) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**Elementwise binary op**: `out[i] := f a[i] b[i]`. Add, multiply, subtract, `max` for a ReLU —\nthe most common kernel there is, and the easiest: footprints are singletons. </code>",
- "141":
- "<code>Paralever.Examples.NeuralNet.trainStep (lrDen : Int) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">One SGD step: forward, then the error, then an in-place weight update with learning rate\n`1 / lrDen`. The update's thread `(i,j)` reads and writes `W[i,j]` *in place* — admissible only\nbecause each thread owns its own cell. </code>",
- "140": "<code>Paralever.Examples.NeuralNet.Y : Nat</code>",
- "14": "<code>Paralever.ParM.pure {α : Type} : α → ParM α</code>",
- "139": "<code>Paralever.Examples.NeuralNet.B2 : Nat</code>",
- "138": "<code>Paralever.Examples.NeuralNet.W2 : Nat</code>",
- "137":
- "<code>Paralever.Lang.ParProg.denseK (rows cols wgt xs bias out : Nat) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**Dense / fully-connected layer**: `out[i] := Σ_j W[i,j] * x[j] + b[i]`.\n\nThread `i` reads row `i` of `W`, the whole of `x`, and one bias cell. Every thread reads all of\n`x` — the broadcast — while writing only `out[i]`. </code>",
- "136": "<code>Paralever.AExp.lit : Int → AExp</code>",
- "135": "<code>Paralever.AExp.max : AExp → AExp → AExp</code>",
- "134": "<code>Paralever.Examples.NeuralNet.Rl : Nat</code>",
- "133":
- "<code>Paralever.Lang.ParProg.mapK (n src dst : Nat) (f : AExp → AExp) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**Elementwise map.** Thread `i` reads `src + i`, applies `f`, writes `dst + i`.\nThe counterpart of `mapArray`. </code>",
- "132": "<code>Paralever.Examples.NeuralNet.C : Nat</code>",
- "131": "<code>Paralever.Examples.NeuralNet.CW : Nat</code>",
- "130": "<code>Paralever.Examples.NeuralNet.X : Nat</code>",
- "13":
- "<code>Paralever.State : Type</code><span class=\"sep\"></span><code class=\"docstring\">The heap: a total map from location to value. Total on purpose — there is no allocation and no\npartiality, so every read succeeds and `accesses` never has to reason about definedness. Ownership\nis expressed by footprints (`Core/Access.lean`), not by the heap's domain. </code>",
- "129":
- "<code>Paralever.Lang.ParProg.conv1dK (n w inp wts out : Nat) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**1-D convolution with weights in memory**: `out[i] := Σ_{k&lt;w} wts[k] * inp[i+k]`.\n\nUnlike `stencilK`, whose coefficients are compile-time expressions, this loads them — so *every*\nthread reads the whole weight array as well as its own window. Two kinds of sharing at once, and\nneither costs anything: `Indep` constrains writes only. </code>",
- "128":
- "<code>Paralever.Examples.NeuralNet.forward : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">Forward pass: convolution, ReLU, dense layer. </code>",
- "127":
- "<code>Paralever.Examples.MergeSort.copyBack (auxBase : Nat) : Nat → Nat → Nat → ParM Unit</code><span class=\"sep\"></span><code class=\"docstring\">Copy `fuel` values from `auxBase + i` back to `j`, advancing both together. </code>",
- "126":
- "<code>Paralever.Examples.MergeSort.mergeStep (mid hi auxBase : Nat) : Nat → Nat → Nat → Nat → ParM Unit</code><span class=\"sep\"></span><code class=\"docstring\">Merge sorted `[i, mid)` and `[j, hi)` (both in the data channel) into the scratch channel\nstarting at `auxBase + k`, advancing `k` alongside whichever of `i`/`j` moves. `fuel` is consumed\none-for-one with every `i`/`j` advance, so `fuel := (mid - i) + (hi - j)` is always exactly\nenough — never runs out early, never needed beyond the merge's real length. </code>",
- "125":
- "<code>Paralever.ParM.parPair {α β : Type} (p : ParM α) (q : ParM β) : ParM (α × β)</code><span class=\"sep\"></span><code class=\"docstring\">Run `p` and `q` in parallel, returning both results — the `N = 2` case of `par`. The left-hand\nside of the sequentialization theorem; `seqPair` is the right. </code>",
- "124":
- "<code>Paralever.ParM.bind {α β : Type} : ParM α → (α → ParM β) → ParM β</code><span class=\"sep\"></span><code class=\"docstring\">Sequential composition: graft `f` onto every `pure` leaf of `p`. A definition, not a\nconstructor — which is why the monad laws below hold on the nose. Needs no companion over `Childs`:\na fork's children are untouched, only its continuation is extended. </code>",
- "123": "<code>hi - lo ≤ 1</code>",
- "122":
- "<code class=\"docstring\">\"Dependent\" if-then-else, normally written via the notation `if h : c then t(h) else e(h)`,\nis sugar for `dite c (fun h =&gt; t(h)) (fun h =&gt; e(h))`, and it is the same as\n`if c then t else e` except that `t` is allowed to depend on a proof `h : c`,\nand `e` can depend on `h : ¬c`. (Both branches use the same name for the hypothesis,\neven though it has different types in the two cases.)\n\nWe use this to be able to communicate the if-then-else condition to the branches.\nFor example, `Array.get arr i h` expects a proof `h : i &lt; arr.size` in order to\navoid a bounds check, so you can write `if h : i &lt; arr.size then arr.get i h else ...`\nto avoid the bounds check inside the if branch. (Of course in this case we have only\nlifted the check into an explicit `if`, but we could also use this proof multiple times\nor derive `i &lt; arr.size` from some other proposition that we are checking in the `if`.)\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `if h : c then t else e` in identifiers is `dite` (use `left` for `t` and `right` for `e`).</code>",
- "121":
- "<code>Unit : Type</code><span class=\"sep\"></span><code class=\"docstring\">The canonical type with one element. This element is written `()`.\n\n`Unit` has a number of uses:\n* It can be used to model control flow that returns from a function call without providing other\n  information.\n* Monadic actions that return `Unit` have side effects without computing values.\n* In polymorphic types, it can be used to indicate that no data is to be stored in a particular\n  field.\n</code>",
- "120":
- "<code>Paralever.Examples.MergeSort.mergeSortPar (N : Nat) : Nat → Nat → ParM Unit</code>",
- "12":
+ "94": "<code>Reaches (Conf.run P σ) C</code>",
+ "93": "<code>Conf τ</code>",
+ "92": "<code>WellFormed P σ</code>",
+ "91":
+ "<code>Paralever.runSeq_invariant_chain {τ : Type} (P : ParM τ) (σ : State) (hwf : WellFormed P σ) (C : Conf τ)\n  (h : Reaches (Conf.run P σ) C) (P' : ParM τ) (σ' : State) :\n  C = Conf.run P' σ' → WellFormed P' σ' ∧ runSeq P' σ' = runSeq P σ</code><span class=\"sep\"></span><code class=\"docstring\">**Every configuration a real execution reaches is still well-formed and still computes the same\ncanonical outcome.** `step_combined` and `WellFormed_preserved` iterated along a whole `Reaches`\nchain — the uniqueness direction of `wellFormed_canonical`, before specializing the endpoint to\n`.pure`. </code>",
+ "90":
+ "<code>Paralever.WellFormed_preserved_all :\n  (∀ {τ : Type} (P : ParM τ) (σ : State),\n      WellFormed P σ → ∀ (P3 : ParM τ) (σ3 : State), Conf.run P3 σ3 ∈ stepC (Conf.run P σ) → WellFormed P3 σ3) ∧\n    ∀ {αs : List Type} (cs : Childs ParM αs) (σ : State),\n      WellFormedChilds cs σ →\n        IndepAll (childFootprints cs σ) →\n          ∀ (cs3 : Childs ParM αs) (σ3 : State),\n            some (cs3, σ3) ∈ stepChilds cs σ → WellFormedChilds cs3 σ3 ∧ IndepAll (childFootprints cs3 σ3)</code><span class=\"sep\"></span><code class=\"docstring\">**Subject reduction**: a well-formed program is still well-formed after one real step, whichever\nbranch moved and however deep its own structure. This is what lets `step_combined` be invoked again at\nthe next step, and so lets the canonical-value invariant survive an entire `Reaches` derivation rather\nthan a single step. </code>",
+ "9":
  "<code>Paralever.ParM : Type → Type 1</code><span class=\"sep\"></span><code class=\"docstring\">A program as data: a finite tree of pure results, memory effects, and parallel forks.\n\nEach effect node carries its own continuation (the *freer* presentation), so the root of the tree is\nalways the next action and no evaluation contexts are needed. `bind` is a defined graft rather than a\nconstructor. Being inductive, `ParM` can only express terminating programs.\nRationale: `docs/program-model.md`. </code>",
- "119":
- "<code>List.drop.{u} {α : Type u} (n : Nat) (xs : List α) : List α</code><span class=\"sep\"></span><code class=\"docstring\">Removes the first `n` elements of the list `xs`. Returns the empty list if `n` is greater than the\nlength of the list.\n\n`O(min n |xs|)`.\n\nExamples:\n* `[0, 1, 2, 3, 4].drop 0 = [0, 1, 2, 3, 4]`\n* `[0, 1, 2, 3, 4].drop 3 = [3, 4]`\n* `[0, 1, 2, 3, 4].drop 6 = []`\n</code>",
- "118":
- "<code>List.take.{u} {α : Type u} (n : Nat) (xs : List α) : List α</code><span class=\"sep\"></span><code class=\"docstring\">Extracts the first `n` elements of `xs`, or the whole list if `n` is greater than `xs.length`.\n\n`O(min n |xs|)`.\n\nExamples:\n* `[a, b, c, d, e].take 0 = []`\n* `[a, b, c, d, e].take 3 = [a, b, c]`\n* `[a, b, c, d, e].take 6 = [a, b, c, d, e]`\n</code>",
- "117":
- "<code>Paralever.Examples.MergeSort.mergePure : List Int → List Int → List Int</code>",
- "116":
- "<code>List.length.{u_1} {α : Type u_1} : List α → Nat</code><span class=\"sep\"></span><code class=\"docstring\">The length of a list.\n\nThis function is overridden in the compiler to `lengthTR`, which uses constant stack space.\n\nExamples:\n* `([] : List String).length = 0`\n* `[\"green\", \"brown\"].length = 2`\n</code>",
- "115": "<code>List Int</code>",
- "114":
- "<code>Paralever.Examples.MergeSort.mergeSortPure : List Int → List Int</code>",
- "113":
+ "89":
+ "<code>Paralever.WellFormed_preserved {τ : Type} (P : ParM τ) (σ : State) :\n  WellFormed P σ → ∀ (P3 : ParM τ) (σ3 : State), Conf.run P3 σ3 ∈ stepC (Conf.run P σ) → WellFormed P3 σ3</code>",
+ "88":
+ "<code>Paralever.step_combined_all :\n  (∀ {τ : Type} (P : ParM τ) (σ : State),\n      WellFormed P σ →\n        ∀ (P3 : ParM τ) (σ3 : State),\n          Conf.run P3 σ3 ∈ stepC (Conf.run P σ) →\n            runSeq P3 σ3 = runSeq P σ ∧ ∀ (F : List Loc), FDisjoint F (accesses P σ) → FDisjoint F (accesses P3 σ3)) ∧\n    ∀ {αs : List Type} (cs : Childs ParM αs) (σ : State),\n      WellFormedChilds cs σ →\n        IndepAll (childFootprints cs σ) →\n          ∀ (cs3 : Childs ParM αs) (σ3 : State),\n            some (cs3, σ3) ∈ stepChilds cs σ →\n              runChilds cs3 σ3 = runChilds cs σ ∧\n                ∀ (F : List Loc), FDisjoint F (accessesChilds cs σ) → FDisjoint F (accessesChilds cs3 σ3)</code><span class=\"sep\"></span><code class=\"docstring\">**The single-step canonical invariant.** Under `WellFormed`, one real step never changes the\ncanonical outcome `runSeq` computes, and never lets a location outside the original footprint leak\ninto `accesses` — whichever `.par` branch moved, however deeply it is itself `.par`-structured.\n\nThe two conjuncts are one statement rather than two lemmas because the hard case needs both at once:\nthe branch moving *second*, replayed against its reference state via `step_locality`, agrees with that\nreplay only outside some set, and pinning the replayed state down *exactly* takes the footprint\nconjunct of this very conclusion, one level down through `ihq`. Splitting them would require each half\nbefore the other.\n\nChaining this along a whole `Reaches` derivation additionally needs `WellFormed` back at every\nintermediate step — that is `WellFormed_preserved`. </code>",
+ "87":
+ "<code>Paralever.FDisjoint (F : List Loc) (f : Footprint) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">`F` shares no location with anything `f` touches. Stated as reads and writes disjoint from `F`\n*separately* rather than as one `Disjoint F (reads ++ writes)`: `Footprint.union` interleaves all the\nreads and then all the writes, so the combined form does not project through a nested union without\nfragile `Or`-shuffling, while this one projects in a line each way (`.left`/`.right`).\n-- ref: `docs/decomposition.md` </code>",
+ "86": "<code>List Loc</code>",
+ "85":
+ "<code>Paralever.step_combined {τ : Type} (P : ParM τ) (σ : State) :\n  WellFormed P σ →\n    ∀ (P3 : ParM τ) (σ3 : State),\n      Conf.run P3 σ3 ∈ stepC (Conf.run P σ) →\n        runSeq P3 σ3 = runSeq P σ ∧ ∀ (F : List Loc), FDisjoint F (accesses P σ) → FDisjoint F (accesses P3 σ3)</code>",
+ "84":
+ "<code>And (a b : Prop) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">`And a b`, or `a ∧ b`, is the conjunction of propositions. It can be\nconstructed and destructed like a pair: if `ha : a` and `hb : b` then\n`⟨ha, hb⟩ : a ∧ b`, and if `h : a ∧ b` then `h.left : a` and `h.right : b`.\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `∧` in identifiers is `and`.</code>",
+ "83":
+ "<code>Eq.{u_1} {α : Sort u_1} : α → α → Prop</code><span class=\"sep\"></span><code class=\"docstring\">The equality relation. It has one introduction rule, `Eq.refl`.\nWe use `a = b` as notation for `Eq a b`.\nA fundamental property of equality is that it is an equivalence relation.\n```\nvariable (α : Type) (a b c d : α)\nvariable (hab : a = b) (hcb : c = b) (hcd : c = d)\n\nexample : a = d :=\n  Eq.trans (Eq.trans hab (Eq.symm hcb)) hcd\n```\nEquality is much more than an equivalence relation, however. It has the important property that every assertion\nrespects the equivalence, in the sense that we can substitute equal expressions without changing the truth value.\nThat is, given `h1 : a = b` and `h2 : p a`, we can construct a proof for `p b` using substitution: `Eq.subst h1 h2`.\nExample:\n```\nexample (α : Type) (a b : α) (p : α → Prop)\n        (h1 : a = b) (h2 : p a) : p b :=\n  Eq.subst h1 h2\n\nexample (α : Type) (a b : α) (p : α → Prop)\n    (h1 : a = b) (h2 : p a) : p b :=\n  h1 ▸ h2\n```\nThe triangle in the second presentation is a macro built on top of `Eq.subst` and `Eq.symm`, and you can enter it by typing `\\t`.\nFor more information: [Equality](https://lean-lang.org/theorem_proving_in_lean4/quantifiers_and_equality.html#equality)\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `=` in identifiers is `eq`.</code>",
+ "82":
+ "<code class=\"docstring\">`by tac` constructs a term of the expected type by running the tactic(s) `tac`. </code>",
+ "81": "<code>Indep (accesses p σ) (accesses q (runSeq p σ).snd)</code>",
+ "80": "<code>ParM β</code>",
+ "8":
+ "<code class=\"docstring\">In Lean, every concrete type other than the universes\nand every type constructor other than dependent arrows\nis an instance of a general family of type constructions known as inductive types.\nIt is remarkable that it is possible to construct a substantial edifice of mathematics\nbased on nothing more than the type universes, dependent arrow types, and inductive types;\neverything else follows from those.\nIntuitively, an inductive type is built up from a specified list of constructors.\nFor example, `List α` is the list of elements of type `α`, and is defined as follows:\n```\ninductive List (α : Type u) where\n| nil\n| cons (head : α) (tail : List α)\n```\nA list of elements of type `α` is either the empty list, `nil`,\nor an element `head : α` followed by a list `tail : List α`.\nSee [Inductive types](https://lean-lang.org/theorem_proving_in_lean4/inductive_types.html)\nfor more information.\n</code>",
+ "79": "<code>ParM α</code>",
+ "78":
+ "<code>Paralever.accesses_runSeq_isolated {α β : Type} (p : ParM α) (q : ParM β) (σ : State)\n  (h : Indep (accesses p σ) (accesses q (runSeq p σ).snd)) :\n  accesses q (runSeq p σ).snd = accesses q σ ∧ (runSeq q (runSeq p σ).snd).fst = (runSeq q σ).fst</code><span class=\"sep\"></span><code class=\"docstring\">**Under `Indep`, `accesses`'s asymmetry disappears.** `q`'s footprint and result measured from\n`σ₁ := (runSeq p σ).2` — the post-`p` state `accesses` conventionally uses for the right branch —\ncoincide with those measured from the original `σ`. So an independent `q` really is computed in\nisolation, which is Brookes' `σ₁ ∗ σ₂` splitting.\n\nA corollary of `accesses_runSeq_locality` at `F := p`'s writes: `Indep`'s two write-disjointness\nclauses are exactly the `FDisjoint` hypothesis there, and `runSeq_frame` is exactly the agreement\nhypothesis. -- ref: `docs/access.md` </code>",
+ "77":
+ "<code>Paralever.runSeq_frame_all :\n  (∀ {τ : Type} (p : ParM τ) (σ : State) (l : Loc), ¬l ∈ (accesses p σ).writes → (runSeq p σ).snd l = σ l) ∧\n    ∀ {αs : List Type} (cs : Childs ParM αs) (σ : State) (l : Loc),\n      ¬l ∈ (accessesChilds cs σ).writes → (runChilds cs σ).snd l = σ l</code><span class=\"sep\"></span><code class=\"docstring\">Locations `p` doesn't write are untouched by its canonical run — the frame property for the\nreference execution, and the base fact `accesses_runSeq_locality` builds on. </code>",
+ "76":
+ "<code>Paralever.runSeq_frame {τ : Type} (p : ParM τ) (σ : State) (l : Loc) :\n  ¬l ∈ (accesses p σ).writes → (runSeq p σ).snd l = σ l</code>",
+ "75":
+ "<code>And.left {a b : Prop} (self : a ∧ b) : a</code><span class=\"sep\"></span><code class=\"docstring\">Extract the left conjunct from a conjunction. `h : a ∧ b` then\n`h.left`, also notated as `h.1`, is a proof of `a`. </code>",
+ "74":
+ "<code>Paralever.wellFormed_canonical_all :\n  (∀ {τ : Type} (p : ParM τ) (σ : State) (r : τ) (σ' : State),\n      WellFormed p σ → (Reaches (Conf.run p σ) (Conf.run (ParM.pure r) σ') ↔ (r, σ') = runSeq p σ)) ∧\n    ∀ {αs : List Type} (cs : Childs ParM αs) (σ : State),\n      WellFormedChilds cs σ →\n        IndepAll (childFootprints cs σ) → ReachesChilds cs σ (pureChilds αs (runChilds cs σ).fst) (runChilds cs σ).snd</code><span class=\"sep\"></span><code class=\"docstring\">**A well-formed program has exactly one outcome, and it is the canonical one.** Whatever the\nschedule, the only `(result, final-state)` pair the real nondeterministic `step`/`Reaches` relation\ncan reach from `p` and `σ` is `runSeq p σ` — and that pair is always reachable. Both directions, as an\n`↔`.\n\nThis is Brookes' Parallel Decomposition Lemma for this operational semantics, and the whole content of\nthe project: `par_seq_eq` and `parAll_par_seq_eq` are this theorem applied to both sides of an\nequivalence plus a definitional bridge. `pure`/`read`/`write` are immediate; the `par` case is the\nproof, assembled from `runSeq_invariant_chain` (→) and the explicitly constructed \"run `p` fully, then\n`q`, then step into `k`\" schedule (←).\n\n`WellFormed` cannot be weakened to top-level `Indep`: independence has to hold at every nested `par`\nnode, since a program can race with *itself* inside one branch while the two branches' total\nfootprints stay disjoint.\n\nThe second component is the children-level witness the `par` case needs: every child can be run to\ncompletion, left to right — the N-ary form of \"run `p` fully, then `q`\". Its `cons` case is the\n2-to-N step, and it is mutual with the theorem itself, because running a child to completion *is*\nthis theorem one level down. -- ref: Brookes CONCUR'04 §5–7; `docs/decomposition.md` </code>",
+ "73": "<code>ParM τ</code>",
+ "72":
+ "<code>Paralever.wellFormed_canonical {τ : Type} (p : ParM τ) (σ : State) (r : τ) (σ' : State) :\n  WellFormed p σ → (Reaches (Conf.run p σ) (Conf.run (ParM.pure r) σ') ↔ (r, σ') = runSeq p σ)</code>",
+ "71":
+ "<code>Paralever.stepC {α : Type} : Conf α → List (Conf α)</code><span class=\"sep\"></span><code class=\"docstring\">`step`, lifted to configurations. `wrong` has no successors, hence it is absorbing. </code>",
+ "70":
+ "<code>Paralever.Reaches.tail {α : Type} {c c' c'' : Conf α} : Reaches c c' → c'' ∈ stepC c' → Reaches c c''</code>",
+ "7":
+ "<code class=\"docstring\">`if c then t else e` is notation for `ite c t e`, \"if-then-else\", which decides to\nreturn `t` or `e` depending on whether `c` is true or false. The explicit argument\n`c : Prop` does not have any actual computational content, but there is an additional\n`[Decidable c]` argument synthesized by typeclass inference which actually\ndetermines how to evaluate `c` to true or false. Write `if h : c then t else e`\ninstead for a \"dependent if-then-else\" `dite`, which allows `t`/`e` to use the fact\nthat `c` is true/false.\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `if c then t else e` in identifiers is `ite` (use `left` for `t` and `right` for `e`).</code>",
+ "69": "<code>Conf α</code>",
+ "68":
+ "<code>Paralever.Reaches.refl {α : Type} {c : Conf α} : Reaches c c</code>",
+ "67":
+ "<code>Paralever.Reaches {α : Type} : Conf α → Conf α → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Reflexive-transitive closure of `stepC`: \"`c` can execute to `c'` under some schedule.\" Every statement about *all* interleavings is a statement about this relation. </code>",
+ "66": "<code>Childs ParM αs✝ × State</code>",
+ "65": "<code>Option (Childs ParM αs✝ × State)</code>",
+ "64":
+ "<code>List.map.{u_1, u_2} {α : Type u_1} {β : Type u_2} (f : α → β) (l : List α) : List β</code><span class=\"sep\"></span><code class=\"docstring\">Applies a function to each element of the list, returning the resulting list of values.\n\n`O(|l|)`.\n\nExamples:\n* `[a, b, c].map f = [f a, f b, f c]`\n* `[].map Nat.succ = []`\n* `[\"one\", \"two\", \"three\"].map (·.length) = [3, 3, 5]`\n* `[\"one\", \"two\", \"three\"].map (·.reverse) = [\"eno\", \"owt\", \"eerht\"]`\n</code>",
+ "63":
+ "<code>Paralever.stepChilds {αs : List Type} : Childs ParM αs → State → List (Option (Childs ParM αs × State))</code><span class=\"sep\"></span><code class=\"docstring\">Step any one child, rebuilding the spine around it. Type-preserving: `Childs ParM αs` in,\n`Childs ParM αs` out. `none` is that child aborting, which the whole fork inherits. </code>",
+ "62":
+ "<code>Option.none.{u} {α : Type u} : Option α</code><span class=\"sep\"></span><code class=\"docstring\">No value. </code>",
+ "61": "<code>Results αs✝</code>",
+ "60":
+ "<code>Option.some.{u} {α : Type u} (val : α) : Option α</code><span class=\"sep\"></span><code class=\"docstring\">Some value of type `α`. </code>",
+ "6": "<code>Val</code>",
+ "59":
+ "<code>Paralever.allPure {αs : List Type} : Childs ParM αs → Option (Results αs)</code><span class=\"sep\"></span><code class=\"docstring\">Every child has finished, with its tuple of results. `none` means at least one is still running,\nso the fork cannot join yet. </code>",
+ "58":
+ "<code class=\"docstring\">Pattern matching. `match e, ... with | p, ... =&gt; f | ...` matches each given\nterm `e` against each pattern `p` of a match alternative. When all patterns\nof an alternative match, the `match` term evaluates to the value of the\ncorresponding right-hand side `f` with the pattern variables bound to the\nrespective matched values.\nIf used as `match h : e, ... with | p, ... =&gt; f | ...`, `h : e = p` is available\nwithin `f`.\n\nWhen not constructing a proof, `match` does not automatically substitute variables\nmatched on in dependent variables' types. Use `match (generalizing := true) ...` to\nenforce this.\n\nSyntax quotations can also be used in a pattern match.\nThis matches a `Syntax` value against quotations, pattern variables, or `_`.\n\nQuoted identifiers only match identical identifiers - custom matching such as by the preresolved\nnames only should be done explicitly.\n\n`Syntax.atom`s are ignored during matching by default except when part of a built-in literal.\nFor users introducing new atoms, we recommend wrapping them in dedicated syntax kinds if they\nshould participate in matching.\nFor example, in\n```lean\nsyntax \"c\" (\"foo\" &lt;|&gt; \"bar\") ...\n```\n`foo` and `bar` are indistinguishable during matching, but in\n```lean\nsyntax foo := \"foo\"\nsyntax \"c\" (foo &lt;|&gt; \"bar\") ...\n```\nthey are not.\n</code>",
+ "57": "<code>Paralever.Conf.wrong {α : Type} : Conf α</code>",
+ "56":
+ "<code>Paralever.nextAccsChilds {αs : List Type} : Childs ParM αs → List (List Label)</code><span class=\"sep\"></span><code class=\"docstring\">One label list *per child*, kept separate so the race check below can range over pairs. </code>",
+ "55":
+ "<code>Paralever.racingAll : List (List Label) → Bool</code><span class=\"sep\"></span><code class=\"docstring\">Whether any *two distinct children* conflict. `step` re-evaluates this at every `par` node on\nevery step, which is why a run that never reaches `wrong` is race-free at every instant rather than\nonly at the start. With one N-ary node all pairs are checked at once, rather than spread over\nnesting levels. </code>",
+ "54": "<code>Results αs✝ → ParM α</code>",
+ "53": "<code>Unit → ParM α</code>",
+ "52": "<code>Paralever.Conf.run {α : Type} : ParM α → State → Conf α</code>",
+ "51": "<code>Val → ParM α</code>",
+ "50":
+ "<code>Paralever.Conf (α : Type) : Type 1</code><span class=\"sep\"></span><code class=\"docstring\">An execution state: either a program paired with a heap, or `wrong`. `wrong` is where a detected\nrace lands, and it is terminal and absorbing — per Reynolds' grainless semantics, racy programs are\n*excluded* rather than assigned a behaviour, which is what makes the atomic grain irrelevant. </code>",
+ "5": "<code>Loc</code>",
+ "49":
+ "<code>Paralever.step {α : Type} : ParM α → State → List (Conf α)</code><span class=\"sep\"></span><code class=\"docstring\">One small step: every configuration the program could move to from this heap. The list is the\nnondeterminism — a `par` node offers *every* ready child, so all interleavings are covered. Empty\nmeans terminal; a singleton `[wrong]` means this step detected a race. </code>",
+ "48":
+ "<code>Paralever.WellFormedChilds {αs : List Type} : Childs ParM αs → State → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Every child is itself well-formed, from the heap the one before it left. </code>",
+ "47":
+ "<code>Paralever.IndepAll : List Footprint → Prop</code><span class=\"sep\"></span><code class=\"docstring\">**Bernstein between every pair of children.** The N-ary independence obligation, stated flatly\nrather than spread over nesting levels. </code>",
+ "46":
+ "<code>True : Prop</code><span class=\"sep\"></span><code class=\"docstring\">`True` is a proposition and has only an introduction rule, `True.intro : True`.\nIn other words, `True` is simply true, and has a canonical proof, `True.intro`\nFor more information: [Propositional Logic](https://lean-lang.org/theorem_proving_in_lean4/propositions_and_proofs.html#propositional-logic)\n</code>",
+ "45":
+ "<code>Paralever.WellFormed {τ : Type} : ParM τ → State → Prop</code><span class=\"sep\"></span><code class=\"docstring\">Bernstein independence checked at *every* `par` node, each against the heap that node sees along\nthe canonical run. The outermost check alone would be unsound — `docs/decomposition.md` has the\ncounterexample. </code>",
+ "44": "<code>Paralever.Footprint.reads (self : Footprint) : List Loc</code>",
+ "43": "<code>Paralever.Footprint.writes (self : Footprint) : List Loc</code>",
+ "42":
+ "<code>Paralever.Disjoint (a b : List Loc) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">No location lies in both lists. </code>",
+ "41":
+ "<code class=\"docstring\">The universe of propositions. `Prop ≡ Sort 0`.\n\nEvery proposition is propositionally equal to either `True` or `False`. </code>",
+ "40": "<code>Footprint</code>",
+ "4": "<code>State</code>",
+ "39":
+ "<code>Paralever.Indep (f₁ f₂ : Footprint) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">**Bernstein's conditions**: two computations may run concurrently when neither writes what the\nother touches. Three clauses, not four — there is deliberately no `Disjoint f₁.reads f₂.reads`,\nbecause concurrent *reads* of the same cell are harmless. That omission is load-bearing: matrix\nmultiply writes disjoint output cells but reads overlapping rows and columns, so the stronger\n`∗`-style disjointness would reject it. -- ref: Bernstein 1966; `docs/access.md` </code>",
+ "38":
+ "<code>Paralever.accesses {τ : Type} : ParM τ → State → Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Every location `p` reads or writes along the canonical run from `σ`.\n\nA fold over the same tree `runSeq` walks, which is why it must carry a state: continuations are\nfunctions, so you cannot see what comes after a `read` without supplying the value it returns. Each\nchild is measured from the heap the one before it left; `accesses_runSeq_isolated` shows that\nstaggering vanishes under independence. </code>",
+ "37": "<code>ParM α✝</code>",
+ "36":
+ "<code>Paralever.Childs.cons {Node : Type → Type 1} {α : Type} {αs : List Type} :\n  Node α → Childs Node αs → Childs Node (α :: αs)</code>",
+ "35":
+ "<code>Paralever.Childs.nil {Node : Type → Type 1} : Childs Node []</code>",
+ "34":
+ "<code>Paralever.Footprint : Type</code><span class=\"sep\"></span><code class=\"docstring\">The set of locations a computation reads and the set it writes.\n\nLists rather than finite sets: every use is a membership or a disjointness check, so duplicates are\nharmless, and concrete footprints stay `decide`-able. </code>",
+ "33":
+ "<code>Paralever.childFootprints {αs : List Type} : Childs ParM αs → State → List Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Each child's footprint **on its own**, measured from the heap the one before it left. What the\nall-pairs independence check ranges over. </code>",
+ "32":
+ "<code>Prod.snd.{u, v} {α : Type u} {β : Type v} (self : α × β) : β</code><span class=\"sep\"></span><code class=\"docstring\">The second element of a pair. </code>",
+ "31":
+ "<code>Prod.fst.{u, v} {α : Type u} {β : Type v} (self : α × β) : α</code><span class=\"sep\"></span><code class=\"docstring\">The first element of a pair. </code>",
+ "30":
+ "<code>Paralever.runChilds {αs : List Type} : Childs ParM αs → State → Results αs × State</code><span class=\"sep\"></span><code class=\"docstring\">The children, left to right, threading the heap. The reference order a fork is measured against. </code>",
+ "3":
+ "<code>Paralever.State.update (σ : State) (l : Loc) (v : Val) : State</code><span class=\"sep\"></span><code class=\"docstring\">`σ` with location `l` set to `v`. </code>",
+ "29": "<code>Results αs✝ × State</code>",
+ "28":
+ "<code class=\"docstring\">`let` is used to declare a local definition. Example:\n```\nlet x := 1\nlet y := x + 1\nx + y\n```\nSince functions are first class citizens in Lean, you can use `let` to declare\nlocal functions too.\n```\nlet double := fun x =&gt; 2*x\ndouble (double 3)\n```\nFor recursive definitions, you should use `let rec`.\nYou can also perform pattern matching using `let`. For example,\nassume `p` has type `Nat × Nat`, then you can write\n```\nlet (x, y) := p\nx + y\n```\n\nThe *anaphoric let* `let := v` defines a variable called `this`.\n</code>",
+ "27": "<code>Results αs✝ → ParM τ</code>",
+ "26": "<code>Childs ParM αs✝</code>",
+ "25": "<code>Unit → ParM τ</code>",
+ "24": "<code>Val → ParM τ</code>",
+ "23": "<code>τ</code>",
+ "22":
+ "<code>Paralever.runSeq {τ : Type} : ParM τ → State → τ × State</code><span class=\"sep\"></span><code class=\"docstring\">Run `p` from `σ` under the canonical left-to-right schedule, returning its result and the final\nheap. This is the *reference* execution: `accesses` and `WellFormed` are stated against it, and\n`wellFormed_canonical` proves every real interleaving of a well-formed program agrees with it. </code>",
+ "21":
+ "<code>Paralever.Results : List Type → Type</code><span class=\"sep\"></span><code class=\"docstring\">The results a fork's children produce: one value per child, at that child's own result type.\n`[] ↦ Unit` is where the trailing `Unit` in `α × β × Unit` comes from. </code>",
+ "20":
+ "<code>Paralever.Childs (Node : Type → Type 1) : List Type → Type 1</code><span class=\"sep\"></span><code class=\"docstring\">A heterogeneous list of `Node`-things, indexed by the types they return.\nN-ary Children on a fork from parent, an inductive type to add a new child to the parent instead of another child branch(like binary tree) </code>",
+ "2":
+ "<code>Paralever.Val : Type</code><span class=\"sep\"></span><code class=\"docstring\">The heap's value universe. Deliberately small: `Storable α` (`Lib/TypedRead.lean`) encodes\nricher types into it, so adding a constructor here is never the right fix. </code>",
+ "19":
+ "<code>List.{u} (α : Type u) : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Linked lists: ordered lists, in which each element has a reference to the next element.\n\nMost operations on linked lists take time proportional to the length of the list, because each\nelement must be traversed to find the next element.\n\n`List α` is isomorphic to `Array α`, but they are useful for different things:\n* `List α` is easier for reasoning, and `Array α` is modeled as a wrapper around `List α`.\n* `List α` works well as a persistent data structure, when many copies of the tail are shared. When\n  the value is not shared, `Array α` will have better performance because it can do destructive\n  updates.\n</code>",
+ "18": "<code>List Type</code>",
+ "17":
+ "<code>Paralever.ParM.par {β : Type} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β</code><span class=\"sep\"></span><code class=\"docstring\">Fork every child at once, then continue with all their results. The only constructor whose\nmeaning Lean does not already fix: `run` interprets it by interleaving, which is what makes the\nsequentialization theorem non-vacuous. </code>",
+ "16":
+ "<code>Unit : Type</code><span class=\"sep\"></span><code class=\"docstring\">The canonical type with one element. This element is written `()`.\n\n`Unit` has a number of uses:\n* It can be used to model control flow that returns from a function call without providing other\n  information.\n* Monadic actions that return `Unit` have side effects without computing values.\n* In polymorphic types, it can be used to indicate that no data is to be stored in a particular\n  field.\n</code>",
+ "15":
+ "<code>Paralever.ParM.write {α : Type} : Loc → Val → (Unit → ParM α) → ParM α</code>",
+ "14":
+ "<code>Paralever.ParM.read {α : Type} : Loc → (Val → ParM α) → ParM α</code>",
+ "139":
+ "<code>Paralever.AutoPar.rewrite (p : ParProg) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">**The rewrite.** The analysis is untrusted; `rewriteOk` is the proved gate, and a program whose\nplan does not pass it is returned unchanged. </code>",
+ "138":
+ "<code>Paralever.AutoPar.rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :\n  (runSeq ((rewrite p).execPar ρ) σ).snd = (runSeq (p.execSeq ρ) σ).snd</code><span class=\"sep\"></span><code class=\"docstring\">**`seq = par` for the rewrite, unconditionally.** The rewritten program, read in parallel,\nleaves exactly the heap the original leaves read sequentially — for every program, with no\nhypothesis, because the gate is checked inside `rewrite`. </code>",
+ "137":
+ "<code>Paralever.Lang.ParProg.par_seq_eq {s : ParProg} (h : s.wfB = true) (ρ : Regs) (σ : State) :\n  s.execPar ρ ∥≡ s.execSeq ρ from σ</code><span class=\"sep\"></span><code class=\"docstring\">**Write the program, check one `Bool`, get the theorem.** If every `parallel` block in `s` has\npairwise-independent threads and every address is a literal — one decidable check on the syntax —\nthen running it with all threads at once reaches exactly the outcomes running them in order does,\nunder every schedule.\n\nData-dependent addressing costs *precision*, not soundness: `A[e]`'s syntactic footprint is all of\n`A`, so two threads indexing the same array are rejected even when their indices never meet. When\nthat matters, the exact per-heap check is `wellFormedB` (`Search/RaceSearch.lean`), which is both\nsound and complete. </code>",
+ "136":
+ "<code>Paralever.Lang.ParProg.execSeq : ParProg → Regs → ParM Regs</code><span class=\"sep\"></span><code class=\"docstring\">The sequential reading: `parallel` means \"in order\". </code>",
+ "135":
+ "<code>Paralever.Lang.ParProg.execPar : ParProg → Regs → ParM Regs</code><span class=\"sep\"></span><code class=\"docstring\">Lower a statement, threading the register file. A `parallel` block gives every thread the\n*current* register file and keeps its own afterwards: register updates inside a thread are private\nto it. </code>",
+ "134":
+ "<code>Paralever.Regs : Type</code><span class=\"sep\"></span><code class=\"docstring\">The register file. Registers hold `Int`, are not memory, and never appear in a footprint. </code>",
+ "133": "<code>Regs</code>",
+ "132":
  "<code>Paralever.Examples.MatMul.Surface.par_seq_eq_2 (ρ : Regs) (σ : State) :\n  (matmul 2).execPar ρ ∥≡ (matmul 2).execSeq ρ from σ</code><span class=\"sep\"></span><code class=\"docstring\">…and the equivalence follows with nothing further to supply. </code>",
- "112":
+ "131":
  "<code class=\"docstring\">`decide` attempts to prove the main goal (with target type `p`) by synthesizing an instance of `Decidable p`\nand then reducing that instance to evaluate the truth value of `p`.\nIf it reduces to `isTrue h`, then `h` is a proof of `p` that closes the goal.\n\nThe target is not allowed to contain local variables or metavariables.\nIf there are local variables, you can first try using the `revert` tactic with these local variables to move them into the target,\nor you can use the `+revert` option, described below.\n\nOptions:\n- `decide +revert` begins by reverting local variables that the target depends on,\n  after cleaning up the local context of irrelevant variables.\n  A variable is *relevant* if it appears in the target, if it appears in a relevant variable,\n  or if it is a proposition that refers to a relevant variable.\n- `decide +kernel` uses kernel for reduction instead of the elaborator.\n  It has two key properties: (1) since it uses the kernel, it ignores transparency and can unfold everything,\n  and (2) it reduces the `Decidable` instance only once instead of twice.\n- `decide +native` uses the native code compiler (`#eval`) to evaluate the `Decidable` instance,\n  admitting the result via an axiom.\n  This can be significantly more efficient than using reduction, but it is at the cost of increasing the size\n  of the trusted code base.\n  Namely, it depends on the correctness of the Lean compiler and all definitions with an `@[implemented_by]` attribute.\n  Like with `+kernel`, the `Decidable` instance is evaluated only once.\n\nLimitation: In the default mode or `+kernel` mode, since `decide` uses reduction to evaluate the term,\n`Decidable` instances defined by well-founded recursion might not work because evaluating them requires reducing proofs.\nReduction can also get stuck on `Decidable` instances with `Eq.rec` terms.\nThese can appear in instances defined using tactics (such as `rw` and `simp`).\nTo avoid this, create such instances using definitions such as `decidable_of_iff` instead.\n\n## Examples\n\nProving inequalities:\n```lean\nexample : 2 + 2 ≠ 5 := by decide\n```\n\nTrying to prove a false proposition:\n```lean\nexample : 1 ≠ 1 := by decide\n/-\ntactic 'decide' proved that the proposition\n  1 ≠ 1\nis false\n-/\n```\n\nTrying to prove a proposition whose `Decidable` instance fails to reduce\n```lean\nopaque unknownProp : Prop\n\nopen scoped Classical in\nexample : unknownProp := by decide\n/-\ntactic 'decide' failed for proposition\n  unknownProp\nsince its 'Decidable' instance reduced to\n  Classical.choice ⋯\nrather than to the 'isTrue' constructor.\n-/\n```\n\n## Properties and relations\n\nFor equality goals for types with decidable equality, usually `rfl` can be used in place of `decide`.\n```lean\nexample : 1 + 1 = 2 := by decide\nexample : 1 + 1 = 2 := by rfl\n```\n</code>",
- "111":
- "<code>List.range (n : Nat) : List Nat</code><span class=\"sep\"></span><code class=\"docstring\">Returns a list of the numbers from `0` to `n` exclusive, in increasing order.\n\n`O(n)`.\n\nExamples:\n* `range 5 = [0, 1, 2, 3, 4]`\n* `range 0 = []`\n* `range 2 = [0, 1]`\n</code>",
- "110": "<code>AExp</code>",
- "11":
- "<code class=\"docstring\">A type universe. `Type ≡ Type 0`, `Type u ≡ Sort (u + 1)`. </code>",
- "109": "<code>Reg</code>",
- "108":
- "<code class=\"docstring\">A `;`-separated group of statements, as a single `ParProg`. </code>",
- "107":
- "<code>Paralever.Lang.ParProg.block : List ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`s₁ ; s₂ ; …` from a list, right-nested. </code>",
- "106": "<code>Nat × Nat</code>",
- "105":
- "<code>Paralever.gridIdx : Nat → Nat → List (Nat × Nat)</code><span class=\"sep\"></span><code class=\"docstring\">Every `(i, j)` with `i &lt; n` and `j &lt; m`, row by row. Defined by recursion rather than as a\n`flatMap` so that both facts below are two-line inductions. </code>",
- "104":
- "<code>Paralever.Lang.ParProg.parEach {α : Type} (xs : List α) (body : α → ParProg) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">One thread per element of a list, for keys that are not indices (chunks, coordinates, names). </code>",
- "103":
- "<code>Nat : Type</code><span class=\"sep\"></span><code class=\"docstring\">The natural numbers, starting at zero.\n\nThis type is special-cased by both the kernel and the compiler, and overridden with an efficient\nimplementation. Both use a fast arbitrary-precision arithmetic library (usually\n[GMP](https://gmplib.org/)); at runtime, `Nat` values that are sufficiently small are unboxed.\n</code>",
- "102": "<code>Nat</code>",
- "101":
+ "130": "<code>Nat</code>",
+ "13": "<code>Type</code>",
+ "129":
  "<code>Paralever.Examples.MatMul.Surface.matmul (n : Nat) : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">One thread per output cell: zero the accumulator, fold `A[i,k] * B[k,j]` over `k`, store. The\naccumulator is a **register**, so the thread's whole write set is the single cell `C[i,j]` — which\nis what lets different cells read overlapping rows and columns. </code>",
+ "128":
+ "<code>Paralever.Lang.ParProg.print : List PrintItem → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`print k` — output, and nothing else. It has no footprint and no effect on the heap: both\ninterpreters erase it, so every theorem about a program is a theorem about the program with its\nprints removed. What it does carry is a barrier, exactly as `synchronize` does, so the parallelizer\ncannot move a statement across the point where its value was observed.\n-- ref: `docs/print.md` § Erased, and a barrier </code>",
+ "127":
+ "<code>Paralever.Lang.ParProg.synchronize : ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`synchronize` — a barrier the parallelizer may not cross. A no-op at run time: `par` already\njoins its threads, so there is nothing left to wait for. Its content is the constraint it puts on\n`autoPar`, which plans each phase on its own. -- ref: `docs/autopar.md` § Synchronization </code>",
+ "126":
+ "<code>Paralever.Lang.ParProg.ifElse : AExp → ParProg → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`if c then t else e`. `0` is false; the footprint is the union of both branches, since which\none runs is not known statically. </code>",
+ "125":
+ "<code>Paralever.Lang.ParProg.storeAt : ArrRef → AExp → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`A[e] := e'` — a data-dependent store. </code>",
+ "124":
+ "<code>Paralever.Lang.ParProg.loadAt : Reg → ArrRef → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := A[e]` — a **data-dependent** load. The index wraps on `A.len`, so the access is\nconfined to `A` by construction (`ArrRef.addr_mem_cells`). </code>",
+ "123":
+ "<code>Paralever.Lang.ParProg.label : String → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`s :: name` — a named region. Semantically transparent: `execPar` ignores it. It exists so a\nregion can be *referred to*, proved about on its own, and found again inside a larger program. </code>",
+ "122": "<code>Paralever.Lang.ParProg.wfAllB : List ParProg → Bool</code>",
+ "121":
+ "<code>Paralever.Lang.ParProg.threadFootprints : List ParProg → List Footprint</code><span class=\"sep\"></span><code class=\"docstring\">Each thread's footprint on its own — what the independence check ranges over. </code>",
+ "120":
+ "<code>Paralever.indepAllB : List Footprint → Bool</code><span class=\"sep\"></span><code class=\"docstring\">Decidable `IndepAll`. </code>",
+ "12": "<code>Paralever.ParM.pure {α : Type} : α → ParM α</code>",
+ "119": "<code>List ParProg</code>",
+ "118":
+ "<code>Paralever.Lang.ParProg.par : List ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`parallel { … }` with one thread per element </code>",
+ "117": "<code>ParProg</code>",
+ "116":
+ "<code>Paralever.Lang.ParProg.seq : ParProg → ParProg → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`a ; b` </code>",
+ "115":
+ "<code>Paralever.Lang.ParProg.set : Reg → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := e` — pure arithmetic, touches no memory </code>",
+ "114":
+ "<code>Paralever.Lang.ParProg.store : Loc → AExp → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`M[l] := e` </code>",
+ "113":
+ "<code>Bool.true : Bool</code><span class=\"sep\"></span><code class=\"docstring\">The Boolean value `true`, not to be confused with the proposition `True`. </code>",
+ "112":
+ "<code>Paralever.Lang.ParProg.load : Reg → Loc → ParProg</code><span class=\"sep\"></span><code class=\"docstring\">`t := M[l]` </code>",
+ "111":
+ "<code>Bool : Type</code><span class=\"sep\"></span><code class=\"docstring\">The Boolean values, `true` and `false`.\n\nLogically speaking, this is equivalent to `Prop` (the type of propositions). The distinction is\npublic important for programming: both propositions and their proofs are erased in the code generator,\nwhile `Bool` corresponds to the Boolean type in most programming languages and carries precisely one\nbit of run-time information.\n</code>",
+ "110":
+ "<code>Paralever.Lang.ParProg : Type</code><span class=\"sep\"></span><code class=\"docstring\">The program statements. Addresses are literals, which is what keeps `footprintOf` syntactic; a loop over\nindices is written in Lean, producing one fully-instantiated thread per index. </code>",
+ "11": "<code class=\"docstring\">The universe level 1</code>",
+ "109":
+ "<code>Paralever.Lang.ParProg.wfB : ParProg → Bool</code><span class=\"sep\"></span><code class=\"docstring\">Whether every `parallel` block in the statement has pairwise-independent threads. </code>",
+ "108":
+ "<code>Paralever.runSeq_parAll_eq_seqAll {τ : Type} (ps : List (ParM τ)) (σ : State) :\n  runSeq (ParM.parAll ps) σ = runSeq (ParM.seqAll ps) σ</code><span class=\"sep\"></span><code class=\"docstring\">The two sides of the N-ary equivalence have the same canonical run — the definitional bridge for\n`parAll_par_seq_eq`. No `Indep` needed. </code>",
+ "107":
+ "<code>Paralever.wellFormed_of_seqAll {τ : Type} (ps : List (ParM τ)) (σ : State) (h : WellFormed (ParM.parAll ps) σ) :\n  WellFormed (ParM.seqAll ps) σ</code><span class=\"sep\"></span><code class=\"docstring\">Well-formedness transfers from `parAll` to `seqAll` — the N-ary `wellFormed_of_seqPair`. </code>",
+ "106":
+ "<code>Prod.mk.{u, v} {α : Type u} {β : Type v} (fst : α) (snd : β) : α × β</code><span class=\"sep\"></span><code class=\"docstring\">Constructs a pair. This is usually written `(x, y)` instead of `Prod.mk x y`.\n</code>",
+ "105":
+ "<code class=\"docstring\">`rw` is like `rewrite`, but also tries to close the goal by \"cheap\" (reducible) `rfl` afterwards.\n</code>",
+ "104":
+ "<code>Iff (a b : Prop) : Prop</code><span class=\"sep\"></span><code class=\"docstring\">If and only if, or logical bi-implication. `a ↔ b` means that `a` implies `b` and vice versa.\nBy `propext`, this implies that `a` and `b` are equal and hence any expression involving `a`\nis equivalent to the corresponding expression with `b` instead.\n\n\nConventions for notations in identifiers:\n\n * The recommended spelling of `↔` in identifiers is `iff`.\n\n * The recommended spelling of `&lt;-&gt;` in identifiers is `iff` (prefer `↔` over `&lt;-&gt;`).</code>",
+ "103": "<code>List τ</code>",
+ "102":
+ "<code class=\"docstring\">Introduces one or more hypotheses, optionally naming and/or pattern-matching them.\nFor each hypothesis to be introduced, the remaining main goal's target type must\nbe a `let` or function type.\n\n* `intro` by itself introduces one anonymous hypothesis, which can be accessed\n  by e.g. `assumption`. It is equivalent to `intro _`.\n* `intro x y` introduces two hypotheses and names them. Individual hypotheses\n  can be anonymized via `_`, given a type ascription, or matched against a pattern:\n  ```lean\n  -- ... ⊢ α × β → ...\n  intro (a, b)\n  -- ..., a : α, b : β ⊢ ...\n  ```\n* `intro rfl` is short for `intro h; subst h`, if `h` is an equality where the left-hand or right-hand side\n  is a variable.\n* Alternatively, `intro` can be combined with pattern matching much like `fun`:\n  ```lean\n  intro\n  | n + 1, 0 =&gt; tac\n  | ...\n  ```\n</code>",
+ "101":
+ "<code>Paralever.ParM.seqAll {α : Type} : List (ParM α) → ParM (List α)</code><span class=\"sep\"></span><code class=\"docstring\">Sequential counterpart of `parAll`: run the list left to right, collecting the results. </code>",
  "100":
  "<code>Paralever.ParM.parAll {α : Type} (ps : List (ParM α)) : ParM (List α)</code><span class=\"sep\"></span><code class=\"docstring\">Run every program in the list in parallel, collecting the results. **One** `par` node, whatever\nthe length — not a nest of binary forks. </code>",
- "10": "<code>Type</code>",
+ "10":
+ "<code class=\"docstring\">A type universe. `Type ≡ Type 0`, `Type u ≡ Sort (u + 1)`. </code>",
  "1":
- "<code class=\"docstring\">Marks a theorem or definition for use by the `grind` tactic.\n\nAn optional modifier (e.g. `=`, `→`, `←`, `cases`, `intro`, `ext`, `inj`, etc.)\ncontrols how `grind` uses the declaration:\n* whether it is applied forwards, backwards, or both,\n* whether equalities are used on the left, right, or both sides,\n* whether case-splits, constructors, extensionality, or injectivity are applied,\n* or whether custom instantiation patterns are used.\n\nSee the individual modifier docstrings for details.\n</code>",
+ "<code>Paralever.Loc : Type</code><span class=\"sep\"></span><code class=\"docstring\">A heap address. `Nat` rather than an opaque type so that region arithmetic — \"is `i*n+j` inside\n`[base, base+len)`?\" — is `omega`-friendly. </code>",
  "0":
- "<code class=\"docstring\">Theorems tagged with the `simp` attribute are used by the simplifier\n(i.e., the `simp` tactic, and its variants) to simplify expressions occurring in your goals.\nWe call theorems tagged with the `simp` attribute \"simp theorems\" or \"simp lemmas\".\nLean maintains a database/index containing all active simp theorems.\nHere is an example of a simp theorem.\n```lean\n@[simp] theorem ne_eq (a b : α) : (a ≠ b) = Not (a = b) := rfl\n```\nThis simp theorem instructs the simplifier to replace instances of the term\n`a ≠ b` (e.g. `x + 0 ≠ y`) with `Not (a = b)` (e.g., `Not (x + 0 = y)`).\nThe simplifier applies simp theorems in one direction only:\nif `A = B` is a simp theorem, then `simp` replaces `A`s with `B`s,\nbut it doesn't replace `B`s with `A`s. Hence a simp theorem should have the\nproperty that its right-hand side is \"simpler\" than its left-hand side.\nIn particular, `=` and `↔` should not be viewed as symmetric operators in this situation.\nThe following would be a terrible simp theorem (if it were even allowed):\n```lean\n@[simp] lemma mul_right_inv_bad (a : G) : 1 = a * a⁻¹ := ...\n```\nReplacing 1 with a * a⁻¹ is not a sensible default direction to travel.\nEven worse would be a theorem that causes expressions to grow without bound,\ncausing simp to loop forever.\n\nBy default the simplifier applies `simp` theorems to an expression `e`\nafter its sub-expressions have been simplified.\nWe say it performs a bottom-up simplification.\nYou can instruct the simplifier to apply a theorem before its sub-expressions\nhave been simplified by using the modifier `↓`. Here is an example\n```lean\n@[simp↓] theorem not_and_eq (p q : Prop) : (¬ (p ∧ q)) = (¬p ∨ ¬q) :=\n```\n\nYou can instruct the simplifier to rewrite the lemma from right-to-left:\n```lean\nattribute @[simp ←] and_assoc\n```\n\nWhen multiple simp theorems are applicable, the simplifier uses the one with highest priority.\nThe equational theorems of functions are applied at very low priority (100 and below).\nIf there are several with the same priority, it is uses the \"most recent one\". Example:\n```lean\n@[simp high] theorem cond_true (a b : α) : cond true a b = a := rfl\n@[simp low+1] theorem or_true (p : Prop) : (p ∨ True) = True :=\n  propext &lt;| Iff.intro (fun _ =&gt; trivial) (fun _ =&gt; Or.inr trivial)\n@[simp 100] theorem ite_self {d : Decidable c} (a : α) : ite c a a = a := by\n  cases d &lt;;&gt; rfl\n```\n</code>"}
+ "<code>Paralever.State : Type</code><span class=\"sep\"></span><code class=\"docstring\">The heap: a total map from location to value. Total on purpose — there is no allocation and no\npartiality, so every read succeeds and `accesses` never has to reason about definedness. Ownership\nis expressed by footprints (`Core/Access.lean`), not by the heap's domain. </code>"}

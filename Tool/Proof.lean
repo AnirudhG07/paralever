@@ -128,6 +128,92 @@ private def soundness (s : Subject) : List String :=
   , "    (runSeq (ParProg.execPar par ρ) σ).2 = (runSeq (ParProg.execSeq " ++ base ++ " ρ) σ).2 :="
   , "  AutoPar.rewrite_sound " ++ base ++ " ρ σ" ]
 
+/-- A side's `WellFormed`, from whichever check decided it. -/
+private def sideWF (t : String) (h : String) (wf : Bool) : String :=
+  if wf then s!"(ParProg.wfB_wellFormed (by decide) ρ0 {h})"
+  else   s!"((wellFormedB_iff (ParProg.execPar {t} ρ0) {h}).1 (by decide))"
+
+/-- **The file's `assert`**, as a section appended to whichever theorem the left program carries.
+The left side's own checks are above it already, so only the right side's are printed here. The
+claim is about the file's own two programs and does not follow `--autopar` into the pass's output.
+-- ref: `docs/equivalence.md` -/
+private def claimPart (s : Subject) (cl : Lang.Claim) : List String :=
+  let h := heap s
+  -- `assertParSeq` states the stronger relation, so both the Boolean and the theorem change
+  let ps := cl.strength == .parSeq
+  let cells := if ps then "src.compared src.comparedRegs" else "src.compared"
+  let agree := s!"ParProg.{if ps then "agreeParSeqB" else "agreeB"} {cells} src.prog src.other ρ0 {h}"
+  let rel := if ps then "AgreeParSeq" else "AgreeOn"
+  let lwf := ParProg.wfB s.prog.prog
+  let rwf := ParProg.wfB cl.other
+  let lok := Lang.sideSound s.prog.layout s.prog.prog
+  let rok := Lang.sideSound s.prog.layout cl.other
+  let σ := s.prog.layout.state
+  let holds := if ps then ParProg.agreeParSeqB cl.cells cl.regs s.prog.prog cl.other (fun _ => 0) σ
+               else ParProg.agreeB cl.cells s.prog.prog cl.other (fun _ => 0) σ
+  let n := Lang.comparedWord cl
+  let on := ", ".intercalate cl.bufs
+  [ ""
+  , "/-! ### The file's claim"
+  , ""
+  , "    " ++ (if ps then "assertParSeq " else "assert ") ++ cl.left ++ "(…) == " ++ cl.right
+      ++ "(…) on " ++ on
+  , ""
+  , "Two programs, not one. The file was compiled twice, with each side's body written out where"
+  , "the claim stands, so both start from the declarations above and from one heap. `src.prog` is"
+  , "the left side, whose checks are above; `src.other` is the right."
+  , "-- ref: `docs/equivalence.md` -/"
+  , "" ]
+  ++ (if !holds then
+        [ "/-- **The claim does not hold.** The two sequential readings differ at some of the"
+        , n ++ " compared, so there is nothing about schedules left to say. -/"
+        , "example : " ++ agree ++ " = false := by decide" ]
+      else if lok && rok then
+        [ "/-- The right side's schedules agree with its own sequential reading. -/"
+        , "example : ParProg.wfB src.other = " ++ (if rwf then "true" else "false")
+            ++ " := by decide" ]
+        ++ (if rwf then [] else
+             [ ""
+             , "/-- Its footprint is a bound rather than the cells touched — a computed address —"
+             , "so the exact check decides it at this heap instead. -/"
+             , "example : wellFormedB (ParProg.execPar src.other ρ0) " ++ h
+                 ++ " = true := by decide" ])
+        ++ [ ""
+           , "/-- The two sequential readings leave the compared " ++ (if ps then
+                 "cells and registers" else "cells") ++ " equal. This is the one"
+           , "obligation parallelism has nothing to do with: neither reading has a fork in it."
+           , "-- ref: `docs/equivalence.md` § How it is proved -/"
+           , "example : " ++ agree ++ " = true := by decide"
+           , ""
+           , "/-- **The two programs agree.** Every outcome either one reaches, under every"
+           , "schedule of either, holds the same values at " ++ on ++ " — " ++ n
+               ++ " compared. -/"
+           , "theorem " ++ s.stem ++ "_agree :"
+           , "    ParProg." ++ rel ++ " " ++ cells ++ " src.prog src.other ρ0 " ++ h ++ " :=" ]
+        ++ (if lwf && rwf then
+              ["  ParProg." ++ (if ps then "agreeParSeq_of_wfB" else "agreeOn_of_wfB")
+                 ++ " (by decide) (by decide) (by decide)"]
+            else
+              [ "  ParProg." ++ (if ps then "agreeParSeq_of_wellFormed" else
+                                   "agreeOn_of_wellFormed")
+              , "    " ++ sideWF "src.prog" h lwf
+              , "    " ++ sideWF "src.other" h rwf ++ " (by decide)"
+                  ++ (if ps then " (by decide)" else "") ])
+      else
+        let racy := if !lok then cl.left else cl.right
+        let side := if !lok then "src.prog" else "src.other"
+        [ "/-- The compared " ++ (if ps then "cells and registers" else "cells")
+            ++ " agree on the canonical run, and **no claim follows**: '" ++ racy
+            ++ "'"
+        , "has a race, so it reaches outcomes its sequential reading does not and there is no"
+        , "single answer to compare. -/"
+        , "example : " ++ agree ++ " = true := by decide"
+        , ""
+        , "example : ParProg.wfB " ++ side ++ " = false := by decide"
+        , ""
+        , "example : wellFormedB (ParProg.execPar " ++ side ++ " ρ0) " ++ h
+            ++ " = false := by decide" ])
+
 /-- **The generated module.** -/
 def proofFile (s : Subject) : String :=
   let p := subjectProg s
@@ -188,6 +274,9 @@ def proofFile (s : Subject) : String :=
            , "not an artefact of over-approximating a footprint. -/"
            , "example : wellFormedB (ParProg.execPar " ++ t ++ " ρ0) " ++ heap s ++ " = false :="
            , "  by decide" ]
+  let body := body ++ (match s.prog.claim with
+    | some cl => claimPart s cl
+    | none    => [])
   "\n".intercalate (body ++ ["", "end Paralever.Proofs." ++ upperOf s.stem, ""])
 
 end Paralever.Tool

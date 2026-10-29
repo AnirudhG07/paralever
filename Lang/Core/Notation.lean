@@ -30,16 +30,66 @@ computations are data. -/
 
 private def ind (d : Nat) : String := String.ofList (List.replicate (2 * d) ' ')
 
-/-- An expression in ordinary infix form. -/
+/-- Whether an expression answers in `0`/`1`: a `min` of two such is an `&&`, not a minimum. -/
+def isCond : AExp → Bool
+  | .lt _ _  => true
+  | .eq _ _  => true
+  | .not _   => true
+  | .min a b => isCond a && isCond b
+  | .max a b => isCond a && isCond b
+  | _        => false
+
+/-- An expression in ordinary infix form, with the derived conditions spelled as they are written.
+-- ref: `docs/block-ir.md` § Conditions -/
 def showExp : AExp → String
+  | .not (.lt a b) => "(" ++ showExp a ++ " >= " ++ showExp b ++ ")"
+  | .not (.eq a b) => "(" ++ showExp a ++ " != " ++ showExp b ++ ")"
+  | .min a b => if isCond a && isCond b
+                then "(" ++ showExp a ++ " && " ++ showExp b ++ ")"
+                else "min(" ++ showExp a ++ ", " ++ showExp b ++ ")"
+  | .max a b => if isCond a && isCond b
+                then "(" ++ showExp a ++ " || " ++ showExp b ++ ")"
+                else "max(" ++ showExp a ++ ", " ++ showExp b ++ ")"
   | .lit n   => toString n
   | .reg r   => "%" ++ toString r
   | .add a b => "(" ++ showExp a ++ " + " ++ showExp b ++ ")"
   | .sub a b => "(" ++ showExp a ++ " - " ++ showExp b ++ ")"
   | .mul a b => "(" ++ showExp a ++ " * " ++ showExp b ++ ")"
-  | .min a b => "min(" ++ showExp a ++ ", " ++ showExp b ++ ")"
-  | .max a b => "max(" ++ showExp a ++ ", " ++ showExp b ++ ")"
   | .div a b => "(" ++ showExp a ++ " / " ++ showExp b ++ ")"
+  | .lt a b  => "(" ++ showExp a ++ " < " ++ showExp b ++ ")"
+  | .eq a b  => "(" ++ showExp a ++ " == " ++ showExp b ++ ")"
+  | .not a   => "!" ++ showExp a
+
+/-- One `print` item, in the Lean form's own vocabulary. -/
+def showItem : PrintItem → String
+  | .text s        => "\"" ++ s ++ "\""
+  | .exp e         => showExp e
+  | .buf nm _ _    => nm
+  | .at nm _ e     => nm ++ "[" ++ showExp e ++ "]"
+  | .cell nm idx _ =>
+      if idx.isEmpty then nm
+      else nm ++ "[" ++ ", ".intercalate (idx.map toString) ++ "]"
+
+/-- One affine subscript: the buffer's base, its coefficient per level, and its constant term. -/
+def showAff (a : Nest.AffAccess) : String :=
+  "A" ++ toString a.base ++ "[" ++ ", ".intercalate (a.coeffs.map toString) ++ "]"
+    ++ (if a.off == 0 then "" else "+" ++ toString a.off)
+
+/-- One statement of a nest body. -/
+def showNestStmt : NestStmt → String
+  | .rd r a => "%" ++ toString r ++ " := " ++ showAff a
+  | .wr a e => showAff a ++ " := " ++ showExp e
+  | .st r e => "%" ++ toString r ++ " := " ++ showExp e
+
+/-- One level: its induction register and its trip count, with the first value and the stride when
+they are not the normalized `0` and `1`. -/
+def showLevels : List Reg → List Nat → List Int → List Int → List String
+  | r :: rs, n :: ns, lo :: los, st :: sts =>
+      ("%" ++ toString r ++ " in " ++ toString n
+        ++ (if lo == 0 && st == 1 then ""
+            else " from " ++ toString lo ++ " step " ++ toString st))
+        :: showLevels rs ns los sts
+  | _, _, _, _ => []
 
 mutual
 
@@ -59,6 +109,12 @@ def render : ParProg → Nat → List String
       ((ind d ++ "if " ++ showExp c ++ " {") :: render t (d + 1)) ++
       ((ind d ++ "} else {") :: render e (d + 1)) ++ [ind d ++ "}"]
   | .synchronize, d => [ind d ++ "synchronize;"]
+  | .print is, d => [ind d ++ "print " ++ ", ".intercalate (is.map showItem) ++ ";"]
+  | .loop n, d =>
+      (ind d ++ "parfor " ++ ", ".intercalate (showLevels n.ivs n.sizes n.lo n.step)
+        ++ " fork " ++ toString n.parDepth ++ " {")
+        :: n.body.map (fun s => ind (d + 1) ++ showNestStmt s ++ ";")
+        ++ [ind d ++ "}"]
 
 def renderAll : List ParProg → Nat → Nat → List String
   | [],      _, _ => []
@@ -115,6 +171,14 @@ syntax "%" num " := " term : impStmt
 syntax "%" ident " := " "[" term "]" : impStmt
 /-- `%name := e` — assignment to a named register. -/
 syntax "%" ident " := " term : impStmt
+/-- `%i := [A, e]` — a **data-dependent** load: the cell of the range `A` at index `e`. `[l]` names
+a cell by address, this one by range and index, which is the pair `ParProg.loadAt` takes. The index
+wraps on `A.len`, so the access is confined to `A` (`ArrRef.addr_mem_cells`). -/
+syntax "%" num " := " "[" term ", " term "]" : impStmt
+/-- `%name := [A, e]` — the same, into a named register. -/
+syntax "%" ident " := " "[" term ", " term "]" : impStmt
+/-- `[A, e] := e'` — a data-dependent store. -/
+syntax "[" term ", " term "]" " := " term : impStmt
 /-- One thread of a `parallel`: a braced, `;`-separated group. -/
 syntax "{" sepBy1(impStmt, "; ") "}" : impThread
 /-- `parallel {…} | {…}` — one thread per group. -/
@@ -134,10 +198,19 @@ syntax "parfor " ident " in " term:max impThread : impStmt
 syntax "parfor " ident " in " term:max impThread " :: " str : impStmt
 /-- `parallel {…} | {…} :: "name"` — a named parallel block. -/
 syntax "parallel " sepBy1(impThread, "| ") " :: " str : impStmt
+/-- `{…} :: "name"` — a named region that is not a fork, which is `ParProg.label` in general.
+`parallel` and `parfor` carry their own `::`; this is the form for everything else. -/
+syntax "{" sepBy1(impStmt, "; ") "}" " :: " str : impStmt
 /-- `synchronize` — end the phase. Statements before and after are never grouped into one fork.
 This reserves `synchronize` project-wide, so no declaration may be named it; the constructor
 `ParProg.synchronize` is unaffected. -- ref: `CLAUDE.md` § Surface-syntax tokens are global -/
 syntax "synchronize" : impStmt
+
+/-- `print [items]` — output, erased from both interpreters. The items are a Lean term rather than a
+surface list: this is the Lean form of the constructor, and `.prl` text is where `print k` is spelled
+the short way. Reserving `print` is why the `.prl` printer is `toPrl`.
+-- ref: `CLAUDE.md` § Surface-syntax tokens are global -/
+syntax "print " term : impStmt
 
 /-- A `;`-separated group of statements, as a single `ParProg`. -/
 syntax "paralever " "{" sepBy1(impStmt, "; ") "}" : term
@@ -150,7 +223,14 @@ partial def expandProg : TSyntax `impStmt → MacroM (TSyntax `term)
   | `(impStmt| % $i:num := $e:term)     => `(ParProg.set $i $e)
   | `(impStmt| % $x:ident := [$l:term]) => `(ParProg.load $x $l)
   | `(impStmt| % $x:ident := $e:term)   => `(ParProg.set $x $e)
+  | `(impStmt| % $i:num := [$a:term, $e:term])   => `(ParProg.loadAt $i $a $e)
+  | `(impStmt| % $x:ident := [$a:term, $e:term]) => `(ParProg.loadAt $x $a $e)
+  | `(impStmt| [$a:term, $e:term] := $v:term)    => `(ParProg.storeAt $a $e $v)
   | `(impStmt| synchronize)                   => `(ParProg.synchronize)
+  | `(impStmt| print $is:term)                => `(ParProg.print $is)
+  | `(impStmt| { $[$ss];* } :: $nm:str) => do
+      let body ← ss.mapM expandProg
+      `(ParProg.label $nm (ParProg.block [$[$body],*]))
   | `(impStmt| for $i:ident in $n:term { $[$ss];* }) => do
       let body ← ss.mapM expandProg
       `(ParProg.block ((List.range $n).map (fun $i => ParProg.block [$[$body],*])))

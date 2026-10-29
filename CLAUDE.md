@@ -31,17 +31,27 @@ reader would otherwise have to guess at.
 
 ```bash
 lean Paralever/Core/ParM.lean        # typecheck one file, fast, no deps needed
-lake build                           # full build (Mathlib + iris — slow, needs disk)
+lake build                           # full build (Mathlib — slow, needs disk)
 lake exe cache get                   # fetch Mathlib oleans before a first full build
 grep -rn "sorry" Paralever/          # the no-sorry gate
-lake exe paralever --help            # the command line: check, run, autopar, prove, convert
+lake exe paralever --help            # the command line: check, run, autopar, prove, vc, convert
+PARALEVER_SMT=path/to/z3 lake exe paralever vc F.prl --solve   # the obligation, via a solver
 ```
 
 `paralever prove FILE -o OUT.lean` writes a Lean module that re-reads `FILE` while it elaborates
 and states what holds of it — `par_seq_eq` when `wfB` accepts, the per-heap equivalence when only
 the exact check does, and the two refusals when there is a race. See `docs/cli.md`.
 
-Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib + iris pinned to `v4.34.0`.
+`paralever vc FILE` emits the same independence obligation as SMT-LIB, for what `wfB` refuses
+because its footprint is over-approximated. **An external solver's `unsat` is not a Lean proof**, so
+it is reported as *discharged by* the named solver and never as proved; a `sat` is recomputed in
+Lean before it is believed. No solver is a build dependency. See `docs/smt-vc.md`.
+
+Toolchain `leanprover/lean4:v4.34.0` (see `lean-toolchain`); Mathlib pinned to `v4.34.0`.
+
+Version **`1.34.0`** — our minor is Lean's minor. It is declared once, in `lakefile.toml`, and
+`Paralever/Version.lean` reads it from there with `include_str`; never write a version literal
+anywhere else. `#guard versionMinor == Lean.version.minor` fails the build if the two drift.
 
 ## Surface-syntax tokens are global
 
@@ -55,6 +65,10 @@ impossible but leaves `ParProg.synchronize` and `.synchronize` usable, because a
 a namespace is lexed as one token. So the keyword is spelled as the user expects and only the bare
 name is spent — which is the trade to check before reserving a word.
 
+`print` is the trade taken deliberately: `syntax "print " term : impStmt` reserves it, so the `.prl`
+writer in `Lang/Compile/Print.lean` is **`toPrl`**, not `print`. A new keyword costs one bare name;
+pick it knowing which one.
+
 ## Mathlib import policy
 
 Never `import Mathlib`. Import the specific module a lemma lives in
@@ -64,19 +78,25 @@ at all; keep it that way as long as possible so `lean <file>.lean` stays a fast 
 
 ## Dependencies
 
-**iris-lean only**, plus Mathlib. `ProofWidgets` ships with Mathlib and is imported by
-`Search/ExplainHtml.lean` alone — but building it runs `npm clean-install`, so that one module makes
-node/npm a build requirement. `Search/Explain.lean` renders the same report with no dependency; see
-`docs/race-search.md`. Everything else is ideas, not imports (Velvet, Veil, Loom,
-SyDPaCC, lean-smt are read for design, never required).
+**Mathlib only.** `ProofWidgets` ships with Mathlib and is imported by `Search/ExplainHtml.lean`
+alone — but building it runs `npm clean-install`, so that one module makes node/npm a build
+requirement. `Search/Explain.lean` renders the same report with no dependency; see
+`docs/race-search.md`. Everything else is ideas, not imports (Iris, Velvet, Veil, Loom, SyDPaCC,
+lean-smt, CSLib are read for design, never required). An SMT solver is **optional and external**:
+`paralever vc --solve` finds z3 or cvc5 at run time, nothing links against one, and `lake build` is
+green on a machine with none.
 
-From iris-lean we take `Iris/BI/*`, `Iris/ProofMode/*`, and `Iris/Algebra/{Heap,GenMap,DFrac}` —
-instantiating `Iris.BI` at our own `State → Prop` buys ~35 proof-mode tactics for one `instance`.
+**No separation-logic library, and that is a decision.** `Logic/Rules.lean` frames with plain `∧`
+over `Core/Access.lean`'s own footprints, because a separating conjunction splits the heap into
+disjoint domains and `Indep` does not — Bernstein permits two threads to *read* one cell, so `∗` is
+strictly narrower than the relation the project is about. A BI instance therefore buys notation and
+tactics for an assertion type no theorem here uses. The iris-lean dependency that proved this was
+removed once it had; `docs/theory.md` § 8 keeps the finding.
 
-Do **not** import `Iris/ProgramLogic/*` or `Iris/HeapLang/*`. Reasons in `PLAN.md`: HeapLang's
-`par` is derived from unstructured `fork`, HeapLang is nondeterministic in allocation/prophecies,
-it has no arrays, `wp_par` is unary so cannot express equivalence, and that subtree churns weekly.
-Read `HeapLang/Lib/{Par,Spawn,Quicksort}` as templates; never depend on them.
+Do **not** depend on a HeapLang-style program logic. HeapLang's `par` is derived from unstructured
+`fork`, it is nondeterministic in allocation/prophecies, it has no arrays, and `wp_par` is unary so
+cannot express an equivalence. Read `HeapLang/Lib/{Par,Spawn,Quicksort}` as templates; never depend
+on them.
 
 ## Facts you must not forget
 
@@ -119,10 +139,14 @@ programs, and `wrong` on random racy ones.
 ## Layout
 
 ```
+Diag.lean    diagnostics: a code, a span, a reason, and the caret rendering. Its own library,
+             below both front ends — see docs/diagnostics.md
 Paralever/
+  Version.lean  the one version, read out of `lakefile.toml` (`--version`, the Lean-minor guard)
   Core/      ParM.lean, Semantics (State, step, Reaches), Access (footprints, Indep)
   Theory/    Decomposition, WellFormedCanonical, Sequentialize (the theorem), Intervals
-  Logic/     Tier-2 DCSL-lite (BIInstance, Rules — Hoare triples, frame, par composition)
+  Logic/     Tier-2 DCSL-lite (Rules — Hoare triples, frame, par composition, framed
+             with `∧` over footprints rather than with `∗`)
   Lib/       Compose (bind lemmas), TypedRead (Storable α), TouchesOnly, Notation, FootprintSimp,
              ArrRef (array-shaped locations over bare `Loc`, `disjoint_of_range`),
              Loop (the indexed read/write loop validator, proved once, plus `#parallel_for`),
@@ -148,18 +172,42 @@ Paralever/
 Lang/         the paralever language and the `.prl` file in front of it — see docs/prl.md
   Core/      Prog (the `ParProg` AST, both interpreters, `wfB`, `par_seq_eq`; loadAt/storeAt —
              computed addresses; ifElse + whileAtMost — control flow; synchronize — a barrier
-             the parallelizer may not cross; footprint over-approximated, see docs/block-ir.md),
+             the parallelizer may not cross; print — output, erased from both interpreters and a
+             barrier too, with `dropPrints` and `execPar_dropPrints`, see docs/print.md;
+             footprint over-approximated, see docs/block-ir.md),
              Layout (buffers, placement, lifetimes — `Arena.of`, `live_disjoint`),
-             Kernels, Cuda, Cost, Exec (real threads), Notation (`[l]` memory, `%n` register,
-             `if`, `while … in`, `synchronize`), Analysis (dependences, `atoms` — register-closed
+             Heaps (the general-heap race search: which cells to probe, which values, and the
+             two `HeapVerdict`s — see docs/general-heap.md),
+             Agree (`AgreeOn` — two programs' outcomes compared on named cells, and
+             `agreeOn_of_wfB`, which is `par_seq_eq` on each side plus one run of
+             each; what `assert` means. `AgreeParSeq` — the same with the final
+             register file, the pair `ParSeqEq` quantifies rather than its heap
+             half; what `assertParSeq` means, and the registers compared are
+             derived, not named — see docs/equivalence.md),
+             Kernels, Cuda, Cost, Exec (real threads), Notation (`[l]` memory, `[A, e]` a
+             computed cell, `%n` register, `if`, `while … in`, `synchronize`, `{…} :: "name"` —
+             every ParProg constructor has a form, see docs/prl.md § The Lean form), Analysis (dependences, `atoms` — register-closed
              segments, `phases` — split at every barrier, `autoPar`), AutoParSound (the rewrite
              preserves the heap — see docs/autopar.md)
-  Compile/   Ast + Parse (`.prl` text; a newline or `;` separates statements), Lower (names,
-             placement, lifetimes, unrolling → Layout × ParProg), Print (`.prl` back out, the
-             Lean block, ANSI colour)
+  Compile/   Ast + Parse (`.prl` text; a newline or `;` separates statements), Expand (`def`
+             written out at every call site, hygienically — see docs/prl.md § Functions), Lower
+             (names, placement, lifetimes, unrolling, `input` consumed → Layout × ParProg; an
+             `assert` compiled twice, once per side — see docs/equivalence.md), Input (the
+             stdin stream and `File.usesInput` — see docs/prl.md § Input), Print (`.prl` back out,
+             the Lean block, ANSI colour)
+  Smt/       the independence obligation for an external solver — Ast (SMT-LIB terms and the
+             query), Vc (registers substituted away, the symbolic footprint, one query per fork),
+             Solve (solver discovery, the answer, and `witness` — a `sat` recomputed in Lean),
+             Report (what `vc` prints and the `.smt2` it writes). `unsat` is *discharged by* a
+             solver, never proved — see docs/smt-vc.md
   Load.lean    `prl_file` — read and compile a file while Lean elaborates
-  Report.lean  the `#eval` views: check, run, race, autoparallelize
-MLIR/        the other front end: Ast + Parse (MLIR generic form), Affine (map evaluation),
+  Verdict.lean the two-part verdict both reports print — `this heap` and `any heap`, so `check`
+               and `vc` cannot disagree
+  Report.lean  the `#eval` views: check, run, race, autoparallelize, and what `print` wrote
+MLIR/        the other front end: Ast + Parse (MLIR generic form), Pretty (MLIR custom form —
+             `affine.for %i = 0 to 8`, desugared to the generic `Op`; `parseAny` picks the reader,
+             `parseFunctions` reads one function of twenty — see docs/mlir-pretty.md),
+             Affine (map evaluation),
              Lower (Mlir.Op → Layout × ParProg, the verdict path, over Int),
              Eval (the same program over ℚ, the reference for differential execution),
              Load (`mlir_prog` — quote the lowered program at elaboration time, as `prl_file` does),
@@ -167,7 +215,8 @@ MLIR/        the other front end: Ast + Parse (MLIR generic form), Affine (map e
              ops closed by the await that names their tokens; `emitRoundTrips` compares memory,
              footprint, verdict and heap, not the tree — registers are not SSA values),
              Corpus (the seven labelled pilots in Examples/Mlir/*.mlir, as #guard gates, each
-             race-free one carrying its `par_seq_eq` instance)
+             race-free one carrying its `par_seq_eq` instance, plus the two custom-form pilots
+             gated against their generic twins)
              — see docs/mlir.md
 Examples/    every demonstrable thing in one tree, with the .prl and .mlir sources beside the
              Lean that reads them — see Examples/README.md. No module docstring headers here
@@ -175,8 +224,11 @@ Examples/    every demonstrable thing in one tree, with the .prl and .mlir sourc
   Tour.lean    the whole project on one program: write, check, prove, break, autoparallelize
   Programs/    the method on real algorithms — SharedReads, MapArray, SumArray, RowSums,
                CompareSwap, MergeSort, MatMul, SortBatches, OpaqueAgents, Pipeline
-  Language/    the nine *.prl files, plus Files (all nine read by `prl_file`), Writing,
-               ControlFlow, Scatter, NeuralNet
+  Language/    the *.prl files, plus Files (ten read by `prl_file`, branch.prl among them
+               — the `Inconclusive` witness), Writing, ControlFlow, Scatter, Stripe, NeuralNet,
+               Functions (def), Equivalence (assert: equiv.prl and twofold.prl),
+               Input (input.prl, which reads the shell, so Lean compiles it from text with the
+               stream supplied)
   Mlir/        the seven *.mlir pilots, plus Files (one lowered end to end, and the corpus report)
   Scale/       matmul12.prl and the 14,451-line matmul12.mlir it emits — the command line's
                ceiling, measured; no Lean module reads it (see docs/mlir.md § Scale)
@@ -188,10 +240,25 @@ Tool/        the `paralever` command line, as a lib (not `Cli`: Mathlib depends 
              that name) — Run (the commands, the option grammar, reading either front end),
              Proof (the Lean module `prove` writes, and which of the three theorems it carries)
              — see docs/cli.md
-Test/        Sanity, AccessSanity, RaceSearch, Lang, Tool, Tactic
+Bench/       the evaluation harness as a lib plus the `paralever-bench` exe — Manifest (the corpus
+             as data: 19 .prl + the 9 MLIR pilots, each with two labels and a justification),
+             Verdict (the taxonomy and the matrices, called *by* MLIR/Corpus.lean), Run (one kernel
+             → a Row, every number from code that already exists), Time (the only IO.monoMsNow in
+             the repo), Scale (the rolled-against-unrolled cost curve: two texts per size, written
+             and elaborated), Report — see docs/bench.md
+Test/        Sanity, AccessSanity, RaceSearch, Lang, Tool, Tactic, Heaps (the general-heap
+             search and the two-part verdict), Print (the surface, the erasure, and that the
+             output walk leaves the heap the interpreter does), Smt (what the VC decides in
+             Lean, what is left for a solver, and that the gap it closes is real — no guard runs a
+             solver), Diag (the code registry and
+             the rendered caret, with every code reached from a .prl file), LeanForm (three .prl
+             files written by hand in Lean and gated against the compiled file), Stress (shapes
+             generated as text, each gated against a closed form — see docs/scale.md)
 docs/        design rationale (program-model.md, semantics.md, access.md, theory.md,
-             opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md,
-             race-search.md, layout.md, autopar.md, mlir.md, website.md, ...)
+             general-heap.md, print.md,
+             opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md, strings.md, smt-vc.md,
+             diagnostics.md, race-search.md, layout.md, autopar.md, equivalence.md,
+             mlir.md, scale.md, website.md, ...)
 index.html   the published site's cover; `web/` its pages, `slides/` the deck
 web/         concept, language, autopar, races, mlir, cli, lean + css/site.css,
              js/site.js, snippets/ (the 22 verso-snippets files) and

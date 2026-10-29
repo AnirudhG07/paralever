@@ -1,0 +1,11 @@
+-- Uppercase a line of standard input, one thread per byte.
+--   echo "hello, world" | paralever run input.prl
+-- A string is a buffer of UTF-8 bytes (docs/strings.md), so the threads write distinct cells and
+-- `wfB` accepts. Branch-free: `%lower` is 1 exactly on 'a'..'z', so no thread has a path.
+buf s[16] = input str
+
+parfor i in 16 {
+  %c := s[i]
+  %lower := (%c >= 97) && (%c <= 122)
+  s[i] := %c - (32 * %lower)
+} :: "upcase"

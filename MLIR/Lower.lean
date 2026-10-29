@@ -1,9 +1,10 @@
 import MLIR.Affine
 import MLIR.Scalar
-import MLIR.Parse
+import MLIR.Pretty
 import Lang.Core.Exec
 import Lang.Core.Layout
 import Paralever.Search.RaceSearch
+import Lang.Core.Roll
 
 /-! # `Mlir.Op → Layout × ParProg`
 
@@ -47,6 +48,16 @@ def memrefOf? : MTy → Option (List Nat × MTy)
   | .memref ds e => some (ds, e)
   | _            => none
 
+/-- A cell of `State` holds one scalar, so a memref of vectors or of an opaque type has no shape to
+place: the refusal is here rather than in the reader, which keeps such a type verbatim so the file
+still parses. -- ref: `docs/mlir-pretty.md` -/
+def scalarElt (what : String) : MTy → Except String MTy
+  | .index   => .ok .index
+  | .int w   => .ok (.int w)
+  | .float w => .ok (.float w)
+  | t        => .error s!"{what}: element type {renderTy t} is not a scalar, so one cell cannot \
+                          hold one element"
+
 /-- Whether an element type is floating point, which is what makes a buffer's values rational. -/
 def isFloatTy : MTy → Bool
   | .float _ => true
@@ -71,14 +82,21 @@ def declOf (o : Op) : Except String (Option BufDecl) :=
       match o.symAttr? "sym_name", o.tyAttr? "type" with
       | some nm, some t =>
           match memrefOf? t with
-          | some (ds, e) => .ok (some ⟨⟨nm, ds, initOf ds (o.attr? "initial_value")⟩, e⟩)
+          | some (ds, e) => do
+              let e ← scalarElt s!"memref.global '{nm}'" e
+              .ok (some ⟨⟨nm, ds, initOf ds (o.attr? "initial_value")⟩, e⟩)
           | none         => .error s!"memref.global '{nm}' has a non-memref type"
       | _, _ => .error "memref.global without sym_name and type"
   | "memref.alloc" | "memref.alloca" =>
       match o.results, o.resultTys with
       | [r], [t] =>
           match memrefOf? t with
-          | some (ds, e) => .ok (some ⟨⟨r, ds, []⟩, e⟩)
+          | some (ds, e) => do
+              let e ← scalarElt s!"{o.name} '%{r}'" e
+              -- `%0` is a legal SSA name and not a legal buffer name, and `to-prl` has to print
+              -- something a reader takes back. -- ref: docs/mlir-pretty.md
+              let nm := if (r.toList.head?).any (fun c => c.isAlpha || c == '_') then r else "v" ++ r
+              .ok (some ⟨⟨nm, ds, []⟩, e⟩)
           | none         => .error s!"{o.name} result is not a memref"
       | _, _ => .error s!"{o.name} must have exactly one result and one result type"
   | _ => .ok none
@@ -96,8 +114,9 @@ partial def collectOp (o : Op) : Except String (List BufDecl) := do
           r.args.mapM fun (nm, t) =>
             match memrefOf? t with
             | some (ds, e) => .ok (⟨⟨nm, ds, []⟩, e⟩ : BufDecl)
-            | none => .error s!"function parameter '%{nm}' has type {renderTy t}; only memref \
-                               parameters are supported"
+            | none => .error s!"function parameter '%{nm}' has type {renderTy t}; a parameter has \
+                               to be a memref with a static shape, since it is the buffer the \
+                               caller handed over and it has to be placed"
       | none => .error "func.func without a single region"
     else .ok []
   let inner ← collectRegions o.regions
@@ -225,6 +244,9 @@ def one (st : LSt) (o : Op) : Except String SVal :=
 def bindResult (o : Op) (st : LSt) (s : SVal) : Except String LSt :=
   match o.results with
   | [r] => .ok (st.bind r s)
+  -- an operation whose result nobody names still happens: a load with no reader is a read, and its
+  -- footprint is what the verdict is about. -- ref: `docs/mlir-pretty.md`
+  | []  => .ok st
   | _   => .error s!"{o.name} must have exactly one result"
 
 /-! ## Addresses
@@ -292,6 +314,91 @@ def nonAffineIndex (o : Op) (nm : String) (idxOps : List String) (st : LSt) :
   | [v] => (← st.get v).toAExp
   | _   => .error s!"{o.name} on '{nm}': a computed subscript is supported for \
                      one-dimensional memrefs only"
+
+/-! ## Rolling an affine nest
+
+`subscript` above turns a map into a *literal* because the unrolled route hands it constant
+indices. A rolled nest hands it the loop coordinates instead, so the same map has to be read
+symbolically — this is that reading, and `Lang/Core/Roll.lean` is the algebra it lands in.
+-- ref: `docs/loops.md` § Rolling -/
+
+/-- An affine expression as a linear form over the nest's coordinates, given a form per dimension
+and per symbol. `floordiv`, `ceildiv`, `mod` and a product of two coordinates are not linear and
+have none; each is a refusal, and the unrolled route still reads the op. -/
+def linearOf (dims syms : List Roll.Lin) (d : Nat) : AffExp → Option Roll.Lin
+  | .dim n   => dims[n]?
+  | .sym n   => syms[n]?
+  | .const k => some (Roll.Lin.const d k)
+  | .add a b => do pure (Roll.Lin.add (← linearOf dims syms d a) (← linearOf dims syms d b))
+  | .sub a b => do pure (Roll.Lin.sub (← linearOf dims syms d a) (← linearOf dims syms d b))
+  | .mul a b => do Roll.Lin.mul (← linearOf dims syms d a) (← linearOf dims syms d b)
+  | _        => none
+
+/-- A loop's trip count, from constant bounds. `LoopNest.sizes` is `List Nat`, so a rolled nest
+removes the *cost* of a large trip count and not the need for it to be a literal — the
+non-constant-bound refusal stands either way. -- ref: `docs/loops.md` -/
+private def tripCount (lo hi step : Int) : Option Nat :=
+  if step ≤ 0 || hi ≤ lo then none else some ((hi - lo + step - 1) / step).toNat
+
+/-- Ops that carry no statement and end a region. -/
+private def stripYield (ops : List Op) : List Op :=
+  ops.filter (fun o => o.name != "affine.yield" && o.name != "func.return")
+
+/-- **The perfect nest a loop op opens**: one level per `affine.for`, one per induced dimension of
+an `affine.parallel`, the SSA name of each level's induction variable, and the innermost body. -/
+private partial def peelAffine (base : Reg) (k : Nat) (ops : List Op) :
+    Option (List Roll.Level × List (String × Nat) × List Op) :=
+  match stripYield ops with
+  | [o] =>
+      if o.name == "affine.for" then
+        match o.body?, boundsOf o ["lowerBound", "lowerBoundMap"],
+              boundsOf o ["upperBound", "upperBoundMap"] with
+        | some r, some [lo], some [hi] => do
+            let n ← tripCount lo hi ((o.intAttr? "step").getD 1)
+            match r.args with
+            | [(v, _)] => do
+                let (ls, ivs, b) ← peelAffine base (k + 1) r.ops
+                some (⟨base + k, n, lo, (o.intAttr? "step").getD 1, false⟩ :: ls,
+                      (v, k) :: ivs, b)
+            | _ => none
+        | _, _, _ => none
+      else if o.name == "affine.parallel" then
+        match o.body?, boundsOf o ["lowerBoundsMap", "lowerBoundsGroups"],
+              boundsOf o ["upperBoundsMap"] with
+        | some r, some los, some his => do
+            guard (los.length == his.length && r.args.length == los.length)
+            let steps := (o.intsAttr? "steps").getD (los.map (fun _ => 1))
+            let here ← (List.range los.length).mapM fun j => do
+              let sp := steps.getD j 1
+              let n ← tripCount (los.getD j 0) (his.getD j 0) sp
+              some (⟨base + k + j, n, los.getD j 0, sp, true⟩ : Roll.Level)
+            let names := (r.args.map Prod.fst).zipIdx.map (fun (v, j) => (v, k + j))
+            let (ls, ivs, b) ← peelAffine base (k + los.length) r.ops
+            some (here ++ ls, names ++ ivs, b)
+        | _, _, _ => none
+      else some ([], [], [o])
+  | bs => some ([], [], bs)
+
+/-- **The access an affine subscript names**, as a rolled nest declares it: the map read
+symbolically over the loop coordinates, then collapsed row-major against the memref's shape. An
+index operand that is neither a loop coordinate nor a constant has no form, which is the
+heap-dependent subscript `wfB` refuses in any case. -/
+private def affAccessOf (C : LCtx) (ivs : List (String × Nat)) (d : Nat) (st : LSt)
+    (o : Op) (nm : String) (idxOps : List String) : Option Nest.AffAccess := do
+  let m := accessMap o idxOps.length
+  guard m.wellScoped
+  guard (idxOps.length == m.dims + m.syms)
+  let args ← idxOps.mapM fun v =>
+    match ivs.lookup v with
+    | some k => some (Roll.Lin.coord d k)
+    | none   =>
+        match st.find? v with
+        | some (.num (.int x)) => some (Roll.Lin.const d x)
+        | _                    => none
+  let ls ← m.results.mapM (linearOf (args.take m.dims) (args.drop m.dims) d)
+  let p ← C.L.find? nm
+  guard (ls.length == p.toBuf.shape.length)
+  Roll.affAccess? p.base p.toBuf.size (Roll.rowMajor d p.toBuf.shape ls)
 
 /-! ## The pass -/
 
@@ -391,6 +498,50 @@ partial def lowerIters (C : LCtx) (r : Region) : List Int → LSt →
       let (bs, st'') ← lowerIters C r is st'
       .ok (b :: bs, st'')
 
+/-- **The innermost body as nest statements.** `affine.load` and `affine.store` become the nest's
+accesses; every other op must be pure arithmetic, which the ordinary lowering already turns into an
+`SVal` and no statement — so `arith.mulf`, the casts and `arith.constant` are reused rather than
+re-read. Anything that emits a statement is a fallback. -/
+partial def nestBody (C : LCtx) (ivs : List (String × Nat)) (d : Nat) :
+    List Op → LSt → Option (List NestStmt × LSt)
+  | [],      st => some ([], st)
+  | o :: os, st =>
+      if o.name == "affine.load" then
+        match o.operands with
+        | mr :: idxOps => do
+            let nm ← (st.buf mr).toOption
+            let a ← affAccessOf C ivs d st o nm idxOps
+            let r := st.nextReg
+            let st' ← (bindResult o { st with nextReg := r + 1 } (.exp (.reg r))).toOption
+            let (ss, st'') ← nestBody C ivs d os st'
+            some (.rd r a :: ss, st'')
+        | [] => none
+      else if o.name == "affine.store" then
+        match o.operands with
+        | v :: mr :: idxOps => do
+            let nm ← (st.buf mr).toOption
+            let a ← affAccessOf C ivs d st o nm idxOps
+            let e ← ((← (st.get v).toOption).toAExp).toOption
+            let (ss, st') ← nestBody C ivs d os st
+            some (.wr a e :: ss, st')
+        | _ => none
+      else do
+        let (ps, st') ← (lowerOp C o st).toOption
+        guard ps.isEmpty
+        nestBody C ivs d os st'
+
+/-- **An affine nest, rolled.** `none` falls back to unrolling, which is what every nest below
+`Roll.maxUnroll` points takes in any case. The induction registers are allocated first so a load
+inside the body cannot collide with one. -/
+partial def rollAffine (C : LCtx) (o : Op) (st : LSt) : Option (ParProg × LSt) := do
+  let (levels, ivs, body) ← peelAffine st.nextReg 0 [o]
+  guard (Roll.maxUnroll < Paralever.Box.prodN (levels.map (fun l => l.size)))
+  let dp ← Roll.parPrefix? levels
+  let st1 := ivs.foldl (fun s (v, k) => s.bind v (.exp (.reg (st.nextReg + k))))
+    { st with nextReg := st.nextReg + levels.length }
+  let (bs, st2) ← nestBody C ivs levels.length (stripYield body) st1
+  some (.loop (Roll.nestOf levels dp bs), { st2 with env := st.env })
+
 /-- One operation. Statements it contributes, and the state after it. -/
 partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg × LSt) := do
   match o.name with
@@ -419,7 +570,9 @@ partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg
   -- buffers
   | "memref.alloc" | "memref.alloca" =>
       match o.results with
-      | [r] => .ok ([], st.bind r (.buf r))
+      | [r] =>
+          let nm := if (r.toList.head?).any (fun c => c.isAlpha || c == '_') then r else "v" ++ r
+          .ok ([], st.bind r (.buf nm))
       | _   => .error s!"{o.name} must have exactly one result"
   | "memref.get_global" =>
       match o.symAttr? "name" with
@@ -454,6 +607,25 @@ partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg
   | "arith.minsi" => do let (a, b) ← two st o
                         let (v, st') ← binOp st o.name a b min min .min false
                         .ok ([], ← bindResult o st' v)
+  -- comparison: MLIR's predicate numbering, signed only. The result is `i1` and a cell holds an
+  -- integer, so the `arith.extui` that follows is read as the identity cast it is.
+  | "arith.cmpi" => do
+      let (a, b) ← two st o
+      let bi : (Int → Int → Bool) → Int → Int → Int := fun f x y => if f x y then 1 else 0
+      let bq : (Rat → Rat → Bool) → Rat → Rat → Rat := fun f x y => if f x y then 1 else 0
+      let (fi, fq, mk) ←
+        match o.intAttr? "predicate" with
+        | some 0 => .ok (bi (· == ·), bq (· == ·), (AExp.eq · ·))
+        | some 1 => .ok (bi (· != ·), bq (· != ·), (AExp.ne · ·))
+        | some 2 => .ok (bi (· < ·),  bq (· < ·),  (AExp.lt · ·))
+        | some 3 => .ok (bi (· ≤ ·),  bq (· ≤ ·),  (AExp.le · ·))
+        | some 4 => .ok (bi (· > ·),  bq (· > ·),  (AExp.gt · ·))
+        | some 5 => .ok (bi (· ≥ ·),  bq (· ≥ ·),  (AExp.ge · ·))
+        | some p => .error (s!"arith.cmpi: predicate {p} is unsigned, and a Paralever cell holds " ++
+                            "a signed integer — only predicates 0 to 5 are read")
+        | none   => .error "arith.cmpi without a 'predicate' attribute"
+      let (v, st') ← binOp st o.name a b fi fq mk false
+      .ok ([], ← bindResult o st' v)
   | "arith.addf" => do let (a, b) ← two st o
                        let (v, st') ← binOp st o.name a b (· + ·) (· + ·) .add true
                        .ok ([], ← bindResult o st' v)
@@ -545,6 +717,9 @@ partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg
       | _ => .error "memref.store needs a value, a memref and its indices"
   -- loops
   | "affine.for" =>
+      match rollAffine C o st with
+      | some (p, st') => .ok ([p], st')
+      | none =>
       match o.body?, boundsOf o ["lowerBound", "lowerBoundMap"],
             boundsOf o ["upperBound", "upperBoundMap"] with
       | some r, some [lo], some [hi] => do
@@ -555,6 +730,9 @@ partial def lowerOp (C : LCtx) (o : Op) (st : LSt) : Except String (List ParProg
       | some _, _, _ => .error "affine.for needs constant lowerBound and upperBound maps"
       | none, _, _   => .error "affine.for without a single region"
   | "affine.parallel" =>
+      match rollAffine C o st with
+      | some (p, st') => .ok ([p], st')
+      | none =>
       match o.body?, boundsOf o ["lowerBoundsMap", "lowerBoundsGroups"],
             boundsOf o ["upperBoundsMap"] with
       | some r, some los, some his => do
@@ -586,48 +764,82 @@ structure Lowered where
   /-- Element types, so a report can say which buffers are rational. -/
   decls  : List BufDecl
 
-/-- Functions at module level, looking through `builtin.module`. -/
-partial def funcsOf : List Op → List Op
+/-- Buffers declared outside any function: the module's globals. Collected separately from the
+entry function's own declarations, so that the nineteen functions a real file holds besides the one
+being lowered do not place nineteen buffers. -- ref: `docs/mlir-pretty.md` § One function out of
+twenty -/
+partial def globalsOf : List Op → List Op
   | []      => []
   | o :: os =>
       let here :=
-        if o.name == "func.func" then [o]
+        if o.name == "memref.global" then [o]
         else if o.name == "builtin.module" then
           match o.regions with
-          | [⟨_, inner⟩] => funcsOf inner
+          | [⟨_, inner⟩] => globalsOf inner
           | _            => []
         else []
-      here ++ funcsOf os
+      here ++ globalsOf os
 
-/-- The one function to lower: the only one there is, or the one called `main`. Refusing to choose
-is deliberate — `func.call` is not supported, so concatenating several functions would run code the
-program never runs. -/
-def entryOf (ops : List Op) : Except String Op :=
-  match funcsOf ops with
-  | [f] => .ok f
-  | []  => .error "no func.func in the module"
-  | fs  =>
-      match fs.find? (fun f => f.symAttr? "sym_name" == some "main") with
+/-- The one function to lower: the one named, the only one there is, or the one called `main`.
+Refusing to guess among several is deliberate — `func.call` is not supported, so concatenating
+functions would run code the program never runs. -/
+def entryOf (entry : Option String) (ops : List Op) : Except String Op :=
+  let fs := funcsOf ops
+  let names := fs.map (fun f => (f.symAttr? "sym_name").getD "?")
+  match entry with
+  | some nm =>
+      match fs.find? (fun f => f.symAttr? "sym_name" == some nm) with
       | some f => .ok f
-      | none   =>
-          let names := fs.map (fun f => (f.symAttr? "sym_name").getD "?")
-          .error ("several functions and none called 'main': " ++ ", ".intercalate names)
+      | none   => .error (s!"no function called '{nm}' in this module: "
+                          ++ ", ".intercalate names)
+  | none =>
+      match fs with
+      | [f] => .ok f
+      | []  => .error "no func.func in the module"
+      | _   =>
+          match fs.find? (fun f => f.symAttr? "sym_name" == some "main") with
+          | some f => .ok f
+          | none   =>
+              .error ("several functions and none called 'main', so name one with --func: "
+                      ++ ", ".intercalate names)
 
-/-- **Lower a parsed file.** The buffers are collected first, because addresses are absolute and the
-layout therefore cannot be discovered while lowering. -/
-def lower (ops : List Op) : Except String Lowered := do
-  let decls ← collectOps ops
+/-- **Lower a parsed file**, taking the function named when there is more than one. The buffers are
+collected first, because addresses are absolute and the layout therefore cannot be discovered while
+lowering. -/
+def lowerAt (entry : Option String) (ops : List Op) : Except String Lowered := do
+  let f ← entryOf entry ops
+  let decls ← do
+    let globals ← collectOps (globalsOf ops)
+    let own ← collectOp f
+    .ok (globals ++ own)
   let L := Layout.of (decls.map BufDecl.arr)
   if !L.wfB then
     let names := ", ".intercalate (decls.map (fun d => d.arr.name))
     .error ("layout is ill-formed (duplicate buffer names, or more initial data than cells): "
             ++ names)
-  let f ← entryOf ops
   let (ps, st) ← lowerOp ⟨L, decls⟩ f ⟨[], 0, [], true⟩
   .ok ⟨L, block ps, st.exact, st.notes.reverse, decls⟩
 
-/-- Parse and lower. -/
-def lowerText (src : String) : Except String Lowered := do lower (← parse src)
+/-- The whole module, when it holds one function. -/
+def lower (ops : List Op) : Except String Lowered := lowerAt none ops
+
+/-- Parse — in either form, generic or custom — and lower. Naming a function in a custom-form file
+reads *that function* and not the rest, which is what makes a real test file usable: the nineteen
+functions beside it may hold a reduction or an op outside the vocabulary.
+-- ref: `docs/mlir-pretty.md` § One function out of twenty -/
+def lowerTextAt (entry : Option String) (src : String) : Except String Lowered := do
+  match entry with
+  | some nm =>
+      if looksGeneric src then lowerAt entry (← parseAny src)
+      else
+        match (Pretty.parseFunctions src).find? (fun p => p.1 == nm) with
+        | some (_, r) => lowerAt entry (← r)
+        | none        =>
+            let names := (Pretty.parseFunctions src).map Prod.fst
+            .error (s!"no function called '{nm}' in this module: " ++ ", ".intercalate names)
+  | none => lowerAt none (← parseAny src)
+
+def lowerText (src : String) : Except String Lowered := lowerTextAt none src
 
 /-! ## Verdicts
 

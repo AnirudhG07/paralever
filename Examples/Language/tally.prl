@@ -1,0 +1,49 @@
+-- `assert` compares the named cells of the final heap; `assertParSeq` compares the final register
+-- file as well. Both sides sum X through the same fork and leave the answer in S, and both keep a
+-- tally of the partials they folded. The second peels the last iteration out of the loop and
+-- forgets to count it: the heap is identical and the tally is not, so the claim holds as an
+-- `assert` and fails as an `assertParSeq`. docs/equivalence.md
+
+const n = 4
+
+def counted(Out, P, In, m) {
+  parfor t in m / 2 {
+    %a := In[2 * t]
+    %b := In[2 * t + 1]
+    P[t] := %a + %b
+  } :: "pairs"
+  synchronize
+  %acc := 0
+  %cnt := 0
+  for t in m / 2 {
+    %p := P[t]
+    %acc := %acc + %p
+    %cnt := %cnt + 1
+  }
+  Out[0] := %acc
+}
+
+def miscounted(Out, P, In, m) {
+  parfor t in m / 2 {
+    %a := In[2 * t]
+    %b := In[2 * t + 1]
+    P[t] := %a + %b
+  } :: "pairs"
+  synchronize
+  %acc := 0
+  %cnt := 0
+  for t in m / 2 - 1 {
+    %p := P[t]
+    %acc := %acc + %p
+    %cnt := %cnt + 1
+  }
+  %p := P[m / 2 - 1]
+  %acc := %acc + %p
+  Out[0] := %acc
+}
+
+buf X[4] = 1, 2, 3, 4
+buf P[2] = zeros
+buf S[1] = zeros
+
+assertParSeq counted(S, P, X, n) == miscounted(S, P, X, n) on S

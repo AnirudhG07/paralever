@@ -1,5 +1,6 @@
 import MLIR.Eval
 import MLIR.Load
+import Bench.Verdict
 
 /-! # The labelled corpus, as build gates
 
@@ -23,29 +24,29 @@ numbers the plan asks a corpus report for are `summary`:
 
 namespace Paralever.MLIR.Corpus
 open Paralever Paralever.MLIR
+open Paralever.Bench (Entry)
 
-/-- One benchmark: a name, its source, and the label its filename carries. -/
-structure Entry where
-  name : String
-  src  : String
-  /-- `true` when the filename ends `-yes`, i.e. a race is expected. -/
-  racy : Bool
+/-- One benchmark: a name, its source, and the label its filename carries. The structure is
+`Bench.Entry`, shared with every other corpus, so that one piece of code scores them all --
+`e.item` is the module text. -- ref: `docs/bench.md` -/
+abbrev Entry := Bench.Entry String
 
 /-- The pilots, in the order the report lists them. Each covers a distinct pattern: a `doall`, an
 antidependence, a missing reduction clause, the same reduction done right, a floating-point
 sliding window, a two-dimensional index space, and an indirect access. -/
 def corpus : List Entry :=
-  [ ⟨"doall-no",            include_str "../Examples/Mlir/doall-no.mlir",            false⟩
-  , ⟨"antidep-yes",         include_str "../Examples/Mlir/antidep-yes.mlir",         true⟩
-  , ⟨"reduction-yes",       include_str "../Examples/Mlir/reduction-yes.mlir",       true⟩
-  , ⟨"reduction-split-no",  include_str "../Examples/Mlir/reduction-split-no.mlir",  false⟩
-  , ⟨"stencil-f64-no",      include_str "../Examples/Mlir/stencil-f64-no.mlir",      false⟩
-  , ⟨"nested-2d-no",        include_str "../Examples/Mlir/nested-2d-no.mlir",        false⟩
-  , ⟨"indirect-yes",        include_str "../Examples/Mlir/indirect-yes.mlir",        true⟩ ]
+  [ Bench.entry "doall-no" (include_str "../Examples/Mlir/doall-no.mlir") false
+  , Bench.entry "antidep-yes" (include_str "../Examples/Mlir/antidep-yes.mlir") true
+  , Bench.entry "reduction-yes" (include_str "../Examples/Mlir/reduction-yes.mlir") true
+  , Bench.entry "reduction-split-no" (include_str "../Examples/Mlir/reduction-split-no.mlir") false
+  , Bench.entry "stencil-f64-no" (include_str "../Examples/Mlir/stencil-f64-no.mlir") false
+  , Bench.entry "nested-2d-no" (include_str "../Examples/Mlir/nested-2d-no.mlir") false
+  , Bench.entry "indirect-yes" (include_str "../Examples/Mlir/indirect-yes.mlir") true ]
 
-/-- Parsed and lowered, keeping the ops so the reference interpreter can be run on them. -/
+/-- Parsed — in whichever form the file is written — and lowered, keeping the ops so the reference
+interpreter can be run on them. -/
 def lowered (e : Entry) : Option (List Op × Lowered) :=
-  match parse e.src with
+  match parseAny e.item with
   | .error _ => none
   | .ok ops  =>
       match lower ops with
@@ -57,7 +58,7 @@ def byName (nm : String) : Option (List Op × Lowered) :=
 
 /-! ## 5. The round trip -/
 
-#guard corpus.all (fun e => roundTrips e.src)
+#guard corpus.all (fun e => roundTrips e.item)
 
 /-! ## 1. Expressiveness
 
@@ -66,7 +67,7 @@ what turns "it did not work" into a named op to implement. -/
 
 /-- Op names the lowering has no rule for, per entry. -/
 def missing (e : Entry) : List String :=
-  match parse e.src with
+  match parseAny e.item with
   | .error _ => ["<parse failed>"]
   | .ok ops  => unsupportedOps ops
 
@@ -81,16 +82,16 @@ obligation — so a false negative here is a bug in `raceSites`, not a tuning ma
 /-- The tool's answer: is this program racy? -/
 def detected (e : Entry) : Option Bool := (lowered e).map (fun p => !p.2.verdictExact)
 
-/-- `(true positives, false positives, false negatives, true negatives)`. -/
-def confusion : Nat × Nat × Nat × Nat :=
-  corpus.foldl
-    (fun (c : Nat × Nat × Nat × Nat) e =>
-      let (tp, fp, fn, tn) := c
-      match detected e with
-      | some true  => if e.racy then (tp + 1, fp, fn, tn) else (tp, fp + 1, fn, tn)
-      | some false => if e.racy then (tp, fp, fn + 1, tn) else (tp, fp, fn, tn + 1)
-      | none       => c)
-    (0, 0, 0, 0)
+/-- The tool's answer over *every* heap, which is the other column `docs/bench.md` asks for:
+`wfB` refusing is a race reported for all heaps, not just this one. -/
+def detectedAnyHeap (e : Entry) : Option Bool := (lowered e).map (fun p => !p.2.verdict)
+
+/-- `(true positives, false positives, false negatives, true negatives)`, from the shared scorer
+rather than a fold written here. -/
+def confusion : Nat × Nat × Nat × Nat := (Bench.confusionOf corpus detected).tuple
+
+/-- The same corpus scored against both checks, plus the gap between them. -/
+def matrices : Bench.TwoMatrices := Bench.twoMatrices corpus detectedAnyHeap detected
 
 #guard confusion == (3, 0, 0, 4)
 #guard corpus.all (fun e => detected e == some e.racy)
@@ -102,14 +103,21 @@ canonical run at one heap. An entry the first rejects and the second accepts is 
 over-approximation, and `indirect-yes` is the shape that normally pays it — here it does not,
 because the program is genuinely racy. -/
 
-/-- Entries rejected syntactically but accepted exactly. -/
-def gap : List String :=
-  (corpus.filter (fun e =>
-    match lowered e with
-    | some (_, r) => !r.verdict && r.verdictExact
-    | none        => false)).map Entry.name
+/-- Entries rejected syntactically but accepted exactly -- `Bench.gapOf` over the two checks. -/
+def gap : List String := Bench.gapOf corpus detectedAnyHeap detected
 
 #guard gap == []
+
+/-! **And the two checks are indistinguishable here.** Scored against `wfB` (every heap) and against
+`verdictExact` (this heap), seven pilots give the same four numbers and an empty gap. That is the
+measurement that makes a larger corpus necessary rather than merely desirable: the precision
+question this project is organised around is invisible at this size. -- ref: `docs/bench.md` -/
+
+#guard matrices.anyHeap == matrices.thisHeap
+#guard matrices.gap == []
+#guard matrices.anyHeap.line == "tp=3 fp=0 fn=0 tn=4"
+#guard matrices.thisHeap.sensitivity == (3, 3)
+#guard matrices.thisHeap.specificity == (4, 4)
 
 /-- Entries whose footprint is a bound rather than the exact set. -/
 def approximated : List String :=
@@ -233,6 +241,52 @@ theorem nested2d_ok (ρ : Regs) (σ : State) :
 #guard ["antidep-yes", "reduction-yes", "indirect-yes"].all
   (fun nm => (byName nm).all (fun p => !p.2.verdict))
 
+/-! ## Custom form
+
+The same two patterns written the way MLIR prints them — `affine.parallel (%i) = (0) to (8)` rather
+than `"affine.parallel"() ({…}) {upperBoundsMap = …}`. `MLIR/Pretty.lean` desugars each construct to
+the operation generic form would have carried, so what is gated here is that the desugaring lands in
+the *same place*: the verdict, the footprint and the values agree with the generic twin, and the
+desugared tree is itself readable by the generic reader. -- ref: `docs/mlir-pretty.md` -/
+
+def prettyCorpus : List Entry :=
+  [ Bench.entry "pretty-doall-no" (include_str "../Examples/Mlir/pretty-doall-no.mlir") false
+  , Bench.entry "pretty-reduce-yes" (include_str "../Examples/Mlir/pretty-reduce-yes.mlir") true ]
+
+def prettyByName (nm : String) : Option (List Op × Lowered) :=
+  (prettyCorpus.find? (fun e => e.name == nm)).bind lowered
+
+-- custom form is custom form: the generic reader stops at the first operation, which is the
+-- reason this module exists
+#guard prettyCorpus.all (fun e => !looksGeneric e.item && (parse e.item).toOption.isNone)
+
+#guard prettyCorpus.all (fun e => (Pretty.parse e.item).toOption.isSome)
+#guard prettyCorpus.all (fun e => (lowered e).isSome)
+#guard prettyCorpus.all (fun e => (missing e).isEmpty)
+
+-- the desugared tree, printed as generic form, is read back unchanged by the generic reader
+#guard prettyCorpus.all (fun e =>
+  match Pretty.parse e.item with
+  | .ok ops  => roundTrips (render ops)
+  | .error _ => false)
+
+-- the label, as for every other entry
+#guard prettyCorpus.all (fun e => detected e == some e.racy)
+
+-- and the same answers as the generic twin, cell for cell
+#guard (prettyByName "pretty-doall-no").map (fun p => p.2.progCells "C")
+        == (byName "doall-no").map (fun p => p.2.progCells "C")
+#guard (prettyByName "pretty-doall-no").map (fun p => p.2.verdict) == some true
+#guard (prettyByName "pretty-reduce-yes").map (fun p => p.2.verdict) == some false
+
+/-- The equivalence, for the race-free one: `mlir_prog` reads either form, so the theorem is stated
+exactly as it is for a generic pilot. -/
+def prettyDoall : Lang.ParProg := mlir_prog "../Examples/Mlir/pretty-doall-no.mlir"
+
+theorem prettyDoall_ok (ρ : Regs) (σ : State) :
+    ParSeqEq (Lang.ParProg.execPar prettyDoall ρ) (Lang.ParProg.execSeq prettyDoall ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
+
 /-- The five numbers, plus a row per benchmark. -/
 def summary : String :=
   let (tp, fp, fn, tn) := confusion
@@ -243,7 +297,9 @@ def summary : String :=
                      ++ " fn=" ++ toString fn ++ " tn=" ++ toString tn
     ++ "\nprecision gap  " ++ toString gap
     ++ "\nover-approx    " ++ toString approximated
-    ++ "\nround trip     " ++ toString (corpus.all (fun e => roundTrips e.src))
-    ++ "\n\n" ++ "\n".intercalate (corpus.map row)
+    ++ "\nround trip     " ++ toString (corpus.all (fun e => roundTrips e.item))
+    ++ "\ncustom form    " ++ toString (prettyCorpus.filter (fun e => (lowered e).isSome)).length
+    ++ "/" ++ toString prettyCorpus.length
+    ++ "\n\n" ++ "\n".intercalate ((corpus ++ prettyCorpus).map row)
 
 end Paralever.MLIR.Corpus

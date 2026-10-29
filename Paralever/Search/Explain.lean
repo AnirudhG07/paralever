@@ -1,3 +1,4 @@
+import Std.Data.HashSet
 import Paralever.Search.RaceSearch
 import Paralever.Lib.Render
 
@@ -79,9 +80,15 @@ def clipNames (nm : LocName) (n : Nat) (ls : List Loc) : String := clipSet n (ls
 /-- `clipStr` on raw locations. -/
 def clipLocs (n : Nat) (ls : List Loc) : String := clipNames rawName n ls
 
-/-- Locations in order of first mention, without repeats. -/
+/-- Locations in order of first mention, without repeats. A set for membership and a reversed
+accumulator: the obvious `if acc.contains l then acc else acc ++ [l]` is quadratic twice over, which
+cost 11.91 s of a 50,000-statement file's check, against 0.27 s now.
+-- ref: docs/scale.md § Where the time went -/
 def nubLocs (ls : List Loc) : List Loc :=
-  ls.foldl (fun acc l => if acc.contains l then acc else acc ++ [l]) []
+  (ls.foldl
+    (fun (p : Std.HashSet Loc × List Loc) l =>
+      if p.1.contains l then p else (p.1.insert l, l :: p.2))
+    ({}, [])).2.reverse
 
 def showLabel (nm : LocName) : Label → String
   | .read l  => "read [" ++ nm l ++ "]"

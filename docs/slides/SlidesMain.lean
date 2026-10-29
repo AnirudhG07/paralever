@@ -30,9 +30,14 @@ def loadTheme : IO CustomTheme := do
   -- stagger.js (per-item reveal fragments for `:::class "steps"` lists) is deliberately
   -- NOT loaded: every slide appears in full, with no staged reveals. To restore the
   -- staggered behaviour, ship it as an asset here and add it back to `extraJs` below.
+  -- autofit.js is loaded: it reshapes reveal's slide box to the window and shrinks a
+  -- slide whose content still overruns it. `extraJs` carries URLs rather than contents,
+  -- so the file ships here and `main` names that URL.
+  -- ref: docs/website.md § The deck's sizes
+  let autofit ← IO.FS.readBinFile (base / "autofit.js")
   return {
     stylesheet     := { filename := "lean.css", contents := ⟨css⟩ },
-    assets         := assets,
+    assets         := assets.push { filename := "assets/autofit.js", contents := autofit },
     -- light theme → light highlight.js theme (not the dark default)
     highlightTheme := HighlightTheme.forRevealTheme "white"
   }
@@ -60,6 +65,6 @@ def main : IO UInt32 := do
   let deckCss ← IO.FS.readFile (base / "paralever.css")
   let config : Config := { cfg theme "slides" with
     extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
-    extraJs  := #[] }
+    extraJs  := #["assets/autofit.js"] }
   discard <| slidesMain config (doc := %doc Slides)
   return 0

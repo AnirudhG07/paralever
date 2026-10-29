@@ -235,33 +235,48 @@ compiles this happily and gives a wrong answer at runtime. Keep as a regression 
 
 ## Dependencies
 
-**iris-lean only** (plus Mathlib — see open question). Everything else is ideas, not imports.
+**Mathlib only.** Everything else is ideas, not imports.
 
-Import: `Iris/BI/*` + `Iris/ProofMode/*` (BI interface and ~35 proof-mode tactics — we instantiate
-`Iris.BI` at our own `ParaProp := State → Prop` with `∗` as disjoint conjunction; one `instance`
-buys the whole proof mode) and `Iris/Algebra/{Heap, GenMap, DFrac}`.
+**The BI question is closed, and the answer was no.** The plan called for instantiating a
+bunched-implications interface at `ParaProp := State → Prop` to get `∗` and a proof mode for one
+`instance`, with the step-indexing modality `▷ := id` as the risk to resolve first. A spike against
+iris-lean resolved it: the instance costs nothing, because a fully proved non-step-indexed `BI` for
+this shape of model already exists upstream — and that is beside the point, because the `∗` it
+provides is *exclusive* separation, strictly narrower than `Indep`, which permits shared reads. The
+dependency was removed once the spike had answered; `docs/theory.md` § 8 keeps the finding, and
+`Logic/Rules.lean` frames with `∧` over `Core/Access.lean`'s footprints, which is what makes its
+parallel rule general rather than narrowed. The fallback plan (hand-roll a minimal BI, ~2 weeks) is
+not needed: no theorem here wants a BI. If read-sharing is ever wanted *inside* a separating
+conjunction, the thing to build is a fractional-permission `∗` over `Core.State`, and nothing
+supplies that off the shelf.
 
-Do **not** import `Iris/ProgramLogic/*` or `Iris/HeapLang/*` — HeapLang's `par` is derived from
-*unstructured* `fork`, HeapLang is nondeterministic in allocation and prophecies (so `⟦C⟧σ` isn't
-even a function), it has no arrays (#526), `wp_par` is unary so it cannot express equivalence, and
-that part of the tree churns weekly (#533, #548, #550, #567). Read `HeapLang/Lib/{Par, Spawn,
+**An SMT solver is optional, external, and never linked.** `paralever vc` emits the independence
+obligation as SMT-LIB and `--solve` discharges it with whatever solver is on the machine (z3, cvc5,
+or `PARALEVER_SMT`); nothing in the tree depends on one and `lake build` is green without any. This
+is the one place where an answer does not come from Lean's kernel, so it is labelled rather than
+claimed: `unsat` is reported as *discharged by* the named solver, `sat` is recomputed in Lean before
+it is believed, and `paralever prove` remains the only path that ends in a checked proof. The
+architecture — generate the obligation, discharge it elsewhere — is what CSLib's Boole does at a
+much larger scale (arXiv 2602.04846). Two things are not done: an invariant over several unknowns
+must be written into the emitted file by hand (`--assume` states only `nonneg`), and a `sat` model is
+not yet replayed as an interleaving, which needs a heap witness. See `docs/smt-vc.md`.
+
+Do **not** depend on a HeapLang-style program logic — HeapLang's `par` is derived from *unstructured*
+`fork`, it is nondeterministic in allocation and prophecies (so `⟦C⟧σ` isn't even a function), it has
+no arrays, and `wp_par` is unary so it cannot express an equivalence. Read `HeapLang/Lib/{Par, Spawn,
 Quicksort}` as *templates*, don't depend on them.
 
-**Risk, resolve first:** iris-lean's `BI` class carries a later modality `▷`; our model isn't
-step-indexed so we set `▷ := id`. Standard ("BI without step-indexing"; cf. Simuliris'
-non-step-indexed Iris), but unvalidated. **Fallback: hand-roll a minimal BI + Aesop rule set
-(~2 weeks).**
+Toolchain: **v4.34.0**, with Mathlib pinned to the same tag. The package version tracks it:
+`1.34.0`, declared in `lakefile.toml` and read from there by `Paralever/Version.lean`, whose
+`#guard` fails the build if the two minors disagree.
 
-Toolchain: 4.31.0 → **4.32.2** (both Mathlib and iris-lean have that tag; already staged in
-`lean-toolchain` and `lakefile.toml`, `lake update` not yet run).
+**Open question:** drop Mathlib too? The plan leans on `List.prod_flatten` (Batteries,
+`Associative`+`LawfulIdentity`, no commutativity needed), `splitLengths`/`flatten_splitLengths`, and
+the fold-duality lemmas in `Mathlib/Data/List/Fold.lean`. Dropping Mathlib means proving those
+ourselves — doable, but real work. `Core/` and `Theory/` already need none of it.
 
-**Open question:** does "only iris-lean" mean dropping Mathlib too? The plan currently leans on
-`List.prod_flatten` (Batteries, `Associative`+`LawfulIdentity`, no commutativity needed),
-`splitLengths`/`flatten_splitLengths`, and the fold-duality lemmas in `Mathlib/Data/List/Fold.lean`.
-Dropping Mathlib means proving those ourselves — doable, but real work.
-
-**Disk:** only ~6 GB free on `/`. A Mathlib build (even via `lake exe cache get`) plus iris will be
-tight. Free space before `lake update`.
+**Disk:** no longer tight — 625 GB free on `/` as of 2026-10-23, and dropping iris-lean returned
+212 MB of fetched package. The original note said ~6 GB, which is stale.
 
 ---
 
@@ -288,7 +303,7 @@ Paralever/
 
 | # | Milestone |
 |---|---|
-| 0 | ✅ Toolchain 4.32.2 + iris. **BI spike** (`▷ := id`) still open — gates Tier-2 only, not the theorem |
+| 0 | ✅ Toolchain 4.34.0. **BI spike** done and the dependency dropped — `∗` is narrower than `Indep` (`docs/theory.md` § 8) |
 | 1 | ✅ `ParM` (no `iter` — dropped, see below) + `Semantics.lean` (`State`, `step`, `Reaches`, `Safe`, race ↦ `wrong`) |
 | 2 | ✅ `Core/Access.lean` — `accesses`/`runSeq` (reference interpreter), `Footprint`, Bernstein `Indep` |
 | 3 | **`par_eq_seq`** — binary, then N-ary, then nested. Plus the anti-vacuity counterexample |

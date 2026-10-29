@@ -65,8 +65,18 @@ def rows (rs : List (List Int)) : Init := fun s =>
   | c :: _ => (rs.map fun r => r.take c ++ List.replicate (c - r.length) 0).flatten
   | []     => rs.flatten
 
+/-- A string's UTF-8 bytes, one per cell, row-major. A string is a *buffer*, not a cell: that is
+what puts its characters at distinct locations, so two threads working on disjoint halves of one
+string are independent by `Layout.disjoint` and `strlen`-shaped kernels have something to be
+parallel over. A character outside ASCII therefore occupies several cells, and a string longer than
+the shape is refused by `Layout.wfB` rather than truncated. -- ref: `docs/strings.md` -/
+def str (s : String) : Init := fun _ => s.toUTF8.toList.map (fun b => Int.ofNat b.toNat)
+
 /-- A bare list of contents reads as `data`, so `buf "CW" [3] [1, 0, -1]` keeps working. -/
 instance : Coe (List Int) Init := ⟨data⟩
+
+/-- A string literal reads as `str`, so `buf "msg" [5] "hello"` keeps the declaration short. -/
+instance : Coe String Init := ⟨str⟩
 
 /-- `buf "C" [6]` (zeros), `buf "W" [2, 6] ones`, `buf "I" [3, 3] eye`,
 `buf "W" [2, 3] (rows [[1, 0, -1], [0, 1, 0]])`. -/
@@ -482,16 +492,31 @@ where
     | _,     [] => []
     | f + 1, ys => ys.take (max n 1) :: go f (ys.drop (max n 1))
 
-/-- One buffer's contents, shaped: a matrix prints a row per line. -/
-def Placed.render (p : Placed) (σ : State) : String :=
-  let cells := (List.range p.toBuf.size).map (fun k => showVal (σ (p.base + k)))
+/-- One buffer's contents, shaped, printing at most `budget` cells — `none` every cell. A matrix
+prints whole rows, so the budget rounds up to a row and never below one.
+-- ref: docs/cli.md § What `run` prints -/
+def Placed.renderUpTo (p : Placed) (σ : State) (budget : Option Nat) : String :=
+  let size := p.toBuf.size
+  let keep := match budget, p.shape with
+    | none,   _      => size
+    | some b, [_, c] => let w := max c 1; min size (max w ((b + w - 1) / w * w))
+    | some b, _      => min size b
+  let left := size - keep
+  let cells := (List.range keep).map (fun k => showVal (σ (p.base + k)))
   let hdr := p.name ++ " " ++ toString p.shape ++ " @" ++ toString p.base ++ "  "
   match p.shape with
   | [_, c] =>
       let rows := (chunk c cells).map (fun r => "[" ++ ", ".intercalate r ++ "]")
+      let rows := if left == 0 then rows
+                  else rows ++ ["… +" ++ toString (left / max c 1) ++ " more rows"]
       hdr ++ "\n".intercalate (rows.zipIdx.map fun (r, i) =>
         (if i == 0 then "" else String.ofList (List.replicate hdr.length ' ')) ++ r)
-  | _ => hdr ++ "[" ++ ", ".intercalate cells ++ "]"
+  | _ =>
+      hdr ++ "[" ++ ", ".intercalate cells
+        ++ (if left == 0 then "" else ", … +" ++ toString left ++ " more") ++ "]"
+
+/-- One buffer's contents, shaped: a matrix prints a row per line. -/
+def Placed.render (p : Placed) (σ : State) : String := p.renderUpTo σ none
 
 /-- **The heap as the buffers you declared.** -/
 def Layout.render (L : Layout) (σ : State) : String :=

@@ -27,7 +27,7 @@ a[3] := (%1 * %1)
 a[4] := (%2 + %3)
 -/
 #guard_msgs in
-#eval IO.println (print chain)
+#eval IO.println (toPrl chain)
 
 /-! ## Step 1 · `units` — cut the chain into register-closed segments
 
@@ -181,6 +181,6 @@ def unsynchronized : ParProg :=
 
 -- the proposal still passes the proved check, and the printed result reads back as itself
 #guard ParProg.wfB (ParProg.autoPar synchronized.prog)
-#guard roundTrips (print { synchronized with prog := ParProg.autoPar synchronized.prog })
+#guard roundTrips (toPrl { synchronized with prog := ParProg.autoPar synchronized.prog })
 
 end Paralever.Examples.AutoPar

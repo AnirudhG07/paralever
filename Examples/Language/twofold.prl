@@ -1,0 +1,57 @@
+-- Two parallel sums of the same eight numbers, sharing one scratch buffer: chunked partials
+-- followed by a serial fold, against a halving tree. Neither is the sequential program; the claim
+-- is that they agree on S, which is the only buffer either was asked about.
+-- They leave P holding different things, which is what `on` is for. docs/equivalence.md
+
+const n = 8
+
+-- four threads, two cells each, then one pass over the four partials
+def chunked(Out, In, P, m) {
+  parfor t in m / 2 {
+    %s := 0
+    for k in 2 {
+      %a := In[t * 2 + k]
+      %s := %s + %a
+    }
+    P[t] := %s
+  } :: "chunks"
+  synchronize
+  %acc := 0
+  for t in m / 2 {
+    %p := P[t]
+    %acc := %acc + %p
+  }
+  Out[0] := %acc
+}
+
+-- three levels, halving each time, with a barrier between them: the partial sums live in P
+def tree(Out, In, P, m) {
+  parfor i in m {
+    %v := In[i]
+    P[i] := %v
+  } :: "copy"
+  synchronize
+  parfor i in m / 2 {
+    %a := P[2 * i]
+    %b := P[2 * i + 1]
+    P[2 * i] := %a + %b
+  } :: "pairs"
+  synchronize
+  parfor i in m / 4 {
+    %a := P[4 * i]
+    %b := P[4 * i + 2]
+    P[4 * i] := %a + %b
+  } :: "quads"
+  synchronize
+  %x := P[0]
+  %y := P[4]
+  Out[0] := %x + %y
+}
+
+buf X[8] = 1, 2, 3, 4, 5, 6, 7, 8
+buf P[8] = zeros
+buf S[1] = zeros
+
+assert chunked(S, X, P, n) == tree(S, X, P, n) on S
+
+print S

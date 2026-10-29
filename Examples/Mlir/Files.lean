@@ -13,7 +13,7 @@ open Paralever Paralever.MLIR
 footprint function, which is why the lowering is a translation rather than an analysis. -/
 
 -- ANCHOR: site-mlir-doall
-def doall : Lang.Compiled := ⟨mlir_layout "doall-no.mlir", mlir_prog "doall-no.mlir", [], []⟩
+def doall : Lang.Compiled := ⟨mlir_layout "doall-no.mlir", mlir_prog "doall-no.mlir", [], [], none⟩
 -- ANCHOR_END: site-mlir-doall
 
 -- the eight iterations become eight threads of one fork, printed back in the surface language
@@ -57,7 +57,7 @@ parallel {
 }
 -/
 #guard_msgs in
-#eval IO.println (Lang.print doall)
+#eval IO.println (Lang.toPrl doall)
 
 /--
 info: doall-no.mlir
@@ -66,13 +66,13 @@ info: doall-no.mlir
   writes    {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
   threads   8
   rounds    3 parallel, 24 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)
+  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (Lang.checkReport "doall-no.mlir" doall)
 
 /--
-info: heap after the run — a .prl program has no print statement, so this is its output
+info: heap after the run — the cells the program left behind, which is most of what it says
 24 cells in 3 buffers, addressed 0 to 23
 NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
 
@@ -101,6 +101,26 @@ takes the canonical schedule and gets 36; the threaded run of the lowered progra
 
 example : Lang.ParProg.wfB (mlir_prog "reduction-yes.mlir") = false := by decide
 
+/-! ## 2b · The same program in MLIR's own syntax
+
+`pretty-doall-no.mlir` is that same elementwise sum written in *custom* form —
+`affine.parallel (%i) = (0) to (8)`, with the subscripts inline — which is what `mlir-opt` prints
+and what people write. `mlir_prog` takes either form (`MLIR.parseAny`), and the custom reader
+desugars each construct to the operation generic form carries, so the lowered program is the same
+one: same footprint, same verdict, same cells. -- ref: `docs/mlir-pretty.md` -/
+
+def prettyDoall : Lang.ParProg := mlir_prog "pretty-doall-no.mlir"
+
+#guard !MLIR.looksGeneric (include_str "pretty-doall-no.mlir")
+#guard (Lang.ParProg.footprintOf prettyDoall).writes
+        == (Lang.ParProg.footprintOf doall.prog).writes
+#guard (Lang.ParProg.footprintOf prettyDoall).reads
+        == (Lang.ParProg.footprintOf doall.prog).reads
+#guard (Corpus.prettyByName "pretty-doall-no").map (fun p => p.2.progCells "C")
+        == (Corpus.byName "doall-no").map (fun p => p.2.progCells "C")
+
+example : Lang.ParProg.wfB prettyDoall = true := by decide
+
 /-! ## 3 · All seven pilots
 
 Seven hand-written files in this directory, each named with the verdict it is expected to get, in
@@ -114,6 +134,7 @@ confusion      tp=3 fp=0 fn=0 tn=4
 precision gap  []
 over-approx    [indirect-yes]
 round trip     true
+custom form    2/2
 
 doall-no  label=race-free  wfB=true  exact=true  sites=0  fp=exact  values=Int  agrees=(some true)
 antidep-yes  label=racy      wfB=false  exact=false  sites=6  fp=exact  values=Int  agrees=(some true)
@@ -122,6 +143,8 @@ reduction-split-no  label=race-free  wfB=true  exact=true  sites=0  fp=exact  va
 stencil-f64-no  label=race-free  wfB=true  exact=true  sites=0  fp=exact  values=ℚ only  agrees=(some false)
 nested-2d-no  label=race-free  wfB=true  exact=true  sites=0  fp=exact  values=Int  agrees=(some true)
 indirect-yes  label=racy      wfB=false  exact=false  sites=3  fp=bound  values=Int  agrees=(some false)
+pretty-doall-no  label=race-free  wfB=true  exact=true  sites=0  fp=exact  values=Int  agrees=(some true)
+pretty-reduce-yes  label=racy      wfB=false  exact=false  sites=7  fp=exact  values=Int  agrees=(some false)
 -/
 #guard_msgs in
 #eval IO.println Corpus.summary

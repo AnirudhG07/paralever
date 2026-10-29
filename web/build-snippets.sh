@@ -63,6 +63,7 @@ GENERATED=$(cat <<'EOF'
 proof-sum|Examples/Language/sum.prl|prove sum.prl — the wfB route
 proof-scatter|Examples/Language/scatter.prl|prove scatter.prl — the per-heap route
 proof-chain|--autopar Examples/Language/chain.prl|prove --autopar chain.prl
+proof-equiv|Examples/Language/equiv.prl|prove equiv.prl — the claim, beside par_seq_eq
 EOF
 )
 

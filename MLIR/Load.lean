@@ -21,7 +21,7 @@ private def readLit (s : TSyntax `str) : TermElabM String := do
   | _ => throwErrorAt s "cannot read {s.getString}"
 
 private def lowerLit (s : TSyntax `str) : TermElabM Lowered := do
-  match parse (← readLit s) with
+  match parseAny (← readLit s) with
   | .error e  => throwErrorAt s "{s.getString}: {e}"
   | .ok ops   =>
       match lower ops with

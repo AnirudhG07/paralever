@@ -230,7 +230,7 @@ end
 
 /-- **The reference run**: the MLIR program evaluated over ℚ, from the declared initial heap. -/
 def Lowered.evalRef (r : Lowered) (ops : List Op) : Except String (Loc → Scalar) := do
-  let f ← entryOf ops
+  let f ← entryOf none ops
   let s ← evalOp ⟨r.layout, r.decls⟩ f ⟨initialHeap r, []⟩
   .ok s.heap
 

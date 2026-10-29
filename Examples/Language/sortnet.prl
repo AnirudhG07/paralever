@@ -1,0 +1,32 @@
+-- Odd-even transposition sort on eight cells: n phases, and inside a phase every comparator
+-- touches a different pair, so the comparators of one phase run at the same time.
+-- A phase's pairs start at 0 on an even phase and at 1 on an odd one, which is why the
+-- comparator count is (n - p % 2) / 2 — folded while the file compiles, since p is a loop
+-- variable and `%` is compile-time modulo. -- ref: docs/prl.md § Functions
+
+const n = 8
+
+-- A[i] and A[j] put in order. Both arms write both cells, so the footprint of the `if` is the
+-- pair whichever way the comparison goes. -- ref: docs/block-ir.md § Control flow
+def cmpswap(A, i, j) {
+  %x := A[i]
+  %y := A[j]
+  if %x > %y {
+    A[i] := %y
+    A[j] := %x
+  } else {
+    A[i] := %x
+    A[j] := %y
+  }
+}
+
+buf A[8] = 5, 3, 8, 1, 7, 2, 6, 4
+
+for p in n {
+  parfor q in (n - p % 2) / 2 {
+    cmpswap(A, 2 * q + p % 2, 2 * q + p % 2 + 1)
+  } :: "phase"
+  synchronize
+}
+
+print A

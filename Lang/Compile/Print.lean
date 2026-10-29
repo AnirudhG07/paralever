@@ -4,7 +4,7 @@ import Paralever.AutoPar.Print
 
 /-! # Printing a compiled file back out
 
-`print` writes `.prl` text, addresses as the buffer names they fall in, and `roundTrips` is the gate
+`toPrl` writes `.prl` text, addresses as the buffer names they fall in, and `roundTrips` is the gate
 on the reader. `toLean` writes the `paralever { … }` block through `AutoPar.surface`, so the Lean
 form has one printer. `highlight` is the same text with ANSI colour, in the editor grammar's token
 classes. Loops and names are gone by now: what prints is the unrolled program `wfB` decides on. -/
@@ -14,6 +14,7 @@ open Paralever Paralever.Lang
 
 -- Structural equality on programs, for the round-trip gate below. Not in the language's own
 -- module: the theory never compares two programs, only runs them.
+deriving instance BEq for Paralever.Lang.PrintItem
 deriving instance BEq for Paralever.Lang.ParProg
 
 /-! ## `.prl` out -/
@@ -28,20 +29,61 @@ def addrStr (L : Layout) (l : Loc) : String :=
   if owners.length == 1 then (L.nameOf l).getD ("[" ++ toString l ++ "]")
   else "[" ++ toString l ++ "]"
 
-/-- The buffer holding this range, for a computed access. -/
+/-- The buffer holding this range, for a computed access: the name alone when the range is the
+whole buffer, and `A[lo..hi]` when it is a slice of one — which is the form that reads back.
+-- ref: `docs/prl.md` § Slices -/
 private def refName (L : Layout) (a : ArrRef) : Option String :=
-  (L.bufs.find? (fun p => p.base == a.base)).map (fun p => p.name)
+  (L.bufs.find? (fun p => p.base ≤ a.base && a.base + a.len ≤ p.base + p.toBuf.size)).map
+    fun p =>
+      if p.base == a.base && a.len == p.toBuf.size then p.name
+      else
+        let lo := a.base - p.base
+        p.name ++ "[" ++ toString lo ++ ".." ++ toString (lo + a.len) ++ "]"
 
-/-- An expression, in the `.prl` grammar. -/
+/-- Whether an expression answers in `0`/`1`, so that a `min` of two of them is an `&&` rather than
+a numeric minimum. Syntactic, and only ever used to choose a spelling. -/
+def isCond : AExp → Bool
+  | .lt _ _  => true
+  | .eq _ _  => true
+  | .not _   => true
+  | .min a b => isCond a && isCond b
+  | .max a b => isCond a && isCond b
+  | _        => false
+
+/-- An expression, in the `.prl` grammar. The derived conditions are printed as what they were
+written as — `!(a < b)` as `a >= b`, a `min` of two conditions as `&&` — so a program read back is
+the program as typed. -- ref: `docs/prl.md` § Conditions -/
 def expStr : AExp → String
+  | .not (.lt a b) => "(" ++ expStr a ++ " >= " ++ expStr b ++ ")"
+  | .not (.eq a b) => "(" ++ expStr a ++ " != " ++ expStr b ++ ")"
+  | .min a b => if isCond a && isCond b
+                then "(" ++ expStr a ++ " && " ++ expStr b ++ ")"
+                else "min(" ++ expStr a ++ ", " ++ expStr b ++ ")"
+  | .max a b => if isCond a && isCond b
+                then "(" ++ expStr a ++ " || " ++ expStr b ++ ")"
+                else "max(" ++ expStr a ++ ", " ++ expStr b ++ ")"
   | .lit n   => toString n
   | .reg r   => "%" ++ toString r
   | .add a b => "(" ++ expStr a ++ " + " ++ expStr b ++ ")"
   | .sub a b => "(" ++ expStr a ++ " - " ++ expStr b ++ ")"
   | .mul a b => "(" ++ expStr a ++ " * " ++ expStr b ++ ")"
   | .div a b => "(" ++ expStr a ++ " / " ++ expStr b ++ ")"
-  | .min a b => "min(" ++ expStr a ++ ", " ++ expStr b ++ ")"
-  | .max a b => "max(" ++ expStr a ++ ", " ++ expStr b ++ ")"
+  -- `a <= b` is `b >= a` and `a > b` is `b < a`: the relation survives, the side it is written
+  -- from is whichever has no constructor of its own.
+  | .lt a b  => "(" ++ expStr a ++ " < " ++ expStr b ++ ")"
+  | .eq a b  => "(" ++ expStr a ++ " == " ++ expStr b ++ ")"
+  | .not a   => "!(" ++ expStr a ++ ")"
+
+/-- One `print` item, in `.prl` spelling. The name travels inside the item, so this needs no
+`Layout`: a print is erased from the program, and an erased statement cannot be re-resolved. -/
+def itemStr : PrintItem → String
+  | .text t        => "\"" ++ t ++ "\""
+  | .exp e         => expStr e
+  | .buf nm _ _    => nm
+  | .at nm _ e     => nm ++ "[" ++ expStr e ++ "]"
+  | .cell nm idx _ =>
+      if idx.isEmpty then nm
+      else nm ++ "[" ++ ", ".intercalate (idx.map toString) ++ "]"
 
 mutual
 
@@ -67,6 +109,15 @@ partial def stmtLines (L : Layout) (d : Nat) : ParProg → List String
       (ind d ++ "if " ++ expStr c ++ " {") :: stmtLines L (d + 1) t
         ++ (if eb.isEmpty then [ind d ++ "}"] else (ind d ++ "} else {") :: eb ++ [ind d ++ "}"])
   | .synchronize         => [ind d ++ "synchronize"]
+  | .print is            => [ind d ++ "print " ++ ", ".intercalate (is.map itemStr)]
+  -- a rolled nest has no `.prl` form yet, so it is written in the Lean form's vocabulary
+  -- -- ref: `docs/loops.md`
+  | .loop nst            =>
+      (ind d ++ "parfor "
+        ++ ", ".intercalate (ParProg.showLevels nst.ivs nst.sizes nst.lo nst.step)
+        ++ " fork " ++ toString nst.parDepth ++ " {")
+        :: nst.body.map (fun st => ind (d + 1) ++ ParProg.showNestStmt st)
+        ++ [ind d ++ "}"]
 
 /-- `parallel {…} | {…}`, one thread per group, with an optional `:: "name"`. -/
 partial def parLines (L : Layout) (d : Nat) (ss : List ParProg) (nm : Option String) :
@@ -117,7 +168,7 @@ where
 /-- **A compiled file as `.prl` text.** A `free` that returned space is printed where the space is
 claimed again; one that only ended a name's scope is printed after the program, where it has the
 same effect and cannot shadow the statements that still use the name. -/
-def print (c : Compiled) : String :=
+def toPrl (c : Compiled) : String :=
   let ds := declLines c.layout
   let late := (c.dead.filter (fun n => !(reused c.layout).contains n)).map (fun n => "free " ++ n)
   "\n".intercalate (ds ++ (if ds.isEmpty then [] else [""]) ++ stmtLines c.layout 0 c.prog
@@ -144,7 +195,7 @@ def roundTrips (src : String) : Bool :=
   match ofString src with
   | .error _ => false
   | .ok c    =>
-      match ofString (print c) with
+      match ofString (toPrl c) with
       | .error _ => false
       | .ok c'   => norm c'.prog == norm c.prog && c'.dead == c.dead
                       && c'.layout.bufs.map (fun p => p.base) == c.layout.bufs.map (fun p => p.base)
@@ -152,13 +203,40 @@ def roundTrips (src : String) : Bool :=
 
 /-! ## Lean out -/
 
-/-- The file as Lean: the `Layout` and the `paralever { … }` block, ready to paste. -/
+/-- Initial contents as an `Init` term. A bare list is `List Nat` where `Init` is expected, so the
+coercion does not fire and the printer names `data` itself. -/
+private def initStr (xs : List Int) : String :=
+  " (data [" ++ ", ".intercalate (xs.map fun k =>
+    if k < 0 then "(" ++ toString k ++ ")" else toString k) ++ "])"
+
+/-- The file as Lean: the `Layout` and the `paralever { … }` block, ready to paste.
+
+Two forms of layout, and which one is printed is decided, not chosen. `Layout.of` places buffers
+consecutively from 0, so it reproduces the addresses the program was compiled against only when the
+file placed nothing by hand and freed nothing; otherwise the explicit bases are printed, which
+`docs/layout.md` allows for exactly this reason. A `.prl` program's addresses are already resolved,
+so a layout that moved them would be a different program. -/
 def toLean (c : Compiled) : String :=
-  let bufs := c.layout.bufs.map fun p =>
+  let bufs := c.layout.bufs
+  let decl := fun (p : Placed) =>
     "buf \"" ++ p.name ++ "\" " ++ toString p.shape
-      ++ (if p.init.isEmpty then "" else " " ++ toString p.init)
-  "def L : Layout := Layout.of\n  [ " ++ "\n  , ".intercalate bufs ++ " ]\n\ndef prog : ParProg := "
-    ++ AutoPar.surface c.prog ++ "\n"
+      ++ (if p.init.isEmpty then "" else initStr p.init)
+  let placed := fun (p : Placed) =>
+    "{ name := \"" ++ p.name ++ "\", shape := " ++ toString p.shape
+      ++ ", init := [" ++ ", ".intercalate (p.init.map toString) ++ "]"
+      ++ ", base := " ++ toString p.base ++ " }"
+  let layout :=
+    if (alloc 0 (bufs.map Placed.toBuf)).map Placed.base == bufs.map Placed.base then
+      "def L : Layout := Layout.of\n  [ " ++ "\n  , ".intercalate (bufs.map decl) ++ " ]"
+    else
+      "-- placed by hand or on freed cells, so the addresses are printed rather than re-allocated"
+        ++ (if c.dead.isEmpty then "" else
+             "\n-- freed, in declaration order: " ++ ", ".intercalate c.dead)
+        ++ "\ndef L : Layout := { bufs :=\n  [ "
+        ++ "\n  , ".intercalate (bufs.map placed) ++ " ] }"
+  layout ++ "\n\ndef prog : ParProg := "
+    ++ AutoPar.surface c.prog (fun a => (refName c.layout a).elim (AutoPar.refPair a)
+         (fun nm => "(L.ref \"" ++ nm ++ "\")")) ++ "\n"
 
 /-! ## Colour
 

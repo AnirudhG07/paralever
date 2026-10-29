@@ -136,9 +136,11 @@
           <code>--mlir-print-op-generic</code> prints every operation the same way,
           so one reader covers <code>affine</code>, <code>memref</code>,
           <code>arith</code> and <code>func</code>. The custom form
-          (<code>affine.for %i = 0 to 8 { … }</code>) needs a parser per dialect,
-          which is what would make "one converter" false. Affine maps are the only
-          piece with their own grammar.
+          (<code>affine.for %i = 0 to 8 { … }</code>) needs a grammar per dialect,
+          so it is read by a second reader that covers those four and
+          <em>desugars</em> to the same operations — below, <a href="#custom-form">the
+          syntax people actually write</a>. Affine maps are the only piece with their
+          own grammar in either form.
         </p>
 
         <p class="text-stone-600 leading-relaxed mb-4">
@@ -284,6 +286,117 @@
           <code>mlir_prog</code> quotes the lowered program into the term at
           elaboration time, exactly as <code>prl_file</code> does, so
           <code>decide</code> sees a literal and never runs the reader.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- custom form -->
+      <section id="custom-form">
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The syntax people actually write</h2>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Generic form is one grammar for every dialect, which is why there is one
+          reader. It is also not what anybody writes: every file in
+          <code>llvm-project</code>, in a bug report or in a compiler's output is
+          in <em>custom</em> form. The same program, in the syntax
+          <code>mlir-opt</code> prints:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">pretty-doall-no.mlir</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-mlir">module {
+  memref.global "private" @A : memref&lt;8xi64&gt; = dense&lt;[1, 2, 3, 4, 5, 6, 7, 8]&gt;
+  memref.global "private" @B : memref&lt;8xi64&gt; = dense&lt;[10, 20, 30, 40, 50, 60, 70, 80]&gt;
+  memref.global "private" @C : memref&lt;8xi64&gt; = dense&lt;0&gt;
+  func.func @main() {
+    %A = memref.get_global @A : memref&lt;8xi64&gt;
+    %B = memref.get_global @B : memref&lt;8xi64&gt;
+    %C = memref.get_global @C : memref&lt;8xi64&gt;
+    affine.parallel (%i) = (0) to (8) {
+      %0 = affine.load %A[%i] : memref&lt;8xi64&gt;
+      %1 = affine.load %B[%i] : memref&lt;8xi64&gt;
+      %2 = arith.addi %0, %1 : i64
+      affine.store %2, %C[%i] : memref&lt;8xi64&gt;
+    }
+    return
+  }
+}</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>MLIR/Pretty.lean</code> reads that, and it is a second
+          <em>reader</em> and nothing else: each construct is desugared to the
+          operation generic form carries, so the lowering, the interpreter, the
+          printer and the corpus never learn that custom form exists. Two rows do
+          most of the work.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Custom</th><th>Generic</th></tr></thead>
+            <tbody>
+              <tr><td><code>affine.for %i = 0 to 8 step 2 { … }</code></td><td><code>"affine.for"() ({ ^bb0(%i: index): … }) {lowerBoundMap = affine_map&lt;() -> (0)&gt;, upperBoundMap = affine_map&lt;() -> (8)&gt;, step = 2}</code></td></tr>
+              <tr><td><code>affine.load %A[%i, %j + 1] : memref&lt;4x8xi64&gt;</code></td><td><code>"affine.load"(%A, %i, %j) {map = affine_map&lt;(d0, d1) -> (d0, d1 + 1)&gt;}</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          An index list becomes a map: the subscripts are parsed as affine
+          expressions and the values they mention become the map's dimensions, in
+          order of first use, which is exactly the shape the lowering already
+          consumes. A region argument becomes the loop index, because that is
+          where the unroller looks for it.
+        </p>
+        <h3 class="text-xl font-semibold serif text-stone-900 mb-3">On MLIR's own test input</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>mlir/test/Dialect/Affine/parallelize.mlir</code> is the input to
+          <code>-affine-parallelize</code>, the pass Paralever is a certifying
+          replacement for: twenty functions written to exercise its edge cases.
+          <code>paralever funcs</code> reads it function by function and says what
+          happened to each.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Outcome</th><th>Count</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td>read</td><td>11</td><td>of 20 functions</td></tr>
+              <tr><td>refused by the reader</td><td>9</td><td>seven <code>iter_args</code> reductions, one <code>memref.reinterpret_cast</code>, one <code>index.constant</code>/<code>tensor.empty</code></td></tr>
+              <tr><td>a verdict</td><td>2</td><td><code>non_affine_load</code>, <code>local_alloc</code></td></tr>
+              <tr><td>refused by the lowering</td><td>7</td><td><code>arith.cmpf</code>, an unregistered op, four dynamic-<code>memref</code> parameters, one <code>index</code> parameter</td></tr>
+              <tr><td>over the unrolling ceiling</td><td>2</td><td><code>max_nested_1</code> (4096×4096) and <code>explicit_parallel</code> (1×123×194) do not finish in 120 s</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The one to look at is <code>non_affine_load</code>: a hundred iterations
+          of <code>memref.load %0[%i]</code> with a subscript the affine machinery
+          cannot read.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">$ paralever --func non_affine_load parallelize.mlir
+parallelize.mlir
+  memory    v0[100] @0  (100 cells)
+  reads     {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], … +90 more}
+  writes    {}
+  threads   1
+  rounds    100 parallel, 100 sequential
+  verdict   independent — par = seq under every schedule (wfB = true)
+
+PROVED. Bernstein holds at every fork, so par_seq_eq applies: every schedule of this
+program leaves the heap its sequential reading leaves.</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          MLIR's pass <strong>declines</strong> that loop — the file's own
+          <code>CHECK</code> line expects the sequential <code>affine.for</code> to
+          survive — because it cannot analyse the access. Bernstein accepts it,
+          because the loop only reads, and reads never conflict. On the pass's own
+          test input, in the pass's own syntax, the comparison is a precision gain
+          rather than a loss, and the acceptance arrives with
+          <code>par_seq_eq</code> attached.
         </p>
       </section>
 

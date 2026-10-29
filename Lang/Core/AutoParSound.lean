@@ -23,11 +23,15 @@ theorem eval_congr : ∀ {e : AExp} {ρ ρ' : Regs},
   | lit n => intro _ _ _; rfl
   | reg r => intro _ _ h; exact h r (by simp [regsOf])
   | add a b iha ihb | sub a b iha ihb | mul a b iha ihb
-  | min a b iha ihb | max a b iha ihb | div a b iha ihb =>
+  | min a b iha ihb | max a b iha ihb | div a b iha ihb
+  | lt a b iha ihb | eq a b iha ihb =>
       intro ρ ρ' h
       have ha := iha (fun r hr => h r (by simp [regsOf, hr]))
       have hb := ihb (fun r hr => h r (by simp [regsOf, hr]))
       simp [AExp.eval, ha, hb]
+  | not a iha =>
+      intro ρ ρ' h
+      simp [AExp.eval, iha (fun r hr => h r (by simpa [regsOf] using hr))]
 
 /-! ### A statement changes only the registers its register footprint names
 
@@ -38,7 +42,7 @@ theorem regs_frame_all :
     (∀ (s : ParProg) (ρ : Regs) (σ : State) (r : Reg),
         r ∉ (regFootprint s).writes → (runSeq (execSeq s ρ) σ).1 r = ρ r)
     ∧ (∀ _ : List ParProg, True) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r' l ρ σ r hr
     simp only [regFootprint, List.mem_cons, List.not_mem_nil, or_false] at hr
     simp [execSeq, readAs, runSeq, Regs.set, hr]
@@ -65,6 +69,9 @@ theorem regs_frame_all :
   · intro ρ σ r _; simp [execSeq, runSeq]
   · trivial
   · intro _ _ _ _; trivial
+  · intro _ ρ σ r _; rfl
+  -- the nest: a fork hands back the file it was given, so nothing moved
+  · intro n ρ σ r _; simp [execSeq, runSeq_bind]
 
 /-- `regs_frame_all`, for one statement. -/
 theorem regs_frame (s : ParProg) (ρ : Regs) (σ : State) {r : Reg}
@@ -79,6 +86,108 @@ parameter rather than with the statement's own read set, because that is what ca
 — and because a conditional's write set names registers only one branch assigns, so "the files
 agree on the writes" is simply false for `ifElse`. -/
 
+/-! ### A nest leaves the same heap under agreeing register files
+
+The nest case of `agree_run_all` below. A nest has no sub-statement, so the induction cannot be
+delegated: it runs over the body, then over the inner points, then over the threads. The invariant
+is the same one at all three levels — equal heaps, and files agreeing on `R`. A register written
+*inside* the body may lie outside `R`, which is harmless, because anything the body goes on to read
+is in `regsOfNest` and so in `R`. -- ref: `docs/loops.md` -/
+
+private theorem agree_setIvs (R : List Reg) : ∀ (rs : List Reg) (los sts : List Int)
+    (cs : List Nat) (ρ ρ' : Regs), (∀ r ∈ R, ρ r = ρ' r) →
+      ∀ r ∈ R, setIvs rs los sts cs ρ r = setIvs rs los sts cs ρ' r := by
+  intro rs
+  induction rs with
+  | nil => intro los sts cs ρ ρ' hR; exact hR
+  | cons r0 rs ih =>
+      intro los sts cs ρ ρ' hR
+      cases los with
+      | nil => exact hR
+      | cons l los =>
+        cases sts with
+        | nil => exact hR
+        | cons st sts =>
+          cases cs with
+          | nil => exact hR
+          | cons c cs =>
+            refine ih los sts cs _ _ ?_
+            intro r hr
+            simp only [Regs.set]
+            split
+            · rfl
+            · exact hR r hr
+
+private theorem agree_runStmts (R : List Reg) (q : List Nat) :
+    ∀ (body : List NestStmt), (∀ r ∈ regsOfNest body, r ∈ R) →
+    ∀ (ρ ρ' : Regs) (σ : State), (∀ r ∈ R, ρ r = ρ' r) →
+      (runSeq (runStmts body q ρ) σ).2 = (runSeq (runStmts body q ρ') σ).2
+      ∧ ∀ r ∈ R, (runSeq (runStmts body q ρ) σ).1 r = (runSeq (runStmts body q ρ') σ).1 r := by
+  intro body
+  induction body with
+  | nil => intro _ ρ ρ' σ hR; exact ⟨rfl, hR⟩
+  | cons s ss ih =>
+      intro hsub ρ ρ' σ hR
+      cases s with
+      | rd r a =>
+          simp only [runStmts, runSeq_bind, runSeq_exec_rd]
+          refine ih (fun r' hr' => hsub r' (by simp only [regsOfNest]; exact hr')) _ _ σ ?_
+          intro r' hr'
+          simp only [Regs.set]
+          split
+          · rfl
+          · exact hR r' hr'
+      | wr a e =>
+          have he : e.eval ρ = e.eval ρ' :=
+            eval_congr (fun r' hr' => hR r' (hsub r'
+              (by simp only [regsOfNest]; exact List.mem_append.2 (Or.inl hr'))))
+          simp only [runStmts, runSeq_bind, runSeq_exec_wr, he]
+          exact ih (fun r' hr' => hsub r'
+            (by simp only [regsOfNest]; exact List.mem_append.2 (Or.inr hr'))) _ _ _ hR
+      | st r e =>
+          have he : e.eval ρ = e.eval ρ' :=
+            eval_congr (fun r' hr' => hR r' (hsub r'
+              (by simp only [regsOfNest]; exact List.mem_append.2 (Or.inl hr'))))
+          simp only [runStmts, runSeq_bind, runSeq_exec_st, he]
+          refine ih (fun r' hr' => hsub r'
+            (by simp only [regsOfNest]; exact List.mem_append.2 (Or.inr hr'))) _ _ σ ?_
+          intro r' hr'
+          simp only [Regs.set]
+          split
+          · rfl
+          · exact hR r' hr'
+
+private theorem agree_inner (n : LoopNest) (R : List Reg)
+    (hsub : ∀ r ∈ regsOfNest n.body, r ∈ R) (u : List Nat) :
+    ∀ (ps : List (List Nat)) (ρ ρ' : Regs) (σ : State), (∀ r ∈ R, ρ r = ρ' r) →
+      (runSeq (n.inner u ps ρ) σ).2 = (runSeq (n.inner u ps ρ') σ).2
+      ∧ ∀ r ∈ R, (runSeq (n.inner u ps ρ) σ).1 r = (runSeq (n.inner u ps ρ') σ).1 r := by
+  intro ps
+  induction ps with
+  | nil => intro ρ ρ' σ hR; exact ⟨rfl, hR⟩
+  | cons p ps ih =>
+      intro ρ ρ' σ hR
+      obtain ⟨h1, h2⟩ := agree_runStmts R (u ++ p) n.body hsub
+        (setIvs n.ivs n.lo n.step (u ++ p) ρ) (setIvs n.ivs n.lo n.step (u ++ p) ρ') σ
+        (agree_setIvs R n.ivs n.lo n.step (u ++ p) ρ ρ' hR)
+      simp only [LoopNest.inner, LoopNest.atPoint, runSeq_bind]
+      rw [h1]
+      exact ih _ _ _ h2
+
+private theorem agree_threads (n : LoopNest) (R : List Reg)
+    (hsub : ∀ r ∈ regsOfNest n.body, r ∈ R) :
+    ∀ (us : List (List Nat)) (ρ ρ' : Regs) (σ : State), (∀ r ∈ R, ρ r = ρ' r) →
+      (runSeq (ParM.seqAll (us.map (n.thread ρ))) σ).2
+        = (runSeq (ParM.seqAll (us.map (n.thread ρ'))) σ).2 := by
+  intro us
+  induction us with
+  | nil => intro ρ ρ' σ _; rfl
+  | cons u us ih =>
+      intro ρ ρ' σ hR
+      simp only [List.map_cons, runSeq_seqAll_cons', LoopNest.thread]
+      rw [(agree_inner n R hsub u n.innerBox ρ ρ' σ hR).1]
+      exact ih ρ ρ' _ hR
+
 theorem agree_run_all :
     (∀ (s : ParProg) (R : List Reg) (ρ ρ' : Regs) (σ : State),
         (∀ r ∈ (regFootprint s).reads, r ∈ R) → (∀ r ∈ R, ρ r = ρ' r) →
@@ -88,7 +197,7 @@ theorem agree_run_all :
         (∀ r ∈ (regFootprintsOf ss).reads, r ∈ R) → (∀ r ∈ R, ρ r = ρ' r) →
           (runSeq (ParM.seqAll (execSeqAll ss ρ)) σ).2
             = (runSeq (ParM.seqAll (execSeqAll ss ρ')) σ).2) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   -- load: the address is a literal, so both sides read the same cell
   · intro r' l R ρ ρ' σ _ hR
     refine ⟨by simp [execSeq, readAs, runSeq], ?_⟩
@@ -169,6 +278,13 @@ theorem agree_run_all :
     simp only [ParM.seqPair, runSeq_bind, runSeq]
     rw [hhd]
     exact ih2 R ρ ρ' _ (fun r hr => hsub r (Or.inr hr)) hR
+  · intro _ R ρ ρ' σ _ hR; exact ⟨rfl, fun r hr => hR r hr⟩
+  -- the nest: no sub-statement, so the three inductions above do the work
+  · intro n R ρ ρ' σ hsub hR
+    refine ⟨?_, fun r hr => by simpa [execSeq, runSeq_bind, runSeq] using hR r hr⟩
+    simp only [execSeq, LoopNest.threads, runSeq_bind, runSeq]
+    exact agree_threads n R (fun r hr => hsub r (by simpa [regFootprint] using hr))
+      n.outerBox ρ ρ' σ hR
 
 /-- `agree_run_all`, for one statement: agreement on what it reads gives the same heap. -/
 theorem agree_heap (s : ParProg) (R : List Reg) (ρ ρ' : Regs) (σ : State)

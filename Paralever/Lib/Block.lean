@@ -53,6 +53,14 @@ inductive AExp where
   /-- Integer division, total: division by zero is `0`, as in Lean's `Int`. Present so a learning
   rate below one can be written without leaving the integers. -/
   | div : AExp → AExp → AExp
+  /-- `a < b`, `a = b` and `a = 0`, each as `1` or `0`. A condition is then an ordinary expression,
+  so `ifElse` and `whileAtMost` need no second grammar for their guards. Three primitives and not
+  nine: `le`, `gt`, `ge`, `ne`, `and` and `or` are derived below, the last two from `min`/`max` on
+  normalized values. Every match on `AExp` therefore grows by three cases, once.
+  -- ref: `docs/block-ir.md` § Conditions -/
+  | lt  : AExp → AExp → AExp
+  | eq  : AExp → AExp → AExp
+  | not : AExp → AExp
   deriving Repr, DecidableEq
 
 /-- The two memory operations. `load r l` is `r := M[l]`; `store l e` is `M[l] := e`. -/
@@ -82,6 +90,70 @@ def AExp.eval (ρ : Regs) : AExp → Int
   | .min a b => let x := a.eval ρ; let y := b.eval ρ; if x ≤ y then x else y
   | .max a b => let x := a.eval ρ; let y := b.eval ρ; if x ≤ y then y else x
   | .div a b => (a.eval ρ) / (b.eval ρ)
+  | .lt a b  => if a.eval ρ < b.eval ρ then 1 else 0
+  | .eq a b  => if a.eval ρ = b.eval ρ then 1 else 0
+  | .not a   => if a.eval ρ = 0 then 1 else 0
+
+/-! ### The derived conditions, and when a branch is taken
+
+`ifElse`'s guard is `c.eval ρ != 0`, so each lemma below is of the form "this condition is nonzero
+exactly when the thing it is named after holds" — which is what a proof about a conditional program
+rewrites with. Without them `if %v < 3` would be a number a reader has to decode.
+-- ref: `docs/block-ir.md` § Conditions -/
+
+/-- `a ≠ 0` as a value: `1` when `a` is nonzero, `0` when it is zero. -/
+def AExp.nz (a : AExp) : AExp := .not (.not a)
+/-- `a ≠ b`. -/
+def AExp.ne (a b : AExp) : AExp := .not (.eq a b)
+/-- `a > b`, which is `b < a` — no constructor of its own. -/
+def AExp.gt (a b : AExp) : AExp := .lt b a
+/-- `a ≤ b`, which is `¬ (b < a)`. -/
+def AExp.le (a b : AExp) : AExp := .not (.lt b a)
+/-- `a ≥ b`, which is `¬ (a < b)`. -/
+def AExp.ge (a b : AExp) : AExp := .not (.lt a b)
+/-- Logical `and`, branch-free: the smaller of two values normalized to `0`/`1`. -/
+def AExp.and (a b : AExp) : AExp := .min a.nz b.nz
+/-- Logical `or`, branch-free: the larger of the two. -/
+def AExp.or (a b : AExp) : AExp := .max a.nz b.nz
+
+section Conditions
+variable (a b : AExp) (ρ : Regs)
+
+@[simp] theorem AExp.lt_nz : (AExp.lt a b).eval ρ ≠ 0 ↔ a.eval ρ < b.eval ρ := by
+  by_cases h : a.eval ρ < b.eval ρ <;> simp [h]
+
+@[simp] theorem AExp.eq_nz : (AExp.eq a b).eval ρ ≠ 0 ↔ a.eval ρ = b.eval ρ := by
+  by_cases h : a.eval ρ = b.eval ρ <;> simp [h]
+
+@[simp] theorem AExp.not_nz : (AExp.not a).eval ρ ≠ 0 ↔ a.eval ρ = 0 := by
+  by_cases h : a.eval ρ = 0 <;> simp [h]
+
+@[simp] theorem AExp.nz_nz : a.nz.eval ρ ≠ 0 ↔ a.eval ρ ≠ 0 := by
+  by_cases h : a.eval ρ = 0 <;> simp [AExp.nz, h]
+
+@[simp] theorem AExp.ne_nz : (AExp.ne a b).eval ρ ≠ 0 ↔ a.eval ρ ≠ b.eval ρ := by
+  by_cases h : a.eval ρ = b.eval ρ <;> simp [AExp.ne, h]
+
+@[simp] theorem AExp.gt_nz : (AExp.gt a b).eval ρ ≠ 0 ↔ b.eval ρ < a.eval ρ := by
+  simp [AExp.gt]
+
+@[simp] theorem AExp.le_nz : (AExp.le a b).eval ρ ≠ 0 ↔ a.eval ρ ≤ b.eval ρ := by
+  by_cases h : b.eval ρ < a.eval ρ <;> simp [AExp.le, h] <;> omega
+
+@[simp] theorem AExp.ge_nz : (AExp.ge a b).eval ρ ≠ 0 ↔ b.eval ρ ≤ a.eval ρ := by
+  by_cases h : a.eval ρ < b.eval ρ <;> simp [AExp.ge, h] <;> omega
+
+@[simp] theorem AExp.and_nz :
+    (AExp.and a b).eval ρ ≠ 0 ↔ (a.eval ρ ≠ 0 ∧ b.eval ρ ≠ 0) := by
+  by_cases ha : a.eval ρ = 0 <;> by_cases hb : b.eval ρ = 0 <;>
+    simp [AExp.and, AExp.nz, ha, hb]
+
+@[simp] theorem AExp.or_nz :
+    (AExp.or a b).eval ρ ≠ 0 ↔ (a.eval ρ ≠ 0 ∨ b.eval ρ ≠ 0) := by
+  by_cases ha : a.eval ρ = 0 <;> by_cases hb : b.eval ρ = 0 <;>
+    simp [AExp.or, AExp.nz, ha, hb]
+
+end Conditions
 
 /-- `+` on `AExp`, so expressions are written as ordinary arithmetic. -/
 instance : Add AExp := ⟨AExp.add⟩

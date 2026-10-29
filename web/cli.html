@@ -171,12 +171,15 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           <table class="opts-table">
             <thead><tr><th>Command</th><th>What it prints</th></tr></thead>
             <tbody>
-              <tr><td><code>FILE</code> (no command)</td><td>the check, then the theorem that holds or the interleaving that breaks it</td></tr>
+              <tr><td><code>init [DIR]</code></td><td>a Lake project with paralever as its dependency: a <code>lakefile.toml</code>, this project's <code>lean-toolchain</code>, a program, and a module whose last line is <code>par_seq_eq</code></td></tr>
+              <tr><td><code>FILE</code> (no command)</td><td>the verdict, then everything <code>run</code> prints, then the interleaving if there is one</td></tr>
               <tr><td><code>check FILE</code></td><td>memory, reads, writes, thread count, rounds, verdict</td></tr>
-              <tr><td><code>run FILE [--threads]</code></td><td>the heap after a run, buffer by buffer</td></tr>
+              <tr><td><code>run FILE [-n NAME]</code></td><td>the heap after a run, buffer by buffer, or one buffer of it</td></tr>
               <tr><td><code>race FILE</code></td><td>the interleaving that reaches <code>wrong</code>, step by step</td></tr>
               <tr><td><code>autopar FILE</code></td><td>the parallelized program as <code>.prl</code>, with the plan's numbers</td></tr>
+              <tr><td><code>funcs FILE</code></td><td>what an MLIR module holds, function by function, and whether the reader takes each one</td></tr>
               <tr><td><code>prove FILE</code></td><td>a Lean module stating what holds of the program</td></tr>
+              <tr><td><code>vc FILE</code></td><td>the independence obligation as SMT-LIB, for a solver to discharge</td></tr>
               <tr><td><code>to-prl FILE</code></td><td>the program as <code>.prl</code></td></tr>
               <tr><td><code>to-mlir FILE</code></td><td>the program as MLIR generic form</td></tr>
               <tr><td><code>to-lean FILE</code></td><td>a <code>Layout</code> and a <code>paralever { … }</code> block</td></tr>
@@ -191,7 +194,16 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
               <tr><td><code>--threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
               <tr><td><code>--autopar</code></td><td>make <code>prove</code>, <code>to-mlir</code> and <code>to-lean</code> take the parallelized program as their subject</td></tr>
               <tr><td><code>--check</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
+              <tr><td><code>--solve</code></td><td><code>vc</code>: discharge what is left with the first solver found — z3, then cvc5, or whatever <code>PARALEVER_SMT</code> names</td></tr>
+              <tr><td><code>--solver NAME|PATH</code></td><td><code>vc</code>: use that solver rather than looking for one; implies <code>--solve</code></td></tr>
+              <tr><td><code>--timeout MS</code></td><td><code>vc</code>: milliseconds per query, 10000 by default, <code>0</code> for no limit</td></tr>
+              <tr><td><code>--assume nonneg</code></td><td><code>vc</code>: assume every value read from the heap is at or above zero, which the clamp in <code>ArrRef.addr</code> makes necessary more often than it looks</td></tr>
               <tr><td><code>--prove PATH</code></td><td>no command: write the Lean module that proves the verdict to <code>PATH</code> as well as printing the verdict itself</td></tr>
+              <tr><td><code>--func NAME</code></td><td>the function to read, in an MLIR module that holds several. In custom form it reads that function alone, so a reduction in the next one does not refuse the file</td></tr>
+              <tr><td><code>-n NAME</code></td><td><code>run</code>: that buffer alone, or one cell of it when the name carries a subscript — <code>-n 'C[1, 2]'</code></td></tr>
+              <tr><td><code>--quiet</code>, <code>-q</code></td><td><code>run</code> and the no-command form: only what the program's <code>print</code> statements wrote — no headings, no heap, no verdict</td></tr>
+              <tr><td><code>--verbose</code>, <code>-v</code></td><td>verbosity on, which is the default; it undoes an earlier <code>--quiet</code></td></tr>
+              <tr><td><code>--all-cells</code></td><td><code>run</code>: every cell of every buffer, instead of the first 32 of each</td></tr>
               <tr><td><code>--colour</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
             </tbody>
           </table>
@@ -208,12 +220,32 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           <pre><code class="language-console">for f in Examples/Language/*.prl; do paralever check "$f" || echo "$f is racy"; done</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A bare file gets one of three verdicts, by the same ladder
-          <code>prove</code> uses: <strong>PROVED</strong> when <code>wfB</code>
-          accepts, <strong>NO RACE FOUND, BUT NOT PROVED</strong> when the
-          footprint of a computed address is over-approximated and only the
-          per-heap check accepts, and <strong>RACY</strong> with the interleaving
-          that reaches <code>wrong</code>. Only the last exits 1.
+          The report ends with the verdict, and the verdict answers two
+          questions, because a program with a computed address has two different
+          answers. <em>This heap</em> is the one the file's <code>buf</code>
+          initializers describe, and <code>raceSites</code> decides it exactly.
+          <em>Any heap</em> is the universally quantified statement:
+          <code>wfB</code> decides it when it accepts, and when it refuses a
+          bounded search looks for a heap at which two threads collide. The two
+          print as one line when they agree and as two when they differ.
+        </p>
+        <pre class="code-block mb-4"><code>$ paralever check Examples/Language/stripe.prl
+  verdict   this heap   Proved: Yes — no two threads touch one cell here
+            any heap    RACE found — with k[1] = -1: A[0] written by both threads
+
+$ paralever check Examples/Language/branch.prl
+  verdict   this heap   Proved: Yes — no two threads touch one cell here
+            any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
+            no race found in 11 heap(s) probed over {c[0]}</code></pre>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>Proved: Yes</code> is a Lean proof either way — for every heap
+          from <code>wfB</code>, for one heap from
+          <code>raceSites_nil_iff</code>. <code>Inconclusive</code> names both of
+          its reasons: what <code>wfB</code> refused over and which constructor
+          widened the footprint, then how far the search looked. Only a race at
+          the declared heap exits 1, and only a real interleaving earns
+          <code>RACE found</code> there. Nothing is restated after the report and
+          no next command is suggested.
         </p>
       </section>
 
@@ -223,9 +255,10 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>run</code> prints</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A <code>.prl</code> program has no print statement, so its output
-          <em>is</em> the heap, and <code>run</code> prints that heap as the
-          buffers the file declared:
+          Most of what a <code>.prl</code> program says is the heap it leaves, so
+          <code>run</code> prints that heap as the buffers the file declared. A
+          <code>print</code> statement writes a line above it, under its own
+          heading; a program with no print has no such section at all.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -233,7 +266,7 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
             <button class="copy-btn">Copy</button>
           </div>
           <pre><code class="language-console">$ paralever run Examples/Language/arena.prl
-heap after the run — a .prl program has no print statement, so this is its output
+heap after the run — the cells the program left behind, which is most of what it says
 12 cells in 3 buffers, 1 of them freed, addressed 0 to 11
 NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
 
@@ -241,7 +274,30 @@ src [4] @0  [1, 2, 3, 4]
 tmp [4] @4  [3, 5, 7, 9]   (freed)
 out [4] @4  [3, 5, 7, 9]</code></pre>
         </div>
-        <p class="text-stone-600 leading-relaxed mt-4">
+        <p class="text-stone-600 leading-relaxed mt-4 mb-4">
+          A bare <code>paralever FILE</code> prints this same body under its
+          verdict. Both commands call one function, <code>Tool.runBody</code>, so
+          whatever <code>run</code> says about a program a bare invocation says
+          too, and the verdict is the whole of the difference. Memory, footprint,
+          thread count and rounds belong to <code>check</code>, which is the
+          command for them.
+        </p>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>--quiet</code> (<code>-q</code>) turns the verbosity off for
+          either command and prints only what the program's <code>print</code>
+          statements wrote — no headings, no heap, no verdict. A program with no
+          <code>print</code> is then silent rather than printing a blank line, and
+          the exit code is unchanged, so a quiet invocation is still the gate:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">$ paralever -q Examples/Language/stripe.prl
+k = [0, 1]</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mt-4 mb-4">
           <code>[4]</code> is the shape — a <code>[2, 6]</code> buffer prints as
           two rows — and <code>@4</code> is the address of the buffer's first cell
           in the one flat heap that <code>State = Loc → Val</code> gives.
@@ -251,6 +307,53 @@ out [4] @4  [3, 5, 7, 9]</code></pre>
           A report is read, not elaborated, so none of it is commented out — the
           <code>--</code> prefix is kept for output that is source, where the
           reader's approximations must survive in a file that still compiles.
+        </p>
+        <h3 class="text-xl font-semibold serif text-stone-900 mb-3">One buffer, and all of the cells</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          A buffer wider than the terminal is not a report. Each one prints at
+          most <code>Lang.runCells</code> = 32 cells, rounded up to a whole row
+          for a matrix, and then says how many it left out — so the shape and the
+          leading values stay legible on a program whose heap is thousands of
+          cells.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">$ paralever run Examples/Scale/matmul12.prl
+…
+C [12, 12] @288  [6072, 6138, 6204, 6270, 6336, 6402, 6468, 6534, 6600, 6666, 6732, 6798]
+                 [15576, 15786, 15996, 16206, 16416, 16626, 16836, 17046, 17256, 17466, 17676, 17886]
+                 [25080, 25434, 25788, 26142, 26496, 26850, 27204, 27558, 27912, 28266, 28620, 28974]
+                 … +9 more rows</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mt-4 mb-4">
+          Two options say otherwise. <code>--all-cells</code> lifts the limit on
+          every buffer. <code>-n</code> asks for one buffer by name, printed in
+          full and with nothing around it, and a subscript asks for the single
+          cell:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-console">$ paralever run Examples/Language/matmul.prl -n C
+C [2, 2] @8  [19, 22]
+             [43, 50]
+
+$ paralever run Examples/Language/matmul.prl -n 'C[1, 1]'
+C[1, 1] @11  50</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mt-4">
+          The address comes with the value because the cell is one of
+          <code>State = Loc → Val</code>'s, and <code>@11</code> is where
+          <code>Layout.at "C" [1, 1]</code> sends that subscript. A name no buffer
+          has, or a subscript outside the shape, is an error naming what the
+          program does declare, and exits 2 rather than printing a default. When
+          the program has a race, <code>-n</code>'s caveat goes to standard error,
+          so the one line on standard output stays greppable.
         </p>
       </section>
 
@@ -343,6 +446,41 @@ written to /tmp/Chain.lean
 lake env lean /tmp/Chain.lean
 /tmp/Chain.lean: Lean accepts it</code></pre>
         </div>
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">A fourth, when the file states a claim</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          An <code>assert</code> adds a section to whichever of the three the left
+          program earned, so a claim file's module states both: the main theorem
+          for the left program, and <code>AgreeOn</code> for the pair. Here is the
+          module for <code>equiv.prl</code>, which compares bubble sort against
+          odd-even transposition sort.
+        </p>
+        <div class="lean-embed">
+            <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
+            <iframe class="lean-demo" loading="lazy" title="prove equiv.prl"
+                    src="snippets/proof-equiv.html"></iframe>
+          </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          Three <code>decide</code>s and the claim holds: the check on each side,
+          and one run of each sequential reading compared at the cells
+          <code>on</code> named. <code>check</code> reports the same answer beside
+          the verdict and exits non-zero when it fails.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">console</span>
+          </div>
+          <pre><code class="language-console">$ paralever check Examples/Language/equiv.prl
+Examples/Language/equiv.prl
+  memory    A[8] @0  (8 cells)
+  reads     {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  writes    {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  threads   1
+  rounds    224 parallel, 224 sequential
+  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim     bubble == oddeven on A
+            Agree: Yes — the same 8 cell(s), under every schedule of either side</code></pre>
+        </div>
+
         <p class="text-stone-600 leading-relaxed">
           Three details of the generated module. It reads the source through
           <code>prl_file</code> or <code>mlir_prog</code>, which compile the file
@@ -352,6 +490,68 @@ lake env lean /tmp/Chain.lean
           otherwise. And <code>--check</code> shells out to
           <code>lake env lean</code>, so the tool reports Lean's verdict rather
           than its own.
+        </p>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- vc -->
+      <section>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>vc</code> hands to a solver</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          A computed address makes the footprint read off the syntax every cell of
+          its buffer, so <code>wfB</code> declines programs whose threads provably
+          touch different cells. <code>vc</code> states the same Bernstein
+          condition over the index <em>expressions</em> instead. Registers are
+          substituted away first, so an index that folds to a literal is decided in
+          Lean and never reaches a solver; what is left is one
+          <code>(check-sat)</code> per parallel block, unsatisfiable exactly when
+          that block is independent.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-8">
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100/70 text-stone-700">
+              <tr><th class="text-left px-5 py-3">the answer</th><th class="text-left px-5 py-3">what it is worth</th></tr>
+            </thead>
+            <tbody class="divide-y divide-stone-200">
+              <tr><td class="px-5 py-3"><code>unsat</code></td><td class="px-5 py-3"><strong>discharged by the named solver, not by Lean's kernel.</strong> An external refutation is not a checked proof, so the report says which solver and which version said so. <code>prove</code> stays the only path that ends in a proof.</td></tr>
+              <tr><td class="px-5 py-3"><code>sat</code></td><td class="px-5 py-3">a claim about two cells, <strong>recomputed in Lean before it is believed</strong>. But an assignment is not a run, so this is the obligation failing — reported as <code>inconclusive</code>, never as <code>RACY</code>. Only a real interleaving earns that word.</td></tr>
+              <tr><td class="px-5 py-3">neither</td><td class="px-5 py-3">the solver ran out of time — <code>--timeout MS</code> is the knob, 10000 by default — or none is installed. No solver is a build dependency, and <code>lake build</code> is green without one.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          The gain is one file wide. <code>Examples/Language/stripe.prl</code> has
+          two threads writing the even and the odd cells of one buffer, with both
+          indices loaded from memory:
+        </p>
+        <pre class="code-block mb-6"><code>$ paralever Examples/Language/stripe.prl
+Examples/Language/stripe.prl
+  verdict   this heap   Proved: Yes — no two threads touch one cell here
+            any heap    RACE found — with k[1] = -1: A[0] written by both threads
+...
+
+$ paralever vc Examples/Language/stripe.prl --solve --assume nonneg
+assuming nonneg
+this heap   Proved: Yes — no two threads touch one cell here
+any heap    RACE found — with k[1] = -1: A[0] written by both threads
+solver: Z3 version 5.3.1 - 64 bit — unsat is its word, not Lean's
+fork 0 — 2 threads
+  3 pair(s) left to decide, over 2 unknown value(s), in QF_LIA
+  u0  the value read from k[0]
+  u1  the value read from k[1]
+  independent — unsat</code></pre>
+        <p class="text-stone-600 leading-relaxed">
+          Each unknown is named by the cell it was read from, because an obligation
+          nobody can read is an obligation nobody can add a hypothesis to.
+          <code>--assume nonneg</code> is that hypothesis in the one case it is
+          always wanted: <code>ArrRef.addr</code> clamps a negative index to its
+          buffer's first cell, so without it every thread with a possibly-negative
+          computed index aliases there — and a solver reports that collision in
+          preference to any other, correctly. The assumption weakens the claim, so
+          the report names it on its first line — and the <code>any heap</code>
+          verdict above it is Lean having found the same collision without a
+          solver, at <code>k[1] = -1</code>.
         </p>
       </section>
 

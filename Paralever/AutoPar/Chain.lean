@@ -62,7 +62,7 @@ theorem runSeq_flatten_all :
     (∀ (p : ParProg) (ρ : Regs) (σ : State),
         runSeq (execSeq (block (flatten p)) ρ) σ = runSeq (execSeq p ρ) σ)
     ∧ (∀ (_ : List ParProg), True) := by
-  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine mutualInduction ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro r l ρ σ; rfl
   · intro l e ρ σ; rfl
   · intro r e ρ σ; rfl
@@ -78,6 +78,8 @@ theorem runSeq_flatten_all :
   · intro ρ σ; rfl
   · trivial
   · intro _ _ _ _; trivial
+  · intro _ ρ σ; rfl
+  · intro n ρ σ; rfl
 
 /-- `runSeq_flatten_all`, for one program. -/
 theorem runSeq_flatten (p : ParProg) (ρ : Regs) (σ : State) :

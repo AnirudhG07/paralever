@@ -178,6 +178,84 @@ Surface syntax: `if (c) {…} else {…}` and `while (c) in n {…}`. The condit
 `term:max`, so a compound condition needs parentheses; `in` is reused rather than reserving a new
 keyword, for the reason recorded in `CLAUDE.md`.
 
+## Conditions
+
+`ifElse` and `whileAtMost` take an `AExp` as their guard and test it against zero, so the language
+needs no second grammar for conditions — but before conditions existed, the only `AExp` that could
+*be* a guard was an arithmetic value, and `if %v` meant "`%v` is nonzero". Three constructors fix
+that:
+
+```lean
+| lt  : AExp → AExp → AExp      -- a < b,  as 1 or 0
+| eq  : AExp → AExp → AExp      -- a = b
+| not : AExp → AExp             -- a = 0
+```
+
+Three and not nine. `le`, `gt`, `ge` and `ne` are definitions over these, and `and`/`or` are
+`min`/`max` of values normalized to `0`/`1`:
+
+| written | is | why |
+|---|---|---|
+| `a > b` | `lt b a` | the arguments swap; no constructor |
+| `a <= b` | `not (lt b a)` | the negation of `>` |
+| `a >= b` | `not (lt a b)` | the negation of `<` |
+| `a != b` | `not (eq a b)` | |
+| `a && b` | `min a.nz b.nz` | both nonzero ⇒ the smaller is `1` |
+| `a \|\| b` | `max a.nz b.nz` | either nonzero ⇒ the larger is `1` |
+
+where `AExp.nz a = not (not a)` is `a` normalized to `0`/`1`. The count is what matters. An `AExp`
+constructor must be handled in nine places — `AExp.eval`, `Analysis.regsOf`, the two `isCond`
+recognizers and the two printers beside them, `AutoPar/Print.lean`'s Lean-source printer, the MLIR
+emitter, and `AutoParSound.lean`'s `eval_congr` induction — and the surface `Exp` it is read from
+adds five more (`regTokens`, `dynamic`, `fold`, `aexp`, and the parser's normalizer). Three
+primitives therefore cost 42 cases; nine would have cost 126, for no new expressive power.
+
+Nothing about footprints changes, and that is the point of keeping conditions inside `AExp` rather
+than making a condition a kind of statement: an `AExp` has no memory operand (§ *Why `AExp` has no
+memory operand*), so a guard reads no cell, and `footprintOf` needs no case for any of the three.
+
+### A guard is nonzero exactly when it holds
+
+`ifElse`'s branch test is `c.eval ρ != 0`, so a proof about a conditional program is always rewriting
+a `≠ 0` into the relation the condition was named after. Each derived form carries that lemma:
+
+```lean
+@[simp] theorem AExp.lt_nz : (AExp.lt a b).eval ρ ≠ 0 ↔ a.eval ρ < b.eval ρ
+@[simp] theorem AExp.le_nz : (AExp.le a b).eval ρ ≠ 0 ↔ a.eval ρ ≤ b.eval ρ
+@[simp] theorem AExp.and_nz : (AExp.and a b).eval ρ ≠ 0 ↔ a.eval ρ ≠ 0 ∧ b.eval ρ ≠ 0
+```
+
+— eleven in all, one per primitive and one per derived form, each closed by `by_cases` on the
+relation followed by `simp`. They are `@[simp]`, so a goal mentioning `if (%0 >= 4) && (%0 != 6)`
+becomes a goal about `ρ 0 ≥ 4 ∧ ρ 0 ≠ 6` without the reader ever decoding a `min` of two `not`s.
+
+### Printing back what was written
+
+Because four of the six forms are definitions, the `AExp` that comes out of the parser has already
+forgotten which spelling produced it: `a >= b` and `!(a < b)` are the same term. A printer that
+matched only the constructors would turn the first into the second, and `&&` into
+`min(!(!(…)), !(!(…)))` — a round trip that type-checks and is unreadable.
+
+Both printers (`Lang/Compile/Print.lean` for `.prl`, `Lang/Core/Notation.lean` for the Lean form)
+therefore recognize the derived shapes:
+
+```lean
+def isCond : AExp → Bool
+  | .lt _ _ | .eq _ _ | .not _ => true
+  | .min a b | .max a b        => isCond a && isCond b
+  | _                          => false
+```
+
+`not (lt a b)` prints as `a >= b`, and a `min` prints as `&&` exactly when both sides are themselves
+conditions — otherwise it is a genuine numeric `min` and prints as one. That is what makes
+`if ((%0 >= 4) && (%0 != 6))` come back verbatim from a parse-print round trip, which
+`Lang/Compile/Print.lean`'s `roundTrips` gates.
+
+The parser matches with a precedence tower — `sum` (`+`, `-`) below `cmp` (the six relations, each
+non-associative) below `conj` (`&&`) below `exp` (`||`) — and normalizes only where it must: its
+`nz` is the identity on an expression that is already a condition, so `(a < b) && (c < d)` builds
+`min (lt a b) (lt c d)` with no redundant double negation to print back.
+
 ## Why not reflect on Lean's `Expr` or LCNF
 
 The tempting next step is to take an existing Lean function over `Array Int`, inspect its elaborated

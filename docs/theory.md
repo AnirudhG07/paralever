@@ -98,8 +98,10 @@ reasoning.
 frame rule if you weaken it?
 
 **→ In our code.** We don't need the full logic to state the theorem, but the *idea* — footprints,
-and disjointness as part of the structure — is everything. Tier 2 (`Logic/`) instantiates
-iris-lean's `BI` at `State → Prop` to get `∗` and a proof mode.
+and disjointness as part of the structure — is everything. Tier 2 (`Logic/Rules.lean`) states Hoare
+triples directly against `Reaches` and frames with `∧` over `Core/Access.lean`'s footprints. It does
+not instantiate a `BI`: § 8 explains why `∗` is the wrong connective for a project whose
+independence relation permits shared reads.
 
 ---
 
@@ -136,7 +138,7 @@ level, not only the outermost `par` — §9's counterexample is exactly why the 
 would be unsound), `wellFormed_canonical` says the only state `parPair C C' σ` can ever reach is the
 canonical `runSeq` value, which *is* "run `C` fully, then run `C'`" — so the two triples compose
 directly. One detail worth flagging: the frame side condition here is stated with `Local`/`Disjoint`
-predicates over locations, not the imported `∗` (`Logic/BIInstance.lean`'s `∗` is *exclusive*
+predicates over locations, not a separating `∗` (a BI's `∗` is *exclusive*
 heap-split, strictly narrower than `Indep` — see §8 — so using it here would silently reintroduce
 the very restriction Bernstein exists to lift). The upshot: "did we prove CSL sound" is the wrong
 question to ask about this codebase — soundness here is a *corollary* of `par_seq_eq`, checked once,
@@ -402,6 +404,28 @@ Indep (r₁,w₁) (r₂,w₂) := w₁∩w₂ = ∅ ∧ w₁∩r₂ = ∅ ∧ w�
 
 Separation logic recovers this with **fractional / read permissions** (`DFrac`): a read-only
 permission can be split and shared, a write permission cannot. Same idea, different packaging.
+
+### Why there is no BI instance here
+
+The project briefly depended on iris-lean to find out whether a bunched-implications instance was
+worth having. The spike answered the question it was built for and the dependency was then removed,
+so the finding is recorded here rather than in a module.
+
+What the spike established, in order. Instantiating `BI` at a heap-predicate model costs nothing:
+iris-lean ships a fully proved non-step-indexed instance for exactly this shape of model, with
+`▷ := id` and a discrete COFE, so the step-indexing burden that was the stated risk never
+materialized. But the `∗` that instance provides is *exclusive* separation — `P ∗ Q` means the state
+splits into disjoint-domain sub-heaps — and the whole content of this section is that `Indep` is
+weaker than that. So the imported connective is not the one the theorems are about, and the
+assertion carrier it is defined over (a partial map) is a different type from `Core.State` (total),
+which would need a restriction or an embedding before a triple could even be stated.
+
+Two conclusions follow. First, `Logic/Rules.lean` frames with `∧` over `Local`/`Disjoint` predicates
+on locations, and the parallel rule it proves is therefore *fully general* — shared reads included —
+rather than waiting on a `∗` that would have narrowed it. Second, a BI buys notation and proof-mode
+tactics for an assertion type no theorem in this tree uses, which is not worth a dependency. If
+read-sharing is ever wanted inside a separating conjunction, the construction to build is a
+fractional-permission `∗` over `Core.State`, and nothing available supplies it off the shelf.
 
 **→ In our code.** `Core/Access.lean` (M2). Already visible in `Label.conflicts`: same location and
 *at least one write* — read/read never conflicts. `Examples/Programs/MatMul.lean` is this exact matmul

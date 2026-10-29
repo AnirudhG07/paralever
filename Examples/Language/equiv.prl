@@ -1,0 +1,36 @@
+-- Two sorts of the same eight cells, built from one comparator: bubble sort reads it in order,
+-- odd-even transposition sort runs a phase of them at once. The claim is that they agree on A.
+-- docs/equivalence.md
+
+const n = 8
+
+def cmpswap(A, i, j) {
+  %x := A[i]
+  %y := A[j]
+  if %x > %y { A[i] := %y
+               A[j] := %x } else { A[i] := %x
+               A[j] := %y }
+}
+
+-- every pass compares every adjacent pair, left to right: no parallel block at all
+def bubble(A, m) {
+  for i in m {
+    for j in m - 1 { cmpswap(A, j, j + 1) }
+  }
+}
+
+-- phase p compares the pairs starting at p mod 2, all of them at once
+def oddeven(A, m) {
+  for p in m {
+    parfor q in (m - p % 2) / 2 {
+      cmpswap(A, 2 * q + p % 2, 2 * q + p % 2 + 1)
+    } :: "phase"
+    synchronize
+  }
+}
+
+buf A[8] = 5, 3, 8, 1, 7, 2, 6, 4
+
+assert bubble(A, n) == oddeven(A, n) on A
+
+print A

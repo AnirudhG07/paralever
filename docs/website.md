@@ -183,3 +183,37 @@ Figures name things in plain language, because a figure is the one place a reade
 name up: the box both front ends converge on says *a Paralever program*, not `Layout × ParProg`.
 Module names belong in the small captions beside a step, which is where "where this lives in the
 code" goes.
+
+## The deck's sizes
+
+`reveal.js` lays every slide out on one box of a fixed size — 1280 × 720 here, set in
+`SlidesMain.lean`'s `cfg` — and then scales that whole box to the window with a CSS transform.
+Lengths in the deck's stylesheets are therefore in **box pixels**, and a length in `vh` or `vw` is
+a bug: those measure the *window*, so the transform multiplies them a second time and the layout
+changes shape with the window.
+
+The arithmetic: reveal's scale is `min(W/1280, H/720)`. With a window wider than 16∶9 the scale is
+`H/720`, and `3.4vh` works out to `3.4 × H/100 ÷ (H/720) = 24.5` box pixels whatever `H` is — the
+case the deck was written in, where nothing looks wrong. With a window *narrower* than 16∶9 — a
+16∶10 laptop screen, which is every MacBook — the scale is `W/1280` instead and the same `3.4vh`
+becomes `43.5 × H/W`, so 27.2 box pixels: eleven percent larger text on the same 720-pixel-tall
+box. That is enough to push the last line of a full slide past the bottom edge, where reveal hides
+it without a scrollbar. The deck fitted on one machine and not another for no reason visible in the
+source. `lean.css` § *base* now gives the conversion (`1vh` = 7.2px, `1vw` = 12.8px) and the files
+hold no viewport units.
+
+`docs/slides/autofit.js` does the two things that should still respond to the window:
+
+- **The box follows the window's shape.** On a window that is not 16∶9 it enlarges the box's short
+  side — 1280 × 800 for a 16∶10 window — rather than leaving reveal to letterbox it. The box only
+  ever grows, so the scale factor and the on-screen text size are unchanged and the extra room is
+  room a slide can use. Outside aspect ratios 1.15 to 2.2 it stops and lets reveal letterbox,
+  because no slide was written for a window that shape.
+- **An overfull slide shrinks instead of clipping.** It measures the union of the slide's children
+  against the box and applies `zoom` to them, which re-runs layout, so the measurement after it is
+  honest and margins shrink with the text as a `font-size` change would not. The floor is 0.62; a
+  slide still overrunning at that point gets `.autofit-scroll`, a scrollbar, which is a visible
+  failure rather than a silent one. Measuring again after webfonts load is what catches a font
+  falling back to wider metrics.
+
+The script is shipped as a theme asset because `Config.extraJs` carries URLs, not file contents.

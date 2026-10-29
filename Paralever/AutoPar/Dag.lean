@@ -27,9 +27,13 @@ def depth : ParProg → Nat
   | .par ss        => depthAll ss
   | .label _ s     => depth s
   | .synchronize         => 0
+  | .print _             => 0
   | .loadAt _ _ _  => 1
   | .storeAt _ _ _ => 1
   | .ifElse _ t e  => max (depth t) (depth e)
+  -- a nest's longest path is one thread's: its body once per sequential point, the forked levels
+  -- running at the same time -- ref: `docs/loops.md`
+  | .loop n        => n.threadOps
 
 /-- The longest of the threads' depths — `time`'s `foldr max` at a fork. -/
 def depthAll : List ParProg → Nat

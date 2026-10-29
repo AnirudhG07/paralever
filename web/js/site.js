@@ -139,8 +139,9 @@
       return {
         name: "prl",
         keywords: {
-          keyword: "paralever buf const reg free parallel parfor for if else while in at",
-          built_in: "zeros ones eye arange full min max"
+          keyword: "paralever def assertParSeq assert on buf let const reg slice copy from free synchronize " +
+                   "parallel parfor for if else while in at input print",
+          built_in: "zeros ones eye arange full str min max"
         },
         contains: [
           h.COMMENT("--", "$"),
@@ -161,6 +162,9 @@
         contains: [
           h.COMMENT("//", "$"),
           { className: "title", begin: /"[a-z_]+\.[a-z_.]+"/ },
+          // custom form prints the same op name unquoted
+          { className: "title", begin: /\b(?:affine|memref|arith|func|async|scf|index|tensor)\.[a-z_.]+/ },
+          { className: "symbol", begin: /@[A-Za-z0-9_]+/ },
           { className: "string", begin: '"', end: '"' },
           { className: "variable", begin: /%[A-Za-z0-9_]+/ },
           { className: "type", begin: /![A-Za-z0-9_.<>x]+|\bmemref<[^>]*>/ },

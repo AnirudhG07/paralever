@@ -1,0 +1,41 @@
+-- Four rows of a matrix times one vector, at the same time, and then a scaling pass.
+-- Every thread reads the whole of V and writes one cell of Y: shared reads are what
+-- Bernstein's condition allows and a disjointness condition would refuse.
+-- The rows are written once, as a `def`, and the call is written out at every site.
+-- -- ref: docs/prl.md § Functions
+
+const n = 4
+
+-- Out[r] := Row · V, over m columns
+def dot(Out, r, Row, V, m) {
+  %s := 0
+  for j in m {
+    %a := Row[j]
+    %b := V[j]
+    %s := %s + %a * %b
+  }
+  Out[r] := %s
+}
+
+def scale(Out, In, k, m) {
+  for i in m {
+    %x := In[i]
+    Out[i] := k * %x
+  }
+}
+
+buf M[4, 4] = arange
+buf V[4] = ones
+buf Y[4] = zeros
+buf Z[4] = zeros
+
+parfor i in n {
+  slice row = M[i * n .. i * n + n]
+  dot(Y, i, row, V, n)
+} :: "rows"
+
+synchronize
+scale(Z, Y, 2, n)
+
+print Y
+print Z

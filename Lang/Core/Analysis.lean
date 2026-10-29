@@ -48,6 +48,30 @@ def regsOf : AExp → List Reg
   | .min a b => regsOf a ++ regsOf b
   | .max a b => regsOf a ++ regsOf b
   | .div a b => regsOf a ++ regsOf b
+  | .lt a b  => regsOf a ++ regsOf b
+  | .eq a b  => regsOf a ++ regsOf b
+  | .not a   => regsOf a
+
+/-- The registers a nest body reads. Its induction registers are written inside the thread and a
+fork's register writes are discarded at the join, so only the reads are visible to the parent.
+-- ref: `docs/loops.md` -/
+def regsOfNest : List NestStmt → List Reg
+  | []            => []
+  | .rd _ _ :: ss => regsOfNest ss
+  | .wr _ e :: ss => regsOf e ++ regsOfNest ss
+  | .st _ e :: ss => regsOf e ++ regsOfNest ss
+
+/-- The registers a `print` reads. A literal and a whole-buffer item read none; an expression and a
+computed subscript read theirs. -- ref: `docs/print.md` -/
+def regsOfItems : List PrintItem → List Reg
+  | []      => []
+  | i :: is =>
+      (match i with
+       | .text _   => []
+       | .exp e    => regsOf e
+       | .buf ..   => []
+       | .cell ..  => []
+       | .at _ _ e => regsOf e) ++ regsOfItems is
 
 mutual
 
@@ -68,6 +92,9 @@ def regFootprint : ParProg → Footprint
   | .ifElse c t e  =>
       Footprint.union ⟨regsOf c, []⟩ (Footprint.union (regFootprint t) (regFootprint e))
   | .synchronize     => .empty
+  | .print items     => ⟨regsOfItems items, []⟩
+  -- a nest forks, so its register writes are discarded too
+  | .loop n          => ⟨regsOfNest n.body, []⟩
 
 /-- The threads' register footprints, combined. -/
 def regFootprintsOf : List ParProg → Footprint
@@ -82,6 +109,16 @@ at a footprint. -/
 def isSynchronize : ParProg → Bool
   | .synchronize => true
   | _      => false
+
+/-- Whether a statement may not be grouped with its neighbours: a `synchronize`, or a `print`. A
+print is erased from the program and its value read off the sequential run, so a scheduler that
+moved a statement across one would change what it prints. Distinct from `isSynchronize`, which
+`phases` splits on: `joinPhases` puts a `synchronize` back between phases and could not put a print
+back. -- ref: `docs/print.md` § A print is a barrier for the parallelizer -/
+def isBarrier : ParProg → Bool
+  | .synchronize => true
+  | .print _     => true
+  | _            => false
 
 /-- **May these two run concurrently?** Bernstein on memory *and* on registers, and never across a
 synchronize.
@@ -125,6 +162,8 @@ def regKills : ParProg → List Reg
   | .storeAt _ _ _ => []
   | .ifElse _ t e  => (regKills t).filter (fun r => (regKills e).contains r)
   | .synchronize         => []
+  | .print _             => []
+  | .loop _              => []
 
 /-- Registers live at the entry of a chain: read before being certainly overwritten. Backward
 liveness — without the kill a reused register like `%0` would appear live across the whole program
@@ -163,7 +202,7 @@ statements may be siblings but *where a fork boundary may be placed*, and that i
 property of the boundary, not of a pair. `atoms` has already enforced it by the time this is
 asked. -/
 def canParSeg (a b : ParProg) : Bool :=
-  !a.isSynchronize && !b.isSynchronize && indepB (footprintOf a) (footprintOf b)
+  !a.isBarrier && !b.isBarrier && indepB (footprintOf a) (footprintOf b)
 
 /-- The longest prefix of `ss` that is pairwise independent — the next group a greedy scheduler
 would fork. -/
@@ -246,14 +285,36 @@ def synchronizeFreeAll : List ParProg → Bool
 
 end
 
-/-- Whether no `synchronize` sits inside a `parallel` thread. Between phases it is a constraint on
-the schedule; *inside* a thread it would be a barrier between siblings, and `ParM` has no
-synchronisation node to give that a meaning. `Lang.Compile.Lower` refuses such a program. -/
-def noSynchronizeInThread : ParProg → Bool
-  | .par ss        => synchronizeFreeAll ss
-  | .seq a b       => noSynchronizeInThread a && noSynchronizeInThread b
-  | .label _ s     => noSynchronizeInThread s
-  | .ifElse _ t e  => noSynchronizeInThread t && noSynchronizeInThread e
+mutual
+
+/-- Whether the statement contains no barrier at all — no `synchronize` and no `print`. The gate on
+the *proved* rewrite route: `emit` wraps every stage in a `par`, so either would end up inside a
+thread, where neither has a meaning. -- ref: `docs/print.md`, `docs/autopar.md` § Synchronization -/
+def barrierFree : ParProg → Bool
+  | .synchronize  => false
+  | .print _      => false
+  | .seq a b      => barrierFree a && barrierFree b
+  | .par ss       => barrierFreeAll ss
+  | .label _ s    => barrierFree s
+  | .ifElse _ t e => barrierFree t && barrierFree e
+  | _             => true
+
+def barrierFreeAll : List ParProg → Bool
+  | []      => true
+  | s :: ss => barrierFree s && barrierFreeAll ss
+
+end
+
+/-- Whether no barrier — no `synchronize`, no `print` — sits inside a `parallel` thread. Between
+phases a barrier is a constraint on the schedule; *inside* a thread it would be a barrier between
+siblings, and `ParM` has no synchronisation node to give that a meaning. `Lang.Compile.Lower`
+refuses such a program (`P106`); this is the gate that the parallelizer does not build one.
+-- ref: `docs/print.md` § Where a print may not go -/
+def noBarrierInThread : ParProg → Bool
+  | .par ss        => barrierFreeAll ss
+  | .seq a b       => noBarrierInThread a && noBarrierInThread b
+  | .label _ s     => noBarrierInThread s
+  | .ifElse _ t e  => noBarrierInThread t && noBarrierInThread e
   | _              => true
 
 /-- **The proposal, for one phase.** The groups a greedy scheduler would fork: a singleton run stays

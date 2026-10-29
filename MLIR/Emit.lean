@@ -1,4 +1,5 @@
 import MLIR.Lower
+import Lang.Core.Analysis
 
 /-! # Generic form out: a compiled program as MLIR
 
@@ -119,17 +120,78 @@ partial def expOps : AExp → E (List Op × String)
   | .div a b => bin "arith.divsi" a b
   | .min a b => bin "arith.minsi" a b
   | .max a b => bin "arith.maxsi" a b
+  | .lt a b  => cmp 2 a b          -- `slt`
+  | .eq a b  => cmp 0 a b          -- `eq`
+  -- `not a` is `a == 0`, which is one op fewer than negating a comparison and reads back as the
+  -- same `AExp` the emitter was given.
+  | .not a   => cmp 0 a (.lit 0)
 where
   bin (nm : String) (a b : AExp) : E (List Op × String) := do
     let (oa, na) ← expOps a
     let (ob, nb) ← expOps b
     let r ← fresh
     pure (oa ++ ob ++ [mk nm [r] [na, nb] [] [] [cellTy, cellTy] [cellTy]], r)
+  -- `arith.cmpi` answers in `i1`, and a cell holds `cellTy`, so the comparison is widened. The
+  -- predicate is MLIR's own numbering: 0 is `eq`, 2 is `slt`. -- ref: `docs/mlir.md` § Conditions
+  cmp (pred : Int) (a b : AExp) : E (List Op × String) := do
+    let (oa, na) ← expOps a
+    let (ob, nb) ← expOps b
+    let c ← fresh
+    let r ← fresh
+    pure (oa ++ ob ++
+      [ mk "arith.cmpi" [c] [na, nb] [("predicate", .ann (.int pred) (.int 64))] []
+          [cellTy, cellTy] [.int 1],
+        mk "arith.extui" [r] [c] [] [] [.int 1] [cellTy] ], r)
 
 /-- `%i = "arith.index_cast"(%v) : (i64) -> index` — a computed subscript is an index. -/
 def toIndex (v : String) : E (List Op × String) := do
   let r ← fresh
   pure ([mk "arith.index_cast" [r] [v] [] [] [cellTy] [.index]], r)
+
+/-! ## A rolled nest, out
+
+A nest is `affine.parallel` over its forked prefix wrapping one `affine.for` per sequential level,
+which is the pair of ops `MLIR/Lower.lean` reads back as one.
+
+The subscript maps are reconstructed by dividing the flat coefficients by the memref's row-major
+strides, outermost axis first. The division is exact — `Σ strides[j] · axis[j]` is the flat form it
+came from — so the reader's own `rowMajor` recovers the access that was declared, which is what
+`emitRoundTrips` compares. -- ref: `docs/loops.md` § The nest, out -/
+
+/-- A flat linear form split into one form per memref axis, against the axis strides. -/
+def splitAxes : List Nat → List Nat → Nat → List (List Nat × Nat)
+  | [],      _,  _   => []
+  | s :: ss, cs, off =>
+      ((cs.map (fun c => c / s), off / s)) :: splitAxes ss (cs.map (fun c => c % s)) (off % s)
+
+/-- One axis's form as an affine expression over the nest's coordinates. -/
+def axisExp (q : List Nat) (c : Nat) : AffExp :=
+  q.zipIdx.foldl
+    (fun acc (k, j) => if k == 0 then acc else .add acc (.mul (.const (Int.ofNat k)) (.dim j)))
+    (.const (Int.ofNat c))
+
+/-- The axes a buffer is emitted with: its shape, or one axis of `size` cells when it is
+shapeless — exactly what `memTy` writes, so the reader reads the shape back. -/
+def emitAxes (p : Placed) : List Nat :=
+  if p.shape.isEmpty then [p.toBuf.size] else p.shape
+
+/-- The map an affine access carries: one result per axis, over the nest's levels. -/
+def accessMapOf (depth : Nat) (p : Placed) (a : Nest.AffAccess) : AffMap :=
+  ⟨(List.range depth).map (fun i => "d" ++ toString i), [],
+   (splitAxes (Nest.strides (emitAxes p)) a.coeffs a.off).map (fun qc => axisExp qc.1 qc.2)⟩
+
+/-- The buffer an access names, found by its base and extent as `ranged` finds a computed one. -/
+def accessBuf (L : Layout) (a : Nest.AffAccess) : E Placed := do
+  match L.bufs.find? (fun p => p.base == a.base && p.toBuf.size == a.size) with
+  | some p => pure p
+  | none   => throw s!"a rolled nest accesses [{a.base}, {a.base + a.size}), which is no declared \
+                       buffer"
+
+/-- A constant-tuple affine map — the form `affine.for` and `affine.parallel` write bounds in. -/
+def constMap (ks : List Int) : MAttr := .affine ⟨[], [], ks.map AffExp.const⟩
+
+/-- `"affine.yield"() : () -> ()` — the terminator every affine region needs. -/
+def affineYield : Op := mk "affine.yield" [] [] [] [] [] []
 
 mutual
 
@@ -186,6 +248,25 @@ partial def stmtOps (L : Layout) : ParProg → E (List Op)
       note ("synchronize needs no operation: every fork is already closed by the async.await_all "
             ++ "that joins it, so the phases MLIR sees are the phases the barrier marks")
       pure []
+  | .print _ =>
+      throw "print has no spelling in the op set the reader supports, so a file with one cannot \
+             be emitted as MLIR"
+  | .loop n => thread (do
+      let depth := n.ivs.length
+      -- one block argument per level, in the order the subscript maps index them
+      let avs ← (List.range depth).mapM (fun _ => fresh)
+      -- a level's induction register holds the loop's *value*, which is its block argument. MLIR
+      -- types that `index` and a cell `i64`, so a body that reads an index as a value gets the
+      -- cast; one that only subscripts with it gets nothing.
+      let used := Paralever.Lang.ParProg.regsOfNest n.body
+      let casts ← (n.ivs.zip avs).filterMapM fun (r, v) =>
+        if used.contains r then do
+          let (os, w) ← toIndex v
+          bindReg r w
+          pure (some os)
+        else pure none
+      let body ← n.body.foldlM (fun acc st => do pure (acc ++ (← nestStmtOps L depth avs st))) []
+      pure (nestOps n avs (casts.flatten ++ body)))
 
 /-- A fork: one `async.execute` per thread, then the `async.await_all` that joins them. The token
 is named before its body is emitted, because that is the order the names are defined in. -/
@@ -200,6 +281,51 @@ partial def forkOps (L : Layout) (ss : List ParProg) (nm : Option String) : E (L
                 (nm.elim [] (fun n => [("paralever.label", MAttr.str n)])) []
                 (toks.map (fun _ => tokenTy)) []
   pure (ts.map Prod.snd ++ [join])
+
+/-- One body statement of a nest: an `affine.load`, an `affine.store`, or the arithmetic a `.st`
+is. The index operands are every level's block argument, which is what makes the map's dimensions
+the nest's coordinates. -/
+partial def nestStmtOps (L : Layout) (depth : Nat) (avs : List String) :
+    NestStmt → E (List Op)
+  | .rd r a => do
+      let p ← accessBuf L a
+      let v ← fresh
+      bindReg r v
+      pure [mk "affine.load" [v] (p.name :: avs) [("map", .affine (accessMapOf depth p a))] []
+               (memTy p :: avs.map (fun _ => MTy.index)) [cellTy]]
+  | .wr a e => do
+      let p ← accessBuf L a
+      let (os, v) ← expOps e
+      pure (os ++ [mk "affine.store" [] (v :: p.name :: avs)
+                      [("map", .affine (accessMapOf depth p a))] []
+                      (cellTy :: memTy p :: avs.map (fun _ => MTy.index)) []])
+  | .st r e => do
+      let (os, v) ← expOps e
+      bindReg r v
+      pure os
+
+/-- The nest's own operations: `affine.parallel` over the forked prefix, then one `affine.for` per
+sequential level, innermost last. A nest with no forked level is the `affine.for` chain alone,
+which is what `parDepth = 0` means. -/
+partial def nestOps (n : LoopNest) (avs : List String) (body : List Op) : List Op :=
+  let lv := fun (k : Nat) => (n.lo.getD k 0, n.sizes.getD k 0, n.step.getD k 1)
+  let seqs := (List.range (n.ivs.length - n.parDepth)).map (fun j => n.parDepth + j)
+  -- innermost first, so each `affine.for` wraps what is already built
+  let inner := seqs.reverse.foldl (fun acc k =>
+      let (lo, sz, sp) := lv k
+      [ mk "affine.for" [] [] [ ("lowerBound", constMap [lo])
+                              , ("upperBound", constMap [lo + sp * Int.ofNat sz])
+                              , ("step", .int sp) ]
+          [⟨[(avs.getD k "0", MTy.index)], acc ++ [affineYield]⟩] [] [] ]) body
+  if n.parDepth == 0 then inner
+  else
+    let ks := List.range n.parDepth
+    [ mk "affine.parallel" [] []
+        [ ("lowerBoundsMap", constMap (ks.map (fun k => (lv k).1)))
+        , ("upperBoundsMap", constMap (ks.map (fun k =>
+              let (lo, sz, sp) := lv k; lo + sp * Int.ofNat sz)))
+        , ("steps", .arr ((ks.map (fun k => (lv k).2.2)).map MAttr.int)) ]
+        [⟨ks.map (fun k => (avs.getD k "0", MTy.index)), inner ++ [affineYield]⟩] [] [] ]
 
 end
 

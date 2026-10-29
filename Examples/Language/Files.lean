@@ -33,14 +33,14 @@ info: sum.prl
   writes    {out[0], out[1], out[2]}
   threads   3
   rounds    3 parallel, 9 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)
+  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (checkReport "sum.prl" sum)
 
 -- running it fills the buffers the file declared
 /--
-info: heap after the run — a .prl program has no print statement, so this is its output
+info: heap after the run — the cells the program left behind, which is most of what it says
 9 cells in 2 buffers, addressed 0 to 8
 NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
 
@@ -95,7 +95,7 @@ info: race.prl
   writes    {log[0], x[0], log[1]}
   threads   2
   rounds    2 parallel, 4 sequential
-  verdict   RACY — 1 conflicting fork(s): {x[0]}
+  verdict   every heap  RACE found — x[0] written by both threads
 -/
 #guard_msgs in
 #eval IO.println (checkReport "race.prl" race)
@@ -115,12 +115,13 @@ Sequential: x[0]↦9
 
 example : ParProg.wfB race.prog = false := by decide
 
-/-! ## 4 · The third verdict: refused, but not racy
+/-! ## 4 · The third verdict: refused by `wfB`, proved at this heap
 
 `scatter.prl` writes `dst[idx[i]]`. The address is computed, so the syntactic footprint has to
 claim all of `dst`, and `wfB` refuses. At the heap the file declares, the three indices miss each
-other and the exact check accepts. The tool reports *which of the two checks disagreed*, rather
-than calling it a race. -/
+other and the exact check accepts — which is a proof of `par = seq` there, and the theorem
+`paralever prove` writes for this file. What stays open is every other heap, since `idx` could hold
+anything. -- ref: `docs/cli.md` § The three verdicts -/
 
 /--
 info: scatter.prl
@@ -129,12 +130,39 @@ info: scatter.prl
   writes    {dst[0], dst[1], dst[2]}
   threads   3
   rounds    2 parallel, 6 sequential
-  verdict   footprint over-approximated: wfB says no, the heap check says yes
+  verdict   this heap   Proved: Yes — no two threads touch one cell here
+            any heap    RACE found — with idx[0] = -1: dst[0] written by both threads
 -/
 #guard_msgs in
 #eval IO.println (checkReport "scatter.prl" scatter)
 
-/-! ## 5 · The answers, pinned
+/-! ## 5 · `Inconclusive`, and both of its reasons
+
+`branch.prl` is the other way the two halves of the verdict come apart. The two threads write
+mirror-image cells of one `if`, so whichever arm runs they write different cells and `par = seq`
+holds at *every* heap — but `footprintOf` unions both arms, so `wfB` sees each thread touching both
+cells and refuses. The search then probes every value of the one cell the condition reads and finds
+no race, which is not a proof: `Inconclusive`, naming which cells were refused over, which
+constructor widened the footprint, and how large the search was.
+-- ref: `docs/general-heap.md` § What `Inconclusive` means -/
+
+def branch : Compiled := prl_file "branch.prl"
+
+/--
+info: branch.prl
+  memory    A[2] @0, c[1] @2  (3 cells)
+  reads     {c[0]}
+  writes    {A[0], A[1]}
+  threads   2
+  rounds    2 parallel, 3 sequential
+  verdict   this heap   Proved: Yes — no two threads touch one cell here
+            any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
+            no race found in 11 heap(s) probed over {c[0]}
+-/
+#guard_msgs in
+#eval IO.println (checkReport "branch.prl" branch)
+
+/-! ## 6 · The answers, pinned
 
 A change that keeps a verdict but breaks an answer still fails the build. -/
 

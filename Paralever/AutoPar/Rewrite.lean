@@ -38,7 +38,7 @@ theorems need; the first is a boundary, not a theorem's hypothesis — `emit` wr
 one needs a liveness condition this route does not yet state. `ParProg.autoPar` is the route that
 honours a barrier. -- ref: docs/autopar.md § Synchronization -/
 def rewriteOk (p : ParProg) : Bool :=
-  synchronizeFree p && noRegFlow (threads (planOf p)) && wfB (emit (planOf p))
+  barrierFree p && noRegFlow (threads (planOf p)) && wfB (emit (planOf p))
 
 /-- **The rewrite.** The analysis is untrusted; `rewriteOk` is the proved gate, and a program whose
 plan does not pass it is returned unchanged. -/

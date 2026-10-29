@@ -18,12 +18,11 @@ to full outcome equivalence, not a restatement of something already on the page 
 below is built on `par_seq_eq`, not confirmed by it: no separate soundness paper of ours is cited
 here beyond that theorem itself.
 
-Uses plain `∧` for framing, not the separating `∗` from `Logic/BIInstance.lean` — see that file's
-header for why (that instance's `∗` is exclusive/disjoint-heap only, narrower than this project's
-own `Indep`, which permits shared reads). `Local` below plays `∗`'s locality role directly against
-`Core/Access.lean`'s own footprint vocabulary, so the parallel rule proved here is fully general
-(shared reads included) without waiting on that design question. Graduating framing itself to `∗`
-is future work; nothing here is blocked on it.
+Framing is plain `∧`, not a separating `∗`, and that is a decision rather than a stopgap. A
+separating conjunction splits the heap into disjoint domains, which is strictly narrower than
+`Core/Access.lean`'s `Indep` — Bernstein's conditions permit two threads to *read* one cell, and `∗`
+does not. `Local` below plays `∗`'s locality role directly against the footprint vocabulary, so the
+parallel rule proved here is fully general, shared reads included. -- ref: `docs/theory.md` § 8
 -/
 
 namespace Paralever.Logic

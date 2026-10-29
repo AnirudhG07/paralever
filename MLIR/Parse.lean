@@ -35,17 +35,29 @@ structure PState where
   i  : Nat
   deriving Inhabited
 
-/-- A reader: consumes input, or fails with a message naming the offset. -/
-abbrev P (α : Type) := StateT PState (Except String) α
+/-- A failure: the offset, and what was wrong. The snippet around it is rendered by `render`, at
+the boundary, not here: `attempt` discards most failures and quoting the source costs a pass over
+the file, which made reading a large module quadratic in its length.
+-- ref: docs/scale.md § Where the time went -/
+structure PErr where
+  pos : Nat
+  msg : String
+
+/-- A reader: consumes input, or fails at an offset. -/
+abbrev P (α : Type) := StateT PState (Except PErr) α
 
 namespace P
 
-/-- Fail, quoting where. The snippet is what turns "parse error" into something a corpus report can
-act on. -/
+/-- Fail at the cursor. -/
 def err (msg : String) : P α := do
   let st ← get
-  let near := String.ofList ((st.cs.toList.drop st.i).take 48)
-  StateT.lift (Except.error (msg ++ " (offset " ++ toString st.i ++ ", near: " ++ near ++ ")"))
+  StateT.lift (Except.error ⟨st.i, msg⟩)
+
+/-- A failure with the source quoted, which is what turns "parse error" into something a corpus
+report can act on. Called once, on the failure that escaped. -/
+def render (cs : Array Char) (e : PErr) : String :=
+  let near := String.ofList ((cs.toList.drop e.pos).take 48)
+  e.msg ++ " (offset " ++ toString e.pos ++ ", near: " ++ near ++ ")"
 
 /-- Run `p`, and on failure consume nothing. The one piece of backtracking the grammar needs: a
 `memref`'s shape is a run of `N x` groups whose end is only known by trying to read one more. -/
@@ -208,14 +220,23 @@ partial def parseType : P MTy := do
   skipWs
   if ← lookingAt "index" then do let _ ← kw "index"; pure .index
   else if ← lookingAt "memref" then do
-    let _ ← kw "memref"
-    let _ ← ch '<'
-    let dims ← parseDims []
-    let elt ← parseType
-    skipWs
-    if (← peek) == some ',' then err "memref with a layout map or memory space is not supported"
-    let _ ← ch '>'
-    pure (.memref dims elt)
+    -- a memref the structured reader cannot take — a dynamic dimension, a layout map, a memory
+    -- space — is kept as the text it is written as, so the file parses and the lowering is what
+    -- refuses it. -- ref: docs/mlir-pretty.md
+    match ← attempt (do
+        let _ ← kw "memref"
+        let _ ← ch '<'
+        let dims ← parseDims []
+        let elt ← parseType
+        skipWs
+        if (← peek) == some ',' then err "memref with a layout map or memory space"
+        let _ ← ch '>'
+        pure (MTy.memref dims elt)) with
+    | some t => pure t
+    | none   => do
+        let _ ← kw "memref"
+        let inner ← angles
+        pure (.other ("memref" ++ inner))
   else if ← lookingAt "tensor" then do
     let _ ← kw "tensor"
     let _ ← ch '<'
@@ -252,9 +273,28 @@ partial def parseType : P MTy := do
         let w ← takeWhile Char.isDigit
         if w.isEmpty then err "expected a float width after 'f'" else pure (.float w.toNat!)
     | some c   =>
-        if isIdentStart c then do let s ← ident; pure (.other s)
+        if isIdentStart c then do
+          let s ← ident
+          -- a parameterised type the reader has no rule for (`vector<64xf32>`, `complex<f32>`) is
+          -- kept as the text it is written as, so a file that mentions one still parses and it is
+          -- the lowering that refuses it. -- ref: docs/mlir-pretty.md
+          if (← peek) == some '<' then do let inner ← angles; pure (.other (s ++ inner))
+          else pure (.other s)
         else err "expected a type"
     | none     => err "expected a type, found end of input"
+
+/-- A balanced `<…>` run, verbatim, brackets included. -/
+partial def angles : P String := do
+  let _ ← ch '<'
+  let rec go (d : Nat) (acc : List Char) : P (List Char) := do
+    match ← peek with
+    | none     => err "unterminated '<'"
+    | some '<' => do bump; go (d + 1) ('<' :: acc)
+    | some '>' => do
+        bump
+        if d == 0 then pure ('>' :: acc) else go (d - 1) ('>' :: acc)
+    | some c   => do bump; go d (c :: acc)
+  pure (String.ofList ('<' :: (← go 0 []).reverse))
 
 /-- Dimensions of a `memref`, each a number followed by `x`. -/
 partial def parseDims (acc : List Nat) : P (List Nat) := do
@@ -448,6 +488,18 @@ partial def parseAttrValue : P MAttr := do
   else if ← lookingAt "false" then do let _ ← kw "false"; pure (.int 0)
   else match ← peek with
     | some '"' => do let s ← strLit; pure (.str s)
+    | some '#' => do
+        -- a dialect attribute (`#llvm.fastmath<none>`) is kept verbatim; a bare alias (`#map`) is
+        -- not, because a rule that read it as the identity map would misread the file.
+        bump
+        let nm ← ident
+        skipWs
+        if (← peek) == some '<' then do
+          let inner ← angles
+          pure (.raw ("#" ++ nm ++ inner))
+        else if nm.any (· == '.') then pure (.raw ("#" ++ nm))
+        else err s!"attribute alias '#{nm}' is not defined in this file, or is an alias the reader \
+                    does not resolve here"
     | some '@' => do
         bump
         skipWs
@@ -597,7 +649,10 @@ partial def parseTop (acc : List Op) : P (List Op) := do
 
 /-- **Read a file of MLIR generic form.** -/
 def parse (src : String) : Except String (List Op) :=
-  (parseTop [] ⟨src.toList.toArray, 0⟩).map Prod.fst
+  let cs := src.toList.toArray
+  match parseTop [] ⟨cs, 0⟩ with
+  | .ok (ops, _) => .ok ops
+  | .error e     => .error (P.render cs e)
 
 /-! ## Printing it back
 
@@ -671,6 +726,7 @@ def renderAttr : MAttr → String
   | .arr xs     => "[" ++ ", ".intercalate (renderAttrs xs) ++ "]"
   | .dict kvs   => "{" ++ ", ".intercalate (renderAttrDict kvs) ++ "}"
   | .unit       => "unit"
+  | .raw t      => t
   | .darr t es  => if es.isEmpty then "array<" ++ t ++ ">"
                    else "array<" ++ t ++ ": " ++ ", ".intercalate (es.map toString) ++ ">"
   | .ann a t    => renderAttr a ++ " : " ++ renderTy t

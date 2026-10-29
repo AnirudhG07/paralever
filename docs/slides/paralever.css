@@ -15,7 +15,7 @@
    event + links that reads low and loose, so top-anchor and close gaps. */
 .reveal section[data-state="title"] {
   justify-content: flex-start;
-  padding: 8.5vh 7vw 5vh;
+  padding: 61.2px 89.6px 36px;
 }
 .reveal section[data-state="title"]::before { margin-bottom: 1em; }
 .reveal section[data-state="title"] h2 { margin-bottom: 0.3em; }
@@ -39,7 +39,7 @@
 .reveal .punch.center { text-align: center; }
 
 /* ---- big-number stats ---- */
-.reveal .stats { display: flex; justify-content: center; gap: 3vw; margin: 0.5em 0; }
+.reveal .stats { display: flex; justify-content: center; gap: 38.4px; margin: 0.5em 0; }
 .reveal .stat { font-size: 1.9em; font-weight: 800; color: var(--lean-blue); text-align: center; }
 .reveal .stat small { display: block; font-size: 0.34em; font-weight: 500; color: var(--muted); letter-spacing: 0.01em; }
 
@@ -246,10 +246,10 @@
 .reveal table.tight td { font-size: 0.5em !important; }
 
 /* ---- two-column tuning (lean.css provides the .two-col grid) ---- */
-.reveal .two-col { gap: 2vw; align-items: start; }
+.reveal .two-col { gap: 25.6px; align-items: start; }
 
 /* ---- hstack/vstack defaults for side-by-side code ---- */
-.reveal .r-hstack { align-items: flex-start; justify-content: center; gap: 2vw; width: 100%; }
+.reveal .r-hstack { align-items: flex-start; justify-content: center; gap: 25.6px; width: 100%; }
 .reveal .r-vstack { gap: 0.25em; align-items: stretch; }
 
 /* ---- closing slide ---- */
@@ -276,13 +276,13 @@
   padding: 0.5em; margin: 0.2em auto; text-align: center;
   display: flex; flex-direction: column; justify-content: center; min-height: 6em;
 }
-.reveal .shotbox img { max-width: 100%; max-height: 40vh; border-radius: 6px; }
+.reveal .shotbox img { max-width: 100%; max-height: 288px; border-radius: 6px; }
 .reveal .shotbox .cap { font-size: 0.56em; color: var(--muted); margin-top: 0.3em; }
 
 /* ---- .figwrap : a wrapper for an inline SVG figure.  Unlike .pipewrap it sets
    no font, so each figure's own font-family attributes decide mono vs sans. ---- */
 .reveal .figwrap { display: flex; justify-content: center; margin: 0.35em auto; width: 100%; }
-.reveal .figwrap svg { width: 92%; height: auto; max-height: 46vh; }
+.reveal .figwrap svg { width: 92%; height: auto; max-height: 331.2px; }
 
 /* ---- .pipewrap : the pure -> seq -> par proof pipeline ---- */
 .reveal .pipewrap { display: flex; justify-content: center; margin: 0.2em auto; }
@@ -302,6 +302,35 @@
   color: var(--muted); font-weight: 600;
 }
 
+
+/* ---- .qask : the question a slide poses.  A `?` rail on the left so the panel
+   reads as a question at a glance, the question itself as an equation, and the
+   quantifiers it has to hold under as chips beneath it. ---- */
+.reveal .qask {
+  display: flex; align-items: center; gap: 0.75em;
+  margin: 0.45em auto 0.3em; padding: 0.55em 1em 0.6em;
+  max-width: 92%; width: fit-content;
+  border: 2px solid var(--lean-blue); border-radius: 12px;
+  background: rgba(37,99,235,0.045);
+}
+.reveal .qask .qm {
+  flex: 0 0 auto; width: 1.55em; height: 1.55em; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--lean-blue); color: var(--lean-blue);
+  font-size: 1.05em; font-weight: 800; line-height: 1;
+}
+.reveal .qask .qhead { font-size: 1.1em; font-weight: 700; line-height: 1.25; }
+.reveal .qask .qhead code { font-size: 0.95em; color: var(--lean-blue); }
+.reveal .qask .qhead .eq { color: var(--lean-blue); padding: 0 0.1em; }
+.reveal .qask .qwhen {
+  display: flex; gap: 0.4em; flex-wrap: wrap;
+  margin: 0.34em 0 0; padding: 0; list-style: none; font-size: 0.56em;
+}
+.reveal .qask .qwhen li {
+  margin: 0; padding: 0.1em 0.6em; border-radius: 999px;
+  background: rgba(37,99,235,0.1); color: var(--lean-blue); font-weight: 600;
+}
+.reveal .qask .qwhen li::before { content: "\2200  "; font-weight: 800; }
 
 /* ---- .lineage : prior results, open typography — no cards, no fills ---- */
 .reveal .lineage { margin: 0.45em auto; text-align: left; max-width: 94%; }
@@ -342,3 +371,10 @@
 .reveal .r-vstack li { margin-bottom: 0.12em; }
 .reveal .r-vstack p { margin: 0.3em 0; }
 .reveal .r-vstack > *:first-child { margin-top: 0; }
+
+/* ---- autofit.js : a slide too full even at its smallest zoom gets a scrollbar
+   rather than losing its last line -- ref: docs/website.md § The deck's sizes ---- */
+.reveal .slides section.autofit-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

@@ -6,13 +6,14 @@ import Paralever.Theory.Decomposition
 import Paralever.Theory.WellFormedCanonical
 import Paralever.Theory.Sequentialize
 import Paralever.Theory.Intervals
+import Paralever.Theory.Box
+import Paralever.Theory.Nest
 import Paralever.Compile.TaskFacts
 import Paralever.Compile.Exec
 import Paralever.Search.RaceSearch
 import Paralever.Search.Explain
 import Paralever.Search.ExplainHtml
 import Paralever.Tactic
-import Paralever.Logic.BIInstance
 import Paralever.Logic.Rules
 import Paralever.Lib.ArrRef
 import Paralever.Lib.Compose
@@ -60,7 +61,7 @@ Where things live:
 | `Lib/` | the proof-burden layer: `ArrRef`, the `#parallel_for` loop validator, typed access, block IR, reductions, the pure bridge, cost |
 | `Kernels/` | named parallel shapes with one-shot theorems — `parEach`, `broadcastPar`, `gridReducePar`, `mapArray`, `parMap` |
 | `Lang/` | a first-order imperative language with `parallel` blocks, lowered into `ParM`; `Core` + `Kernels` + `Cuda` + `Cost` + `Exec` + `Analysis` + `Notation` |
-| `Logic/` | Tier-2 Hoare triples and the iris-lean BI instance |
+| `Logic/` | Tier-2 Hoare triples, over `Core/Access.lean`'s own footprints |
 | `Compile/` | `execTask`, which runs a program on real threads, and the `Task` facts it rests on |
 | `Search/` | counterexample search: race-site scan, schedules, `follow_sound`, `Explain` (the interleaving printed) and `ExplainHtml` (the same, as an infoview widget) |
 

@@ -328,7 +328,7 @@ theorem mergeSortPar_spec (N : Nat) :
       intro lo hi hn hN σ
       have hle1 : hi - lo ≤ 1 := by omega
       have heq : mergeSortPar N lo hi = .pure () := by
-        rw [mergeSortPar.eq_1]; rw [dif_pos hle1]
+        rw [mergeSortPar.eq_1]; rw [dite_eq_left hle1]
       rw [heq]
       refine ⟨?_, trivial⟩
       simp only [accesses]; exact FootprintWithin.empty _
@@ -336,7 +336,7 @@ theorem mergeSortPar_spec (N : Nat) :
       intro lo hi hn hN σ
       by_cases hle1 : hi - lo ≤ 1
       · have heq : mergeSortPar N lo hi = .pure () := by
-          rw [mergeSortPar.eq_1]; rw [dif_pos hle1]
+          rw [mergeSortPar.eq_1]; rw [dite_eq_left hle1]
         rw [heq]
         refine ⟨?_, trivial⟩
         simp only [accesses]; exact FootprintWithin.empty _
@@ -351,7 +351,7 @@ theorem mergeSortPar_spec (N : Nat) :
             = ParM.bind (ParM.parPair (mergeSortPar N lo (lo+(hi-lo)/2)) (mergeSortPar N (lo+(hi-lo)/2) hi))
                 (fun _ => ParM.bind (mergeStep (lo+(hi-lo)/2) hi N (hi - lo) lo (lo+(hi-lo)/2) lo) (fun _ =>
                   copyBack N (hi - lo) lo lo)) := by
-          rw [mergeSortPar.eq_1]; rw [dif_neg hle1]
+          rw [mergeSortPar.eq_1]; rw [dite_eq_right hle1]
         rw [heq]
         obtain ⟨hFL, hWL⟩ := ih lo (lo+(hi-lo)/2) hmn hmidN σ
         obtain ⟨hFR, hWR⟩ := ih (lo+(hi-lo)/2) hi hhn hN (runSeq (mergeSortPar N lo (lo+(hi-lo)/2)) σ).2

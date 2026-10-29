@@ -1,8 +1,14 @@
 name = "paralever"
-version = "0.1.0"
+version = "1.34.0"
 # `Lang` is listed so a plain `lake build` covers the file front end too, which the exe root alone
 # would not reach.
 defaultTargets = ["paralever", "Lang", "Tool"]
+
+# Diagnostics: positions, spans, codes and the rendered report. Below both front ends, because
+# both report through it and neither may depend on the other. Imports nothing but core Lean, so a
+# reader stays checkable on its own. See docs/diagnostics.md.
+[[lean_lib]]
+name = "Diag"
 
 [[lean_lib]]
 name = "Paralever"
@@ -14,6 +20,15 @@ globs = ["Examples.+"]
 [[lean_lib]]
 name = "Test"
 globs = ["Test.+"]
+
+# The evaluation harness. `Bench.Verdict` imports nothing and is called *by* `MLIR.Corpus`, so the
+# scoring of the pilots and of every suite added later is one piece of code; the layers above it
+# read files through `Tool.Run.loadAny` and reimplement no measurement. A separate lib because it
+# is the only part of the tree that times anything, and timing never runs during `lake build`.
+# See docs/bench.md.
+[[lean_lib]]
+name = "Bench"
+globs = ["Bench.+"]
 
 # The MLIR front end: a reader for MLIR generic form and the lowering into `ParProg`.
 # A separate lib because it is the only part of the tree that parses text, and because
@@ -41,6 +56,12 @@ globs = ["Tool", "Tool.+"]
 name = "paralever"
 root = "Main"
 
+# The harness, as a binary. Not in `defaultTargets`: `lake build` must not time anything, and a
+# machine with no corpus on disk must still build green. See docs/bench.md.
+[[lean_exe]]
+name = "paralever-bench"
+root = "Bench.Main"
+
 # A scratch module for `web/build-snippets.sh`: it writes the file `paralever prove`
 # generates here so Lake can build its `:highlighted` facet, which is what
 # verso-snippets renders. Not checked in — see .gitignore.
@@ -50,15 +71,6 @@ name = "Snippet"
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.34.0"
-
-# iris-lean: we use only the BI interface, the proof mode, and the heap algebra.
-# The package root is the `Iris` subdirectory of the repo.
-# See the plan: we deliberately do NOT depend on Iris/ProgramLogic or Iris/HeapLang.
-[[require]]
-name = "iris"
-git = "https://github.com/leanprover-community/iris-lean"
-subDir = "Iris"
 rev = "v4.34.0"
 
 [[require]]
