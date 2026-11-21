@@ -56,7 +56,7 @@ IISc Bengaluru · ISP-I · 4th-year BTech
 {timeDay}`·`
 :::
 
-# The fundamental question for (truly) parallelizing programs
+# The question
 
 
 ```html
@@ -100,7 +100,7 @@ One run of each agrees. A parallel program has many runs, and the question is ab
 `parallel` block run at the same time, and the block ends when all of them have.
 :::
 
-# Two questions, and one checker answers both
+# The two questions
 
 
 ```html
@@ -118,7 +118,7 @@ One run of each agrees. A parallel program has many runs, and the question is ab
   ending in a heap the sequential reading does not produce.
 :::
 
-# A Hoare triple cannot say "this cell is mine"
+# Hoare triples and ownership
 
 
 ```html
@@ -146,7 +146,7 @@ One run of each agrees. A parallel program has many runs, and the question is ab
 * Ownership is the missing notion, and it is what separation logic adds.
 :::
 
-# `∗` forbids a shared read that nothing can go wrong with
+# Separating conjunction and shared reads
 
 
 ```html
@@ -182,7 +182,27 @@ a time by `with r when B do C`. That is mutual exclusion — the right tool for 
 a serialization of exactly the reads a matmul wants to run at once.
 :::
 
-# Memory is a function, and one equation carries the whole proof
+# Why no separation-logic library
+
+```html
+<div class="dgm col tight">
+  <div class="nd">iris-lean, added as a dependency to answer one question<em>can <code>Indep</code> be an instance of a bunched-implications <code>&#8727;</code>?</em></div>
+  <div class="nd good">the BI instance costs <b>nothing</b><em>non-step-indexed, <code>&#9655; := id</code>, a discrete COFE &#183; the step-indexing risk never arrived</em></div>
+  <div class="nd bad">its <code>&#8727;</code> is <b>exclusive</b> separation<em>the state splits into disjoint-domain pieces, so a shared read is not expressible</em></div>
+  <div class="nd bad">its carrier is a <b>partial</b> map<em><code>Core.State</code> is total &#183; a restriction or an embedding before a triple can be stated</em></div>
+</div>
+```
+
+:::class "steps"
+* The dependency was removed once it had answered: the instance would have been cheap, and the
+  connective it supplies is not the one these theorems are about.
+* `Logic/Rules.lean` frames with `∧` over footprints instead, so its parallel rule is *fully
+  general* — shared reads included — rather than waiting on a `∗` that would have narrowed it.
+* What would supply read-sharing inside a `∗` is a *fractional-permission* `∗` over `Core.State`, and
+  nothing available builds one off the shelf.
+:::
+
+# The state
 
 :::class "two-col"
 ```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 17) (endLine := 17) -stretch
@@ -243,7 +263,7 @@ def update (σ : State) (l : Loc) (v : Val) : State :=
   finally to one step of an arbitrary interleaving.
 :::
 
-# A program is a tree, and `par` is the only node that branches
+# The program tree
 
 ```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 82) (endLine := 89) -stretch
 inductive ParM : Type → Type 1 where
@@ -295,8 +315,9 @@ inductive ParM : Type → Type 1 where
 ```
 
 :::class "steps"
-* A program is *data*, so "for every program `p` …" is an ordinary quantifier, and `par` is a
-  constructor whose meaning Lean does not already know.
+* A program is *data*, so "for every program `p` …" is an ordinary quantifier, and `par` — the
+  only node with more than one subtree — is a constructor whose meaning Lean does not already
+  know.
 * Lean's `Task` could not host this: `(Task.spawn f).get = f ()` holds by `rfl`, so parallel and
   sequential would be the *same term* and every theorem about them vacuous.
 * `par` is N-ary and heterogeneous from the start — one node with a children spine, not a nest of
@@ -305,7 +326,7 @@ inductive ParM : Type → Type 1 where
   boundary is permanent rather than a gap.
 :::
 
-# `runSeq` walks the tree left to right, so it names exactly one answer
+# The reference run
 
 ```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 151) (endLine := 157) -stretch
 def runSeq {τ : Type} : ParM τ → State → τ × State
@@ -359,7 +380,7 @@ def runSeq {τ : Type} : ParM τ → State → τ × State
   finished.
 :::
 
-# Footprints are measured along that run — staggered, and that is the crux
+# Footprints, measured along the run
 
 :::class "two-col"
 ```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 201) (endLine := 203) -stretch
@@ -406,7 +427,7 @@ def childFootprints {αs : List Type} : Childs ParM αs → State → List Footp
 This gap is the entire technical content of the theorem. It is closed once, and used in exactly one
 case of one lemma.
 
-# Independence is Bernstein, and `WellFormed` asks it at every fork
+# Bernstein independence, and `WellFormed`
 
 :::class "two-col"
 ```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 65) (endLine := 66) -stretch
@@ -443,7 +464,7 @@ def WellFormed {τ : Type} : ParM τ → State → Prop
   are what excludes a race. Nothing in the definition is spare.
 :::
 
-# The machine: one child moves, or the fork joins, or it is `wrong`
+# The machine
 
 ```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 138) (endLine := 149) -stretch
 def step {α : Type} : ParM α → State → List (Conf α)
@@ -479,7 +500,7 @@ Races go to `wrong` rather than to a wrong answer, following Reynolds' grainless
 what makes the atomic grain irrelevant: there is no "last writer wins", so no theorem here depends on
 how coarsely a write is implemented.
 
-# The theorem: a well-formed program has exactly one reachable outcome
+# Canonical outcomes
 
 ```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1462) (endLine := 1464) -stretch
 theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
@@ -533,7 +554,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
 * Confluence and normalization, in one biconditional, for a language whose fork is N-ary.
 :::
 
-# Two ways to attack it fail, and the third is a conservation law
+# The proof strategy
 
 ```html
 <div class="dgm col tight">
@@ -554,7 +575,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
   again; iterate along the path; read `Φ` off at the end.
 :::
 
-# The whole difficulty is one equation: `σ₁ 7 = σ₀ 7`
+# The one equation
 
 ```html
 <div class="dgm tight">
@@ -586,7 +607,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
 That single equation is the entire difficulty of the theorem. Everything that follows is machinery for
 saying it in general: at `N` children instead of two, and at an arbitrary depth of nesting.
 
-# Four lemmas lift `update_other` from one cell to whole programs
+# The four lemmas
 
 ```html
 <div class="figwrap">
@@ -665,7 +686,7 @@ Isolation is proved by taking `F := writes (accesses p σ)` in locality: `q` doe
 clauses C1 and C2 verbatim, and the two heaps agree outside `F` is the frame lemma. Two hypotheses,
 both already in hand.
 
-# Conservation: every step leaves `runSeq` exactly where it was
+# Conservation under one step
 
 ```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 902) (endLine := 906) -stretch
 theorem step_combined {τ : Type} (P : ParM τ) :
@@ -693,7 +714,7 @@ theorem step_combined {τ : Type} (P : ParM τ) :
 Every row but the last is `runSeq`'s own defining equation, read in the other direction. The last row
 is the theorem.
 
-# The one case with content: a child that is not the leftmost moves
+# The non-leftmost child
 
 ```html
 <div class="figwrap">
@@ -743,7 +764,7 @@ is the theorem.
   inductive depth at which it is proving the value fact.
 :::
 
-# `WellFormed` survives every step, so the invariant holds along every path
+# Preservation and chaining
 
 :::class "two-col"
 ```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1237) (endLine := 1239) -stretch
@@ -798,7 +819,7 @@ exists. Chaining says the hypothesis is nonetheless available at every configura
 schedule, because footprints only *shrink* as a program steps and independence is monotone under
 shrinking either side.
 
-# Safety is three lines; liveness exhibits one schedule
+# The two directions
 
 ```html
 <div class="dgm col tight">
@@ -817,7 +838,7 @@ shrinking either side.
   down.
 :::
 
-# `par ≡ seq` by unfolding — independence is not mentioned
+# The equivalence theorem
 
 ```leanLibCode Paralever.Theory.Sequentialize (package := paralever) (startLine := 18) (endLine := 19) -stretch
 def ParSeqEq {α : Type} (p q : ParM α) (σ : State) : Prop :=
@@ -856,7 +877,7 @@ theorem parAll_par_seq_eq {τ : Type} (ps : List (ParM τ)) (σ : State)
   induction over the children list happened once, in conservation's 2-to-N step.
 :::
 
-# Drop the hypothesis and the conclusion is false
+# A racy counterexample
 
 ```html
 <div class="dgm tight">
@@ -880,7 +901,7 @@ q&#8242; = read 5 (&#955;v. write 8 v)<em>q&#8242; reads the cell p writes &#183
   independent programs, `wrong` on random racy ones.
 :::
 
-# The surface language: declared memory, registers, and one fork
+# The surface language
 
 ```html
 <div class="dgm col tight">
@@ -898,7 +919,7 @@ for i in n { … }        parfor i in n { … }        while (c) in n { … }<em
 </div>
 ```
 
-```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 261) (endLine := 273) -stretch
+```leanLibCode Lang.Core.Prog (package := paralever) (startLine := 275) (endLine := 287) -stretch
 def wfB : ParProg → Bool
   | .load _ _  => true
   | .store _ _ => true
@@ -918,7 +939,7 @@ Over-approximation costs precision, never soundness: `execPar_accesses_sub` prov
 footprint contains every cell actually touched, at every heap. `wfB s = true` implies
 `WellFormed (execPar s ρ) σ`, so one `decide` discharges the metatheorem's hypothesis.
 
-# A hand-written `parallel` is checked, not trusted
+# A hand-written fork
 
 ```html
 <div class="dgm tight">
@@ -951,7 +972,7 @@ Parallel: 9&#8614;1          Sequential: 9&#8614;2<em>`explainProg late σ₀` &
   aimed search 2 ms.
 :::
 
-# Four programs, four verdicts, one `decide` each
+# Programs and verdicts
 
 ```html
 <table class="dgmt">
@@ -980,7 +1001,7 @@ The sum's theorem holds for *any* chunk plan and any heap, with no `decide` — 
 symbolic size. The matmul's is `decide` on a concrete `n`, which is where the ceiling is: 6.6 s at
 `n = 8`, 19 s at `n = 10`, and `native_decide` is prohibited.
 
-# Automatic parallelization: one scoreboard pass, then a plan in program order
+# Automatic parallelization
 
 ```html
 <div class="figwrap">
@@ -1023,7 +1044,7 @@ symbolic size. The matmul's is `decide` on a concrete `n`, which is where the ce
   whether a plan is optimal rather than merely better.
 :::
 
-# `rewrite_sound`: `seq = par` for the rewrite, with no hypothesis
+# Soundness of the rewrite
 
 ```leanLibCode Paralever.AutoPar.Rewrite (package := paralever) (startLine := 51) (endLine := 52) -stretch
 theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
@@ -1051,7 +1072,7 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
   for the N-shape has a race in it.
 :::
 
-# MLIR: one reader, and every language that targets it
+# MLIR as the front end
 
 ```html
 <div class="figwrap">
@@ -1107,7 +1128,7 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
   rather than a script to trust.
 :::
 
-# One file end to end, and what an affine map gives for free
+# One file end to end
 
 ```html
 <div class="dgm tight">

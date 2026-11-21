@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="check, run, race, autopar, prove, and the two conversions — one file in, and either a verdict or a Lean module that proves it." />
+    <meta name="description" content="check, run, race, autopar, prove, and the two conversions. One file in, and either a verdict or a Lean module that proves it." />
     <meta property="og:title" content="The command line — paralever" />
-    <meta property="og:description" content="check, run, race, autopar, prove, and the two conversions — one file in, and either a verdict or a Lean module that proves it." />
+    <meta property="og:description" content="check, run, race, autopar, prove, and the two conversions. One file in, and either a verdict or a Lean module that proves it." />
     <meta property="og:type" content="website" />
     <title>The command line — paralever</title>
     <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
@@ -71,11 +71,11 @@
 
       <section>
         <p class="text-stone-600 leading-relaxed mb-6">
-          A checker that prints <em>race-free</em> is a linter, and you believe it
-          or you do not. A tool that writes a module which Lean then checks is
-          different in kind, because the claim leaves with its proof attached.
-          Name a file and no command and the tool answers the question a file
-          arrives with — is this program race-free, and if so what holds of it.
+          A checker that prints <em>race-free</em> is a linter, and you believe
+          it or you do not. A tool that writes a module Lean then checks is
+          different in kind: the claim leaves with its proof attached. Name a
+          file and no command, and the tool answers the question a file arrives
+          with.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -98,10 +98,9 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Both front ends, one program</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Every command takes a <code>.prl</code> file or a <code>.mlir</code>
-          module in generic form, because both compile to the same pair — a
-          <code>Layout</code> saying where the buffers are, and an unrolled
-          <code>ParProg</code>.
+          Every command takes a <code>.prl</code> file or an <code>.mlir</code>
+          module. Both compile to the same pair: a layout saying where the
+          buffers are, and an unrolled program.
         </p>
         <figure class="dgm">
         <svg viewBox="0 0 830 270" role="img"
@@ -154,10 +153,9 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           <text class="t-note" x="710" y="247" text-anchor="middle">the program, converted</text>
         </svg>
         <figcaption>
-          Which front end the file came through matters in exactly one place: the
-          generated proof module has to read the source again, so it names it with
-          <code>prl_file</code> or with <code>mlir_prog</code>. Everything else is
-          written once.
+          Which front end a file came through matters in one place. The
+          generated proof module has to read the source again, so it names the
+          right reader. Everything else is written once.
         </figcaption>
       </figure>
       </section>
@@ -194,14 +192,18 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
               <tr><td><code>--threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
               <tr><td><code>--autopar</code></td><td>make <code>prove</code>, <code>to-mlir</code> and <code>to-lean</code> take the parallelized program as their subject</td></tr>
               <tr><td><code>--check</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
-              <tr><td><code>--solve</code></td><td><code>vc</code>: discharge what is left with the first solver found — z3, then cvc5, or whatever <code>PARALEVER_SMT</code> names</td></tr>
+              <tr><td><code>--solve</code></td><td><code>vc</code>: discharge what is left with the first solver found: z3, then
+                cvc5, or whatever <code>PARALEVER_SMT</code> names</td></tr>
               <tr><td><code>--solver NAME|PATH</code></td><td><code>vc</code>: use that solver rather than looking for one; implies <code>--solve</code></td></tr>
               <tr><td><code>--timeout MS</code></td><td><code>vc</code>: milliseconds per query, 10000 by default, <code>0</code> for no limit</td></tr>
               <tr><td><code>--assume nonneg</code></td><td><code>vc</code>: assume every value read from the heap is at or above zero, which the clamp in <code>ArrRef.addr</code> makes necessary more often than it looks</td></tr>
               <tr><td><code>--prove PATH</code></td><td>no command: write the Lean module that proves the verdict to <code>PATH</code> as well as printing the verdict itself</td></tr>
               <tr><td><code>--func NAME</code></td><td>the function to read, in an MLIR module that holds several. In custom form it reads that function alone, so a reduction in the next one does not refuse the file</td></tr>
-              <tr><td><code>-n NAME</code></td><td><code>run</code>: that buffer alone, or one cell of it when the name carries a subscript — <code>-n 'C[1, 2]'</code></td></tr>
-              <tr><td><code>--quiet</code>, <code>-q</code></td><td><code>run</code> and the no-command form: only what the program's <code>print</code> statements wrote — no headings, no heap, no verdict</td></tr>
+              <tr><td><code>-n NAME</code></td><td><code>run</code>: that buffer alone, or one cell of it when the name carries a subscript, as in
+                <code>-n 'C[1, 2]'</code></td></tr>
+              <tr><td><code>--quiet</code>, <code>-q</code></td><td><code>run</code> and the no-command form: only what the
+                program's <code>print</code> statements wrote, with no
+                headings, no heap and no verdict</td></tr>
               <tr><td><code>--verbose</code>, <code>-v</code></td><td>verbosity on, which is the default; it undoes an earlier <code>--quiet</code></td></tr>
               <tr><td><code>--all-cells</code></td><td><code>run</code>: every cell of every buffer, instead of the first 32 of each</td></tr>
               <tr><td><code>--colour</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
@@ -221,13 +223,12 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
           The report ends with the verdict, and the verdict answers two
-          questions, because a program with a computed address has two different
-          answers. <em>This heap</em> is the one the file's <code>buf</code>
-          initializers describe, and <code>raceSites</code> decides it exactly.
-          <em>Any heap</em> is the universally quantified statement:
-          <code>wfB</code> decides it when it accepts, and when it refuses a
-          bounded search looks for a heap at which two threads collide. The two
-          print as one line when they agree and as two when they differ.
+          questions. <em>This heap</em> is the one the file's initializers
+          describe, and the exact scan decides it. <em>Any heap</em> is the
+          universally quantified claim: the syntactic check decides it when it
+          accepts, and when it refuses, a bounded search looks for a heap where
+          two threads collide. The two print as one line when they agree and as
+          two when they differ.
         </p>
         <pre class="code-block mb-4"><code>$ paralever check Examples/Language/stripe.prl
   verdict   this heap   Proved: Yes — no two threads touch one cell here
@@ -238,14 +239,11 @@ $ paralever check Examples/Language/branch.prl
             any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
             no race found in 11 heap(s) probed over {c[0]}</code></pre>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>Proved: Yes</code> is a Lean proof either way — for every heap
-          from <code>wfB</code>, for one heap from
-          <code>raceSites_nil_iff</code>. <code>Inconclusive</code> names both of
-          its reasons: what <code>wfB</code> refused over and which constructor
-          widened the footprint, then how far the search looked. Only a race at
-          the declared heap exits 1, and only a real interleaving earns
-          <code>RACE found</code> there. Nothing is restated after the report and
-          no next command is suggested.
+          <code>Proved: Yes</code> is a Lean proof either way. An
+          <code>Inconclusive</code> names both its reasons: what the check
+          refused over, which constructor widened the footprint, and how far the
+          search looked. Only a race at the declared heap exits 1, and only a
+          real interleaving earns <code>RACE found</code>.
         </p>
       </section>
 
@@ -255,10 +253,10 @@ $ paralever check Examples/Language/branch.prl
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>run</code> prints</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Most of what a <code>.prl</code> program says is the heap it leaves, so
+          Most of what a program says is the heap it leaves, so
           <code>run</code> prints that heap as the buffers the file declared. A
           <code>print</code> statement writes a line above it, under its own
-          heading; a program with no print has no such section at all.
+          heading. A program with no print has no such section.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -275,19 +273,16 @@ tmp [4] @4  [3, 5, 7, 9]   (freed)
 out [4] @4  [3, 5, 7, 9]</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4 mb-4">
-          A bare <code>paralever FILE</code> prints this same body under its
-          verdict. Both commands call one function, <code>Tool.runBody</code>, so
-          whatever <code>run</code> says about a program a bare invocation says
-          too, and the verdict is the whole of the difference. Memory, footprint,
-          thread count and rounds belong to <code>check</code>, which is the
-          command for them.
+          A bare <code>paralever FILE</code> prints the same body under its
+          verdict. Both commands call one function, so the verdict is the whole
+          of the difference. Memory, footprint, thread count and rounds belong
+          to <code>check</code>.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>--quiet</code> (<code>-q</code>) turns the verbosity off for
-          either command and prints only what the program's <code>print</code>
-          statements wrote — no headings, no heap, no verdict. A program with no
-          <code>print</code> is then silent rather than printing a blank line, and
-          the exit code is unchanged, so a quiet invocation is still the gate:
+          <code>-q</code> prints only what the program's <code>print</code>
+          statements wrote: no headings, no heap, no verdict. A program with no
+          print is then silent rather than blank. The exit code is unchanged, so
+          a quiet invocation is still a gate.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -298,23 +293,19 @@ out [4] @4  [3, 5, 7, 9]</code></pre>
 k = [0, 1]</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4 mb-4">
-          <code>[4]</code> is the shape — a <code>[2, 6]</code> buffer prints as
-          two rows — and <code>@4</code> is the address of the buffer's first cell
-          in the one flat heap that <code>State = Loc → Val</code> gives.
-          <code>tmp</code> and <code>out</code> print the same numbers because
-          <code>free</code> returns the cells and the next buffer is placed on
-          them; the <code>(freed)</code> marker says which of the two is dead.
-          A report is read, not elaborated, so none of it is commented out — the
-          <code>--</code> prefix is kept for output that is source, where the
-          reader's approximations must survive in a file that still compiles.
+          <code>[4]</code> is the shape, and a two-dimensional buffer prints as
+          rows. <code>@4</code> is the address of its first cell in the one flat
+          heap. Two buffers print the same numbers when <code>free</code>
+          returned the cells and the next buffer was placed on them, and the
+          <code>(freed)</code> marker says which one is dead. A report is read,
+          not elaborated, so none of it is commented out.
         </p>
         <h3 class="text-xl font-semibold serif text-stone-900 mb-3">One buffer, and all of the cells</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A buffer wider than the terminal is not a report. Each one prints at
-          most <code>Lang.runCells</code> = 32 cells, rounded up to a whole row
-          for a matrix, and then says how many it left out — so the shape and the
-          leading values stay legible on a program whose heap is thousands of
-          cells.
+          A buffer wider than the terminal is not a report. Each prints at most
+          32 cells, rounded up to a whole row for a matrix, then says how many
+          it left out. The shape and the leading values stay legible on a heap
+          of thousands of cells.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -329,10 +320,9 @@ C [12, 12] @288  [6072, 6138, 6204, 6270, 6336, 6402, 6468, 6534, 6600, 6666, 67
                  … +9 more rows</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4 mb-4">
-          Two options say otherwise. <code>--all-cells</code> lifts the limit on
-          every buffer. <code>-n</code> asks for one buffer by name, printed in
-          full and with nothing around it, and a subscript asks for the single
-          cell:
+          Two options say otherwise. <code>--all-cells</code> lifts the limit
+          everywhere. <code>-n</code> asks for one buffer by name, printed in
+          full with nothing around it, and a subscript asks for one cell.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -347,13 +337,11 @@ $ paralever run Examples/Language/matmul.prl -n 'C[1, 1]'
 C[1, 1] @11  50</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4">
-          The address comes with the value because the cell is one of
-          <code>State = Loc → Val</code>'s, and <code>@11</code> is where
-          <code>Layout.at "C" [1, 1]</code> sends that subscript. A name no buffer
-          has, or a subscript outside the shape, is an error naming what the
-          program does declare, and exits 2 rather than printing a default. When
-          the program has a race, <code>-n</code>'s caveat goes to standard error,
-          so the one line on standard output stays greppable.
+          The address comes with the value, because <code>@11</code> is where
+          that subscript lands in the flat heap. A name no buffer has, or a
+          subscript outside the shape, is an error naming what the program does
+          declare, and exits 2. When the program has a race, the caveat goes to
+          standard error, so the one line on standard output stays greppable.
         </p>
       </section>
 
@@ -392,40 +380,40 @@ C[1, 1] @11  50</code></pre>
         <h3 class="text-xl font-bold serif text-stone-900 mb-3">The first case, which is what the library is for</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
           <code>wfB</code> decides Bernstein's condition at every <code>par</code>
-          node by reading the syntax, so it holds at every heap — and that is
-          exactly <code>par_seq_eq</code>'s hypothesis.
+          node by reading the syntax, so it holds at every heap, which is exactly
+            <code>par_seq_eq</code>'s hypothesis.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
-            <iframe class="lean-demo" loading="lazy" title="prove sum.prl — the wfB route"
+            <iframe class="lean-demo" loading="lazy" title="prove sum.prl: the wfB route"
                     src="snippets/proof-sum.html"></iframe>
           </div>
 
         <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">The second case: a computed address</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>dst[%i]</code> has a footprint of <em>all</em> of
-          <code>dst</code>, because the index is not known from the syntax, so two
-          threads that write distinct cells still look like they collide and
-          <code>wfB</code> refuses. The per-heap check measures the accesses along
-          the canonical run instead, and accepts — which buys the equivalence at
-          the heap the file declares, and nowhere else.
+          A computed index has a footprint of the whole buffer, because the
+          index is not known from the syntax. Two threads writing distinct cells
+          still look like they collide, so the syntactic check refuses. The
+          per-heap check measures the accesses along the canonical run instead,
+          and accepts. That buys the equivalence at the declared heap and
+          nowhere else.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
-            <iframe class="lean-demo" loading="lazy" title="prove scatter.prl — the per-heap route"
+            <iframe class="lean-demo" loading="lazy" title="prove scatter.prl: the per-heap route"
                     src="snippets/proof-scatter.html"></iframe>
           </div>
 
         <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">The third case: a real race</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The generated file says so and proves both refusals. No theorem of this
-          shape exists for such a program: its parallel reading reaches
-          <code>wrong</code>, which is no terminating outcome, while its sequential
-          reading terminates. <code>paralever race FILE</code> prints the
-          interleaving that does it.
+          The generated file says so and proves both refusals. No theorem of
+          this shape exists for such a program. Its parallel reading reaches
+          <code>wrong</code> while its sequential reading terminates.
+          <code>paralever race FILE</code> prints the interleaving that does
+          it.
         </p>
 
-        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">With <code>--autopar</code>, one more theorem — and the strongest</h3>
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">With <code>--autopar</code>, one more theorem</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
           Here is the module the tool wrote for <code>chain.prl</code>, verbatim.
         </p>
@@ -448,11 +436,11 @@ lake env lean /tmp/Chain.lean
         </div>
         <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">A fourth, when the file states a claim</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          An <code>assert</code> adds a section to whichever of the three the left
-          program earned, so a claim file's module states both: the main theorem
-          for the left program, and <code>AgreeOn</code> for the pair. Here is the
-          module for <code>equiv.prl</code>, which compares bubble sort against
-          odd-even transposition sort.
+          An <code>assert</code> adds a section to whichever of the three the
+          left program earned. A claim file's module then states both: the main
+          theorem for the left program, and the agreement for the pair. Here is
+          <code>equiv.prl</code>, which compares bubble sort against odd-even
+          transposition sort.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · written by paralever prove</div>
@@ -460,10 +448,9 @@ lake env lean /tmp/Chain.lean
                     src="snippets/proof-equiv.html"></iframe>
           </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Three <code>decide</code>s and the claim holds: the check on each side,
-          and one run of each sequential reading compared at the cells
-          <code>on</code> named. <code>check</code> reports the same answer beside
-          the verdict and exits non-zero when it fails.
+          Three decisions and the claim holds: the check on each side, and one
+          run of each sequential reading compared at the named cells.
+          <code>check</code> reports the same answer beside the verdict.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -482,14 +469,14 @@ Examples/Language/equiv.prl
         </div>
 
         <p class="text-stone-600 leading-relaxed">
-          Three details of the generated module. It reads the source through
-          <code>prl_file</code> or <code>mlir_prog</code>, which compile the file
-          <em>while the module elaborates</em>, so <code>by decide</code> sees a
-          program literal and never runs the reader. The path it names is relative
-          to the module's own directory when the two live in one tree, and absolute
-          otherwise. And <code>--check</code> shells out to
-          <code>lake env lean</code>, so the tool reports Lean's verdict rather
-          than its own.
+          Three details of the generated module. It reads the source while the
+          module elaborates, so <code>by decide</code> sees a program literal
+          and never runs the reader. The path it names is relative when the two
+          live in one tree, and absolute otherwise. <code>--check</code> shells
+          out to Lean, so the tool reports Lean's verdict rather than its own.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/cli.md</code>.
         </p>
       </section>
 
@@ -499,14 +486,13 @@ Examples/Language/equiv.prl
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What <code>vc</code> hands to a solver</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          A computed address makes the footprint read off the syntax every cell of
-          its buffer, so <code>wfB</code> declines programs whose threads provably
-          touch different cells. <code>vc</code> states the same Bernstein
-          condition over the index <em>expressions</em> instead. Registers are
-          substituted away first, so an index that folds to a literal is decided in
-          Lean and never reaches a solver; what is left is one
-          <code>(check-sat)</code> per parallel block, unsatisfiable exactly when
-          that block is independent.
+          A computed address widens the footprint to the whole buffer, so the
+          syntactic check declines programs whose threads provably touch
+          different cells. <code>vc</code> states the same Bernstein condition
+          over the index <em>expressions</em> instead. Registers are substituted
+          away first, so an index that folds to a literal is decided in Lean and
+          never reaches a solver. What is left is one query per fork,
+          unsatisfiable exactly when that fork is independent.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-8">
           <table class="w-full text-sm">
@@ -514,9 +500,14 @@ Examples/Language/equiv.prl
               <tr><th class="text-left px-5 py-3">the answer</th><th class="text-left px-5 py-3">what it is worth</th></tr>
             </thead>
             <tbody class="divide-y divide-stone-200">
-              <tr><td class="px-5 py-3"><code>unsat</code></td><td class="px-5 py-3"><strong>discharged by the named solver, not by Lean's kernel.</strong> An external refutation is not a checked proof, so the report says which solver and which version said so. <code>prove</code> stays the only path that ends in a proof.</td></tr>
-              <tr><td class="px-5 py-3"><code>sat</code></td><td class="px-5 py-3">a claim about two cells, <strong>recomputed in Lean before it is believed</strong>. But an assignment is not a run, so this is the obligation failing — reported as <code>inconclusive</code>, never as <code>RACY</code>. Only a real interleaving earns that word.</td></tr>
-              <tr><td class="px-5 py-3">neither</td><td class="px-5 py-3">the solver ran out of time — <code>--timeout MS</code> is the knob, 10000 by default — or none is installed. No solver is a build dependency, and <code>lake build</code> is green without one.</td></tr>
+              <tr><td class="px-5 py-3"><code>unsat</code></td><td class="px-5 py-3">Discharged by the named solver rather than by Lean's kernel.
+                An external refutation is not a checked proof, so the report says which solver and which version said so. <code>prove</code> stays the only path that ends in a proof.</td></tr>
+              <tr><td class="px-5 py-3"><code>sat</code></td><td class="px-5 py-3">a claim about two cells, recomputed in Lean before it is
+                believed. An assignment is not a run, so this is the
+                obligation failing, reported as <code>inconclusive</code>
+                rather than as <code>RACY</code>. Only a real interleaving earns that word.</td></tr>
+              <tr><td class="px-5 py-3">neither</td><td class="px-5 py-3">the solver ran out of time (<code>--timeout MS</code> is the
+                knob, 10000 by default), or none is installed. No solver is a build dependency, and <code>lake build</code> is green without one.</td></tr>
             </tbody>
           </table>
         </div>
@@ -542,16 +533,17 @@ fork 0 — 2 threads
   u1  the value read from k[1]
   independent — unsat</code></pre>
         <p class="text-stone-600 leading-relaxed">
-          Each unknown is named by the cell it was read from, because an obligation
-          nobody can read is an obligation nobody can add a hypothesis to.
-          <code>--assume nonneg</code> is that hypothesis in the one case it is
-          always wanted: <code>ArrRef.addr</code> clamps a negative index to its
-          buffer's first cell, so without it every thread with a possibly-negative
-          computed index aliases there — and a solver reports that collision in
-          preference to any other, correctly. The assumption weakens the claim, so
-          the report names it on its first line — and the <code>any heap</code>
-          verdict above it is Lean having found the same collision without a
-          solver, at <code>k[1] = -1</code>.
+          Each unknown is named by the cell it was read from. An obligation
+          nobody can read is one nobody can add a hypothesis to.
+          <code>--assume nonneg</code> is that hypothesis in the case it is
+          always wanted. A negative index is clamped to the buffer's first cell,
+          so without the assumption every possibly-negative index aliases there,
+          and a solver correctly reports that collision ahead of any other. The
+          assumption weakens the claim, so the report names it on its first
+          line.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/smt-vc.md</code>.
         </p>
       </section>
 
@@ -562,8 +554,8 @@ fork 0 — 2 threads
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The four reports, also inside Lean</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
           The executable is a thin wrapper. The same four views are
-          <code>#eval</code>s over a program read at elaboration time, so a file
-          can be the subject of a theorem without a build step in between.
+          <code>#eval</code>s over a program read while Lean elaborates, so a
+          file can be the subject of a theorem with no build step between.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-8">
           <table class="opts-table">
@@ -585,10 +577,10 @@ fork 0 — 2 threads
 out [3] @6  [3, 7, 11]</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          With <code>--threads</code> the same program runs one <code>Task</code>
-          per thread of every fork, and prints the same table. That is not luck:
-          <code>runTask_eq</code> proves the threaded run leaves the heap the
-          canonical order leaves, for every program <code>wfB</code> accepts.
+          With <code>--threads</code> the same program runs one real thread per
+          child of every fork, and prints the same table. That is not luck. A
+          theorem says the threaded run leaves the heap the canonical order
+          leaves, for every accepted program.
         </p>
       </section>
 
@@ -598,12 +590,10 @@ out [3] @6  [3, 7, 11]</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The two conversions</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>to-prl</code> on a <code>.mlir</code> file and
-          <code>to-mlir</code> on a <code>.prl</code> file are the same program
-          printed by the other front end's printer, with the reader's
-          approximations as comments at the top. Here is
-          <code>doall-no.mlir</code> coming back as <code>.prl</code>, its
-          <code>affine.parallel</code> unrolled into eight threads:
+          Each conversion is the same program printed by the other front end's
+          printer, with the reader's approximations as comments at the top. Here
+          is <code>doall-no.mlir</code> coming back as <code>.prl</code>, its
+          parallel loop unrolled into eight threads.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -626,17 +616,15 @@ parallel {
 }</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A full cycle changes one thing: MLIR globals must carry an initial value,
-          so a buffer the <code>.prl</code> file left implicit comes back as
-          <code>buf out[4] = 0, 0, 0, 0</code>.
+          A full cycle changes one thing. MLIR globals must carry an initial
+          value, so a buffer the file left implicit comes back written out.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          What <code>to-mlir</code> cannot do is refuse quietly. Three programs
-          have no generic form in the supported operation set, and each gets a
-          named error: a file with a conditional or a loop, a computed subscript
-          into a multi-dimensional buffer, and a layout where a <code>free</code>
-          returned space so two buffers share cells — two MLIR globals cannot
-          alias.
+          What <code>to-mlir</code> cannot do is refuse quietly. Three kinds of
+          program have no generic form here, and each gets a named error: a file
+          with a conditional or a loop, a computed subscript into a
+          multi-dimensional buffer, and a layout where two buffers share cells
+          after a <code>free</code>.
         </p>
       </section>
 
@@ -649,26 +637,23 @@ parallel {
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900"><code>prove</code> writes; Lean checks.</strong>
-              Without <code>--check</code> the tool does not run Lean, so a module
-              it writes for a large program can still be slow to check or exceed
-              the recursion bound — <code>decide</code> reduces the program against
-              a heap. The generated module raises the bound and says why.
+              <code>prove</code> writes and Lean checks. Without
+              <code>--check</code> the tool does not run Lean, so a module for a
+              large program can still be slow or exceed the recursion bound. The
+              generated module raises that bound and says why.
             </p>
           </li>
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900"><code>--check</code> needs the repository.</strong>
-              It shells out to <code>lake env lean</code>, so it has to run from a
+                            <code>--check</code> needs the repository. It shells out to <code>lake env lean</code>, so it has to run from a
               directory where <code>lake</code> resolves this package.
             </p>
           </li>
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">One function per module.</strong>
-              An MLIR file with several functions and none called
+                            One function per module. An MLIR file with several functions and none called
               <code>main</code> is refused rather than guessed at, because
               interprocedural calls are not supported.
             </p>
@@ -676,19 +661,19 @@ parallel {
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">The subject is the whole program.</strong>
-              There is no option to name an entry region; a labelled region is
+                            The subject is the whole program. There is no option to name an
+              entry region; a labelled region is
               reachable from Lean with <code>ParProg.findLabel</code>.
             </p>
           </li>
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">Registers come back renumbered through MLIR.</strong>
-              SSA values are not assignable, so a register assignment with no
-              memory in it is inlined into whatever reads it. The program's memory,
-              footprint, verdict and heap are unchanged, which is what the
-              round-trip gate compares.
+              Registers come back renumbered through MLIR. SSA values are not
+              assignable, so a register assignment with no memory in it is
+              inlined into whatever reads it. The memory, footprint, verdict and
+              heap are unchanged, and that is what the round-trip gate
+              compares.
             </p>
           </li>
         </ul>

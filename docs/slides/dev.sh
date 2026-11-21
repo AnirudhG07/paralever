@@ -10,8 +10,11 @@
 # Notes
 #   * CSS edits (lean.css / paralever.css) are cheap — the theme is read at
 #     runtime, so no Lean is recompiled; the rebuild is ~1-2s.
-#   * Content edits (Slides.lean) recompile the deck module (a few seconds) —
-#     that's inherent to a compiled-Lean deck, not something a watcher removes.
+#   * Content edits (main/Slides.lean, isp/IspSlides.lean) recompile that deck's
+#     module (a few seconds) — inherent to a compiled-Lean deck, not something a
+#     watcher removes.
+#   * The server's root is `slides/`, so `/` is the hand-written deck list and
+#     each deck is one folder below it.
 #   * A failed build leaves the last good page up; fix the error and save again.
 #   * Ctrl-C stops both the watcher and the server.
 # ---------------------------------------------------------------------------
@@ -40,6 +43,7 @@ IP=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \K[0-9.]+')
 echo "▶ serving (first run downloads browser-sync)…"
 echo "    Local:    http://localhost:$PORT"
 echo "    Network:  http://$IP:$PORT   ← open on your phone / share on Wi-Fi"
+echo "    Decks:    /main/index.html  (the project talk)   /isp/index.html  (ISP)"
 npx --yes browser-sync start \
     --server "$OUT" --startPath /index.html \
     --no-notify --port "$PORT" &

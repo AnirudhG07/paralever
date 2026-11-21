@@ -1,5 +1,6 @@
 import VersoSlides
 import Slides
+import IspSlides
 
 open VersoSlides
 
@@ -55,16 +56,48 @@ def cfg (theme : CustomTheme) (out : System.FilePath) : Config where
   margin      := 0.0
   center      := false
 
-/-- Build every deck. **Add one line per new deck**: give it a URL sub-folder and
-point it at that deck's `#doc` with `%doc <ModuleName>` (the bare Lean module
-name — e.g. `Slides`, not `Slides.lean`). -/
+/-- The files every deck shares, hoisted one level up and referenced from there. -/
+def sharedFiles : Array String := #["lib", "assets", "lean.css", "paralever.css"]
+
+/-- Move a deck's shared files into its parent folder and point the deck at them there.
+
+`slidesMain` writes every deck a full copy of the vendored reveal.js (`lib/`, 2.9 MB), the theme
+stylesheet, the `extraCss` files and the theme assets, and references them from `index.html` by a
+bare relative name. There is no base-path option, so the sharing is done after the write: each
+named reference in `index.html` gains a `../`, and the file itself is moved up beside its
+siblings. Every deck writes the same bytes, so whichever deck runs last is the one whose copy is
+kept.
+
+What stays in the deck's own folder is `index.html` and `-verso-docs.json` — the snippet data each
+page fetches relative to its own URL, which is per-deck and must not be shared. -/
+def shareWithParent (deck : System.FilePath) (names : Array String := sharedFiles) : IO Unit := do
+  let parent := deck.parent.getD "."
+  let page := deck / "index.html"
+  let mut html ← IO.FS.readFile page
+  for name in names do
+    html := (html.replace s!"\"{name}\"" s!"\"../{name}\"").replace s!"\"{name}/" s!"\"../{name}/"
+    let src := deck / name
+    let dst := parent / name
+    if ← src.pathExists then
+      if ← dst.isDir then IO.FS.removeDirAll dst
+      else if ← dst.pathExists then IO.FS.removeFile dst
+      IO.FS.rename src dst
+  IO.FS.writeFile page html
+
+/-- Build every deck. **Add one line per new deck**: give it a sub-folder of `slides/`, point it at
+that deck's `#doc` with `%doc <ModuleName>` (the bare Lean module name — e.g. `Slides`, not
+`Slides.lean`), and hoist its shared files. `slides/index.html`, which lists the decks, is written
+by hand and is not generated here. -/
 def main : IO UInt32 := do
   let base ← findBase
   let theme ← loadTheme
   -- per-deck overrides, layered on top of lean.css (read at runtime too)
   let deckCss ← IO.FS.readFile (base / "paralever.css")
-  let config : Config := { cfg theme "slides" with
+  let deck (out : System.FilePath) : Config := { cfg theme out with
     extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
     extraJs  := #["assets/autofit.js"] }
-  discard <| slidesMain config (doc := %doc Slides)
+  discard <| slidesMain (deck "slides/main") (doc := %doc Slides)
+  shareWithParent "slides/main"
+  discard <| slidesMain (deck "slides/isp") (doc := %doc IspSlides)
+  shareWithParent "slides/isp"
   return 0

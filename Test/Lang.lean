@@ -75,7 +75,7 @@ theorem sum_ok (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar sum.prog ρ) (ParProg.execSeq sum.prog ρ) σ :=
   ParProg.par_seq_eq (by decide) ρ σ
 
-theorem matmul_ok (ρ : Regs) (σ : State) :
+theorem matmul_parseqeq (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar matmul.prog ρ) (ParProg.execSeq matmul.prog ρ) σ :=
   ParProg.par_seq_eq (by decide) ρ σ
 

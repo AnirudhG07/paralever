@@ -61,9 +61,8 @@
         The Lean library
       </h1>
       <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
-        Six libraries and one executable. <code>Core/</code> and
-        <code>Theory/</code> need no Mathlib at all, so a single file can be
-        typechecked on its own in a second.
+        Six libraries and one executable. <code>Core/</code> and <code>Theory/</code> need no Mathlib, so a
+          single file can be typechecked on its own in a second.
       </p>
     </header>
 
@@ -85,11 +84,11 @@ grep -rn "sorry" Paralever/      # the no-sorry gate
 lake exe paralever --help        # the command line</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          The toolchain is pinned to <code>leanprover/lean4:v4.34.0</code>, with
-          Mathlib at the same tag. Mathlib is never imported through
-          an umbrella file: a lemma is imported from the module it actually lives
-          in, which is what keeps a standalone <code>lean &lt;file&gt;</code> check
-          viable on the files that matter most.
+          The toolchain is pinned, with Mathlib at the same tag. Mathlib is
+          never imported through an umbrella file. A lemma comes from the module
+          it actually lives in, which is what keeps a standalone
+          <code>lean &lt;file&gt;</code> check viable on the files that matter
+          most.
         </p>
       </section>
 
@@ -109,7 +108,7 @@ lake exe paralever --help        # the command line</code></pre>
                 <li><b>Kernels/</b> <i>named parallel shapes, each with its one-shot theorem</i></li>
                 <li><b>AutoPar/</b> <i>Chain · Plan · Dag · Sound (<code>rewrite_sound</code>) · Rewrite · Print</i></li>
                 <li><b>Search/</b> <i>RaceSearch · Explain · ExplainHtml</i></li>
-                <li><b>Compile/</b> <i>TaskFacts · Exec (<code>execTask</code> — real threads)</i></li>
+                <li><b>Compile/</b> <i>TaskFacts · Exec (<code>execTask</code>, on real threads)</i></li>
                 <li><b>Tactic.lean</b> <i><code>paralever_race</code> and <code>paralever_check</code></i></li>
               </ul>
             </li>
@@ -117,7 +116,8 @@ lake exe paralever --help        # the command line</code></pre>
               <ul>
                 <li><b>Lang/</b> <i>Core · Layout · Kernels · Cuda · Cost · Exec · Notation · Analysis · AutoParSound</i></li>
                 <li><b>Compile/</b> <i>Ast · Parse · Lower · Print</i></li>
-                <li><b>Load.lean</b> <i><code>prl_file</code> — read and compile a file while Lean elaborates</i></li>
+                <li><b>Load.lean</b> <i><code>prl_file</code>: read and compile a file while Lean
+                  elaborates</i></li>
                 <li><b>Report.lean</b> <i>the four <code>#eval</code> views</i></li>
               </ul>
             </li>
@@ -135,6 +135,23 @@ lake exe paralever --help        # the command line</code></pre>
       <!-- core -->
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Where each thing is</h2>
+        <p class="text-stone-600 leading-relaxed">
+          Two declarations say what the library is for. The first is the claim
+          every theorem ends at. The second is what a thread touches.
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Paralever/Theory/Sequentialize.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="ParSeqEq: what the same outcomes means"
+                  src="snippets/parseqeq.html"></iframe>
+        </div>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Paralever/Core/Access.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="Footprint: what a computation touches"
+                  src="snippets/footprint.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Everything else is where to find the rest.
+        </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th>Module</th><th>What it defines</th></tr></thead>
@@ -147,10 +164,12 @@ lake exe paralever --help        # the command line</code></pre>
               <tr><td><code>Lang/Core/Prog.lean</code></td><td><code>ParProg</code>, <code>footprintOf</code>, <code>wfB</code>, <code>execPar</code>, <code>execSeq</code>, and <code>par_seq_eq</code> on the surface</td></tr>
               <tr><td><code>Lang/Core/Analysis.lean</code></td><td><code>flatten</code>, <code>atoms</code>, <code>dependences</code>, <code>canPar</code>, <code>autoPar</code></td></tr>
               <tr><td><code>AutoPar/Dag.lean</code></td><td>the scoreboard, <code>preds</code>, <code>asap</code>, <code>critical</code></td></tr>
-              <tr><td><code>AutoPar/Plan.lean</code></td><td><code>plan</code> — the three-case fold — and <code>plan_units</code></td></tr>
+              <tr><td><code>AutoPar/Plan.lean</code></td><td><code>plan</code> (the three-case fold) and
+                <code>plan_units</code></td></tr>
               <tr><td><code>AutoPar/Sound.lean</code></td><td><code>rewrite_sound</code>, <code>rewrite_wf</code>, <code>rewrite_parSeqEq</code></td></tr>
               <tr><td><code>Search/RaceSearch.lean</code></td><td><code>raceSites</code>, <code>raceSites_nil_iff</code>, <code>wellFormedB</code>, <code>findWrongGuided</code>, <code>follow_sound</code></td></tr>
-              <tr><td><code>Compile/Exec.lean</code></td><td><code>execTask</code> — the same term, on real <code>Task</code>s</td></tr>
+              <tr><td><code>Compile/Exec.lean</code></td><td><code>execTask</code>: the same term, on real
+                <code>Task</code>s</td></tr>
             </tbody>
           </table>
         </div>
@@ -162,30 +181,38 @@ lake exe paralever --help        # the command line</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Lean's <code>induction</code> refuses <code>ParM</code></h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          This is the one thing that will surprise someone reading a proof for the
-          first time. <code>ParM</code>'s <code>par</code> constructor takes a
-          <code>Childs ParM αs</code> — a nested inductive family — and the
-          automatically generated recursor is not in the shape the tactic wants, so
-          every proof goes through one of two hand-written principles instead.
+          Here is the type.
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Paralever/Core/ParM.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="ParM: a program as data"
+                  src="snippets/parm.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          This is the one thing that surprises someone reading a proof for the
+          first time. The fork constructor takes a nested inductive family, and
+          the recursor Lean generates is not the shape the tactic wants. Every
+          proof goes through one of two hand-written principles instead.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th>Use</th><th>When</th></tr></thead>
             <tbody>
               <tr><td><code>ParM.inductionOn</code></td><td>the statement is about one program</td></tr>
-              <tr><td><code>ParM.mutualInduction</code></td><td>the statement is about a program <em>and</em> its children's spine at once — which is most of the theory, since a fork's property is stated in terms of its children's</td></tr>
+              <tr><td><code>ParM.mutualInduction</code></td><td>the statement is about a program <em>and</em> its children's
+                spine at once, which is most of the theory, since a fork's
+                property is stated in terms of its children's</td></tr>
             </tbody>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The reason the spine exists at all is worth recording, because the
-          obvious alternative does not typecheck.
-          <code>List (ParM α)</code> with a constructor-local <code>α</code> is
-          rejected by the kernel — "nested inductive datatypes parameters cannot
-          contain local variables" — so the children carry their own type list, and
-          that index is what keeps each child's result type static. The N-ary
-          theorems are then proved by induction on the children list, where the
-          <code>cons</code> case is the two-to-N step.
+          The spine exists because the obvious alternative does not typecheck.
+          A plain <code>List (ParM &alpha;)</code> with a constructor-local
+          <code>&alpha;</code> is rejected by the kernel, so the children carry
+          their own type list instead. That index is what keeps each child's
+          result type static. The N-ary theorems are then proved by induction on
+          the children list, where the <code>cons</code> case is the two-to-N
+          step.
         </p>
       </section>
 
@@ -195,15 +222,28 @@ lake exe paralever --help        # the command line</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The worked examples</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>Examples/</code> is one tree with Lean files, <code>.prl</code>
-          files and <code>.mlir</code> files side by side. The source files are
-          read and compiled from <em>inside</em> Lean while the Lean file
-          elaborates, so no command line is involved and <code>by decide</code>
-          sees the compiled program rather than the reader.
+          <code>Examples/</code> is one tree, with Lean, <code>.prl</code> and
+          <code>.mlir</code> files side by side. The sources are compiled from
+          inside Lean while the module elaborates. No command line is involved,
+          and <code>by decide</code> sees the compiled program.
+        </p>
+        <p class="text-stone-600 leading-relaxed">
+          This is what one of them looks like: matrix multiply, read from
+          <code>matmul.prl</code>, proved equivalent at every heap.
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Examples/Language/Files.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="matmul: wfB accepts, the theorem follows"
+                  src="snippets/matmul-theorem.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Nothing in that proof is supplied by hand. <code>by decide</code>
+          checks Bernstein's three conditions on the quoted program, and the
+          main theorem does the rest.
         </p>
         <figure class="dgm">
           <ul class="ftree">
-            <li><b>Tour.lean</b> <i>the whole project on one program — start here</i></li>
+            <li><b>Tour.lean</b> <i>the whole project on one program; start here</i></li>
             <li><b>Programs/</b> <i>how do I prove my own algorithm equivalent?</i></li>
             <li><b>Language/</b> <i>how do I write and check a <code>.prl</code> file?</i></li>
             <li><b>Mlir/</b> <i>how do I bring a program in from MLIR?</i></li>
@@ -213,11 +253,11 @@ lake exe paralever --help        # the command line</code></pre>
           </ul>
         </figure>
 
-        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Programs/</code> — the method, on real algorithms</h3>
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Programs/</code>: the method, on real algorithms</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Every file follows the same chain, and the two links are independent:
-          changing the algorithm does not touch link 2, and changing the
-          decomposition does not touch link 1.
+          Every file follows the same chain, and the two links are
+          independent. Changing the algorithm does not touch the second link,
+          and changing the decomposition does not touch the first.
         </p>
         <figure class="dgm">
           <div class="flow">
@@ -232,9 +272,7 @@ lake exe paralever --help        # the command line</code></pre>
             <div class="flow-node is-acc">par<small>forked</small></div>
           </div>
           <figcaption>
-            Link ① is about the algorithm and link ② about the decomposition, and
-            neither touches the other: changing how the work is split leaves ①
-            alone, and changing what the work computes leaves ② alone.
+                        Link ① is about the algorithm and link ② about the decomposition.
           </figcaption>
         </figure>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
@@ -255,24 +293,25 @@ lake exe paralever --help        # the command line</code></pre>
           </table>
         </div>
 
-        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Races/</code> — what failure looks like</h3>
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10"><code>Races/</code>: what failure looks like</h3>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th>File</th><th></th></tr></thead>
             <tbody>
               <tr><td><code>Caught.lean</code></td><td>two programs where the <em>conclusion</em> of the theorem is false, not just its hypothesis</td></tr>
               <tr><td><code>Report.lean</code></td><td>reading a counterexample: the interleaving, and the heap the sequential run leaves</td></tr>
-              <tr><td><code>Pointers.lean</code></td><td>a stray index — rejected in three shapes, and <strong>accepted</strong> in one, because this is equivalence, not memory safety</td></tr>
+              <tr><td><code>Pointers.lean</code></td><td>a stray index: rejected in three shapes and accepted in one,
+                because this is equivalence rather than memory safety</td></tr>
             </tbody>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          <code>Caught.lean</code> is the file that keeps the main theorem honest.
-          If the independence hypothesis were decoration, the conclusion would hold
-          without it; these two programs are the witnesses that it does not. The
-          other standing obligation is a loop-carried dependence —
-          <code>A[i] := A[i-1] + 1</code> — kept as a case whose obligation is
-          <em>unprovable</em>.
+          <code>Caught.lean</code> keeps the main theorem honest. These two
+          programs refute the conclusion once the independence hypothesis is
+          dropped, which is what shows the hypothesis to be load-bearing. The
+          other standing obligation is a loop-carried dependence,
+          <code>A[i] := A[i-1] + 1</code>, kept as a case whose obligation
+          cannot be proved.
         </p>
       </section>
 
@@ -285,34 +324,31 @@ lake exe paralever --help        # the command line</code></pre>
           Mathlib, and nothing else.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>No separation-logic library</strong>, which is a decision rather
-          than an omission. A separating conjunction splits the heap into disjoint
-          domains, and the independence relation this project is built on does not:
-          Bernstein's conditions permit two threads to read one cell, so
-          <code>&lowast;</code> is strictly narrower than the relation every theorem
-          here is about. The Hoare-triple layer therefore frames with ordinary
-          conjunction over the footprints the library already computes, which is
-          what makes its parallel rule general — shared reads included — instead of
-          narrowing it to match an imported connective. An earlier dependency on
-          iris-lean existed to test exactly this, and was removed once it had
-          answered: the finding is kept in <code>docs/theory.md</code>&nbsp;§&nbsp;8.
+          There is no separation-logic library, and that is a decision rather
+          than an omission. A separating conjunction splits the heap into
+          disjoint domains, and Bernstein's relation does not: two threads may
+          read one cell. So <code>&lowast;</code> is strictly narrower than the
+          relation every theorem here is about. The Hoare-triple layer frames
+          with ordinary conjunction over the footprints the library already
+          computes, which keeps its parallel rule general. An earlier dependency
+          on iris-lean existed to test exactly this, and was removed once it had
+          answered. The finding is kept in
+          <code>docs/theory.md</code>&nbsp;&sect;&nbsp;8.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>HeapLang is deliberately not imported</strong>, and read only as
-          a template. Its <code>par</code> is derived from an unstructured
-          <code>fork</code>; it is nondeterministic in allocation and prophecies;
-          it has no arrays; and its parallel-composition rule is unary, so it
-          cannot express an equivalence at all. Any one of those would be enough.
+          HeapLang is read as a template and never imported. Its fork is
+          unstructured, it is nondeterministic in allocation, it has no arrays,
+          and its parallel rule is unary, so it cannot express an equivalence at
+          all. Any one of those would be enough.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          Several other systems were read for design and are not required —
-          deliberately, since each would add a toolchain pin. The reading list and
-          the reasons are in <code>docs/papers.md</code>; every rejected
-          alternative has its own note in <code>docs/</code>, which is where
-          rationale lives. Source files carry a one-line pointer to the paper or
-          the design note a declaration comes from, and nothing more: the rule is
-          that every definition, hypothesis and design choice traces to one or the
-          other.
+          Several other systems were read for design and are not required.
+          Each would add a toolchain pin. The reading list and the reasons are
+          in <code>docs/papers.md</code>, and every rejected alternative has its
+          own note in <code>docs/</code>. Source files carry a one-line pointer
+          to the paper or the note a declaration comes from, and nothing more.
+          The rule is that every definition, hypothesis and design choice traces
+          to one or the other.
         </p>
       </section>
 

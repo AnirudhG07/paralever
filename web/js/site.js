@@ -72,7 +72,7 @@
   ];
 
   var EXTRAS = [
-    ["The talk", "@base@slides/", "the deck, built from the library"],
+    ["Blog", "https://anirudhg07.github.io/blogs/paralever-a-language-that-proves-parallel-equals-sequential/", "the project, written up"],
     ["Source", "https://github.com/AnirudhG07/paralever", "the repository"]
   ];
 

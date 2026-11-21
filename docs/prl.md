@@ -761,7 +761,7 @@ file above rather than a report about it. See `docs/cli.md`.
 
 `Examples/Language/` is gated by `Test/Lang.lean`, which compiles each file, prints it back, checks the
 verdict it is labelled with, and — for seven of the files `wfB` accepts — proves the instance
-of `par_seq_eq` that the verdict licenses (`sum_ok`, `matmul_ok`, `stencil_ok`, `pipeline_ok`,
+of `par_seq_eq` that the verdict licenses (`sum_ok`, `matmul_parseqeq`, `stencil_ok`, `pipeline_ok`,
 `control_ok`, `chain_ok`, `arena_ok`). The two it refuses have no such theorem: for `race.prl` the
 conclusion is false, and `Examples/Races/Caught.lean` refutes that shape; for `scatter.prl` the conclusion
 holds at heaps where the indices miss, which `Examples/Language/Scatter.lean` proves from the exact check.

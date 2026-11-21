@@ -300,43 +300,6 @@
   letter-spacing: 0.1em;
 }
 
-/* Verdict badges — the three things a check can say */
-.verdict {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.25rem 0.7rem;
-  border-radius: 99px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-.verdict::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-}
-.verdict-ok {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-}
-.verdict-heap {
-  background: #fefce8;
-  color: #a16207;
-  border: 1px solid #fef08a;
-}
-.verdict-race {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
-
 /* Section divider */
 .divider {
   border: none;
@@ -752,3 +715,49 @@ main > section:first-of-type > p:first-of-type {
   color: #44403c;
 }
 
+
+/* ---- Example rhythm -------------------------------------------------------
+   Every section leads with a real program or a real capture, then two or three
+   short sentences about it. The code and the sentences that explain it have to
+   read as one unit, so the gap inside a pair is smaller than the gap between
+   pairs. */
+
+/* the hero's opening program, and the question under it */
+.hero-ex { max-width: 44rem; }
+.hero-ask {
+  margin: 0.9rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #57534e;
+}
+.hero-ask strong { color: #1c1917; font-weight: 700; }
+
+/* prose that follows a capture is that capture's caption: keep it close */
+main .code-wrap + p,
+main .lean-embed + p,
+main figure.dgm + p {
+  margin-top: 0.9rem;
+}
+
+/* but a new step starts well clear of the one before it */
+main h3 + .code-wrap,
+main h3 + .lean-embed,
+main h3 + figure.dgm,
+main h3 + .dgm { margin-top: 1.1rem; }
+
+main p + .code-wrap,
+main p + .lean-embed,
+main p + figure.dgm,
+main p + .opts-table,
+main p + .dgm { margin-top: 1.75rem; }
+
+/* two captures in a row are separate examples, not one long listing */
+main .code-wrap + .code-wrap { margin-top: 1.5rem; }
+
+/* a table that follows a capture gets the same air prose does */
+main .code-wrap + .opts-table,
+main .lean-embed + .opts-table { margin-top: 2rem; }
+
+/* section headings carry their own space already (4.5rem); subheadings inside a
+   worked example need less, or the three steps drift apart */
+main h3 { margin-bottom: 0.35rem; }

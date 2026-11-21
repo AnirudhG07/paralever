@@ -26,6 +26,26 @@
 .reveal .event { font-size: 0.9em; }
 .reveal .links { margin-top: 0.9em; font-size: 0.8em; }
 
+/* ---- section page: the name of what is coming, and the slides under it ----
+   Centred and quiet, so it reads as a turn in the talk rather than a slide
+   carrying content. `.ahead` is the list of what the section holds. */
+.reveal section[data-state="section"] {
+  justify-content: center;
+  padding: 61.2px 128px;
+}
+.reveal section[data-state="section"] h1,
+.reveal section[data-state="section"] h2 {
+  font-size: 1.9em;
+  margin-bottom: 0.65em;
+}
+.reveal .ahead { list-style: none; margin: 0; padding: 0; font-size: 1em; }
+.reveal .ahead li {
+  color: var(--muted);
+  padding: 0.18em 0 0.18em 0.9em;
+  border-left: 3px solid var(--lean-blue);
+  margin-bottom: 0.34em;
+}
+
 /* ---- body: bump bullet-point text a touch ---- */
 .reveal ul, .reveal ol { font-size: 0.92em; }
 

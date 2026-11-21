@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Paralever proves that a parallel program leaves the same heap as its sequential counterpart under every schedule, in Lean 4 — one metatheorem, then a decidable independence check per program." />
+    <meta name="description" content="Paralever proves in Lean 4 that a parallel program leaves the same heap as its sequential counterpart under every schedule. One metatheorem, then a decidable independence check per program." />
     <meta property="og:title" content="paralever — paralever" />
-    <meta property="og:description" content="Paralever proves that a parallel program leaves the same heap as its sequential counterpart under every schedule, in Lean 4 — one metatheorem, then a decidable independence check per program." />
+    <meta property="og:description" content="Paralever proves in Lean 4 that a parallel program leaves the same heap as its sequential counterpart under every schedule. One metatheorem, then a decidable independence check per program." />
     <meta property="og:type" content="website" />
     <title>paralever — paralever</title>
     <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
@@ -69,21 +69,42 @@
       <h1 class="text-5xl md:text-7xl font-bold serif text-stone-900 tracking-tight leading-[1.0] mb-6">
         paralever
       </h1>
-      <p class="text-xl md:text-2xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl mb-6">
-        A parallel program and its sequential counterpart leave the same heap —
-        under <em>every</em> schedule — whenever the forked branches are
-        independent. Proved once in Lean 4; after that, each program owes a
-        single decidable check.
-      </p>
-      <p class="text-base text-stone-500 leading-relaxed max-w-2xl mb-10">
-        The theorem is about a semantics, not about Lean's runtime. <code>par</code>
-        is a constructor of the program type and its meaning is fixed by an
-        interleaving machine, so there is something to prove. A program that races
-        does not quietly get the equality: it reaches an absorbing
-        <code>wrong</code>, and the tool prints the interleaving that puts it there.
+      <p class="text-xl md:text-2xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl mb-8">
+        A parallel program should leave behind what the sequential one left
+        behind. Paralever proves that in Lean 4, for every schedule at once.
       </p>
 
-      <div class="flex flex-wrap gap-4">
+      <div class="hero-ex">
+        <div class="code-wrap" style="margin-top:0">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">Examples/Language/matmul.prl</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">const n = 2
+
+buf A[2, 2] = 1, 2, 3, 4
+buf B[2, 2] = 5, 6, 7, 8
+buf C[2, 2]
+
+parfor i in n {
+  for j in n {
+    %acc := 0
+    for k in n {
+      %x := A[i, k]
+      %y := B[k, j]
+      %acc := %acc + %x * %y
+    }
+    C[i, j] := %acc
+  }
+} :: "matmul 2x2"</code></pre>
+        </div>
+        <p class="hero-ask">
+          One thread per row. Each thread writes its own row of <code>C</code>.
+          Every thread reads all of <code>B</code>. <strong>Is that a race?</strong>
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-4 mt-10">
         <a href="https://github.com/AnirudhG07/paralever" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-2.5 px-6 py-3 bg-stone-900 text-stone-100 rounded-xl font-bold text-sm hover:bg-stone-800 transition-colors no-underline">
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
@@ -95,43 +116,87 @@
            class="inline-flex items-center gap-2.5 px-6 py-3 bg-white/70 border border-stone-200 text-stone-900 rounded-xl font-bold text-sm hover:border-mustard-700 transition-colors no-underline">
           Read the theorem
         </a>
-        <a href="slides/"
+        <a href="https://anirudhg07.github.io/blogs/paralever-a-language-that-proves-parallel-equals-sequential/" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-2.5 px-6 py-3 bg-white/70 border border-stone-200 text-stone-900 rounded-xl font-bold text-sm hover:border-mustard-700 transition-colors no-underline">
-          The talk
+          Blog
         </a>
       </div>
     </header>
 
     <main class="px-6 md:px-12 lg:px-24 max-w-5xl mx-auto pb-24">
 
-      <!-- THE THEOREM -->
+      <!-- MATMUL, PROVED -->
       <section>
-        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">One theorem, then a check</h2>
-        <p class="text-stone-600 leading-relaxed mb-4">
-          <code>ParSeqEq p q σ</code> says the two programs reach exactly the same
-          terminal configurations from the heap <code>σ</code>: not that one
-          refines the other, not that both satisfy a specification, but that the
-          sets of reachable results coincide. On the surface language, the
-          hypothesis is a <code>Bool</code>.
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Matrix multiply, proved</h2>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          It is not a race. Three steps show why: measure what each thread
+          touches, check the three conditions, then state the theorem.
         </p>
 
-        <div class="lean-embed">
-            <div class="lean-embed-label">Lean 4 · Paralever/Theory/Sequentialize.lean</div>
-            <iframe class="lean-demo" loading="lazy" title="ParSeqEq — what &quot;the same outcomes&quot; means"
-                    src="web/snippets/parseqeq.html"></iframe>
+        <h3 class="text-lg font-bold serif text-stone-900">1 &middot; What each thread touches</h3>
+        <figure class="dgm">
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <p class="t-col-head">Writes: disjoint</p>
+              <table class="fp-table">
+                <tr><td class="fp-th">thread 0</td><td><code>C[0,0]</code> <code>C[0,1]</code></td></tr>
+                <tr><td class="fp-th">thread 1</td><td><code>C[1,0]</code> <code>C[1,1]</code></td></tr>
+              </table>
+              <p class="fp-note fp-note-ok">no cell in common: <code>w&#8321; &cap; w&#8322; = &empty;</code></p>
+            </div>
+            <div>
+              <p class="t-col-head">Reads: overlapping</p>
+              <table class="fp-table">
+                <tr><td class="fp-th">thread 0</td><td><code>A[0,&middot;]</code> <span class="fp-shared"><code>B[&middot;,0]</code> <code>B[&middot;,1]</code></span></td></tr>
+                <tr><td class="fp-th">thread 1</td><td><code>A[1,&middot;]</code> <span class="fp-shared"><code>B[&middot;,0]</code> <code>B[&middot;,1]</code></span></td></tr>
+              </table>
+              <p class="fp-note fp-note-acc">all of <code>B</code> in common, and that is allowed</p>
+            </div>
           </div>
-          <div class="lean-embed">
-            <div class="lean-embed-label">Lean 4 · Lang/Core/Prog.lean</div>
-            <iframe class="lean-demo" loading="lazy" title="par_seq_eq — one Bool, then the theorem"
-                    src="web/snippets/wfb-par-seq-eq.html"></iframe>
+          <div class="fp-clauses">
+            <span class="fp-clause"><code>w&#8321; &cap; w&#8322; = &empty;</code></span>
+            <span class="fp-clause"><code>w&#8321; &cap; r&#8322; = &empty;</code></span>
+            <span class="fp-clause"><code>w&#8322; &cap; r&#8321; = &empty;</code></span>
+            <span class="fp-clause fp-clause-free"><code>r&#8321; &cap; r&#8322;</code> &middot; no clause</span>
           </div>
+          <figcaption>
+            The three conditions are Bernstein's. No two threads write one cell,
+            and no thread writes a cell another reads. There is no fourth
+            condition on reads, which is why this program passes.
+          </figcaption>
+        </figure>
 
+        <h3 class="text-lg font-bold serif text-stone-900">2 &middot; What the tool answers</h3>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever check Examples/Language/matmul.prl</span>
+          </div>
+          <pre><code class="language-console">Examples/Language/matmul.prl
+  memory    A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
+  reads     {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
+  writes    {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
+  threads   2
+  rounds    10 parallel, 20 sequential
+  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
+        </div>
         <p class="text-stone-600 leading-relaxed">
-          Everything a user writes per program is <code>h</code>, and
-          <code>h</code> is discharged by <code>by decide</code>. The surface
-          language computes a footprint from the syntax, so <code>wfB</code> tests
-          Bernstein's three conditions at every <code>parallel</code> node without
-          ever running the program.
+          The footprints are read off the program text. The program is never
+          run, and no schedule is enumerated. The same report is gated by the
+          build at <code>Examples/Language/Files.lean</code>, so this text cannot
+          go stale.
+        </p>
+
+        <h3 class="text-lg font-bold serif text-stone-900">3 &middot; The theorem</h3>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Examples/Language/Files.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="matmul: wfB accepts, the theorem follows"
+                  src="web/snippets/matmul-theorem.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>by decide</code> checks the three conditions on this program.
+          <code>par_seq_eq</code> turns that Boolean into equality of outcomes
+          under every schedule. The proof is one line because the hard theorem
+          was proved once, for all programs.
         </p>
       </section>
 
@@ -141,18 +206,16 @@
       <section>
         <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Shared reads are allowed</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          Independence is <strong>Bernstein's condition</strong> —
-          <code>w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅</code> — and not separation logic's
-          <code>∗</code>. The difference is the whole reason the method covers real
-          kernels: a matrix multiply writes disjoint cells of <code>C</code> while
-          reading overlapping rows of <code>A</code> and columns of
-          <code>B</code>, which <code>∗</code>-disjointness refuses and Bernstein
-          admits.
+          Separation logic's <code>&#8727;</code> splits memory into disjoint
+          pieces, so two threads may not hold the same cell. Matrix multiply
+          fails that test. Bernstein's condition has no clause on reads, so it
+          admits the program. That one difference is what lets the method reach
+          real kernels.
         </p>
 
         <div class="grid md:grid-cols-2 gap-6">
           <div>
-            <div class="mb-3"><span class="verdict verdict-ok">wfB = true</span></div>
+            <div class="mb-3"><code class="text-sm font-semibold text-stone-900">accepted</code></div>
             <div class="code-wrap" style="margin-top:0">
               <div class="code-wrap-header">
                 <span class="code-wrap-lang">stencil.prl</span>
@@ -170,14 +233,14 @@ parfor i in n {
 } :: "stencil"</code></pre>
             </div>
             <p class="text-sm text-stone-500 leading-relaxed">
-              Neighbouring threads read <code>inp[i+1]</code> in common and no cell
-              is written twice. Independent, so <code>par_seq_eq</code> applies at
-              every heap.
+              Neighbours share the read of <code>inp[i+1]</code>. No cell is
+              written twice. The threads are independent, so the theorem applies
+              at every heap.
             </p>
           </div>
 
           <div>
-            <div class="mb-3"><span class="verdict verdict-race">race</span></div>
+            <div class="mb-3"><code class="text-sm font-semibold text-stone-900">refused</code></div>
             <div class="code-wrap" style="margin-top:0">
               <div class="code-wrap-header">
                 <span class="code-wrap-lang">race.prl</span>
@@ -195,9 +258,9 @@ parallel {
 }</code></pre>
             </div>
             <p class="text-sm text-stone-500 leading-relaxed">
-              Both threads write <code>x[0]</code>. The parallel reading reaches
-              <code>wrong</code>, the sequential reading terminates, and the
-              equality is <em>false</em> — refuted in Lean, not merely unproved.
+              Both threads write <code>x[0]</code>. The parallel reading aborts
+              where the sequential reading finishes, so the equality is false.
+              Lean refutes it rather than leaving it open.
             </p>
           </div>
         </div>
@@ -205,39 +268,42 @@ parallel {
 
       <hr class="divider" />
 
-      <!-- THE LADDER -->
+      <!-- THE TWO QUESTIONS -->
       <section>
-        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Three verdicts, no fourth</h2>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">The given heap, and every heap</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          A program lands in exactly one of three places, and which one is decided
-          by the checks rather than chosen. <code>paralever prove FILE</code>
-          writes the Lean module that carries whichever theorem the verdict
-          licenses.
+          Every report answers the question twice. At the heap the file
+          declares, an exact search settles it. At every heap, the syntactic
+          check settles it when the footprints are precise enough. A computed
+          address or a branch widens them, and then the general answer is the
+          weaker of the two.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden">
           <table class="opts-table">
             <thead>
-              <tr><th>Verdict</th><th>What holds</th><th>How</th></tr>
+              <tr><th>Question</th><th>What is proved</th><th>How</th></tr>
             </thead>
             <tbody>
               <tr>
-                <td><span class="verdict verdict-ok">independent</span></td>
-                <td><code>ParSeqEq</code> at <strong>every</strong> heap and register file</td>
-                <td><code>ParProg.par_seq_eq (by decide) ρ σ</code></td>
+                <td>At the given heap</td>
+                <td><code>ParSeqEq</code> at the heap the file declares</td>
+                <td>the exact per-heap search, then <code>parSeqEq_of_runSeq_eq</code></td>
               </tr>
               <tr>
-                <td><span class="verdict verdict-heap">this heap only</span></td>
-                <td><code>ParSeqEq</code> at the <strong>declared</strong> heap — the syntactic footprint over-approximated a computed address</td>
-                <td><code>parSeqEq_of_runSeq_eq</code> from the exact per-heap check</td>
-              </tr>
-              <tr>
-                <td><span class="verdict verdict-race">race</span></td>
-                <td>No theorem of this shape. Both refusals are proved, and the interleaving is printed</td>
-                <td><code>by decide</code> on each, plus <code>follow_sound</code></td>
+                <td>At every heap</td>
+                <td><code>ParSeqEq</code> at every heap and register file</td>
+                <td><code>ParProg.par_seq_eq (by decide) &rho; &sigma;</code></td>
               </tr>
             </tbody>
           </table>
         </div>
+        <p class="text-stone-600 leading-relaxed">
+          If two threads touch one cell and at least one writes, both answers
+          are no. Each refusal is itself proved. The tool then prints the
+          interleaving that reaches <code>wrong</code>, and
+          <code>paralever prove FILE</code> writes the Lean module carrying
+          whichever theorem the two answers license.
+        </p>
       </section>
 
       <hr class="divider" />
@@ -248,29 +314,28 @@ parallel {
         <div class="grid md:grid-cols-2 gap-4">
           <a class="card" href="web/concept.html">
             <h3>The theorem</h3>
-            <p><code>ParM</code>, the interleaving machine, footprints, Bernstein
-            independence, canonical outcomes, and how <code>par ≡ seq</code> is
-            proved.</p>
+            <p>A program as data, the machine that runs every schedule,
+            footprints, and how <code>par &equiv; seq</code> is proved.</p>
           </a>
           <a class="card" href="web/language.html">
             <h3>The language</h3>
-            <p>The <code>.prl</code> grammar in full: buffers and lifetimes,
-            registers, computed addresses, control flow, and what is rejected.</p>
+            <p>The <code>.prl</code> grammar: buffers, registers, computed
+            addresses, control flow, and what is refused.</p>
           </a>
           <a class="card" href="web/autopar.html">
             <h3>Autoparallelization</h3>
-            <p>A <code>;</code>-chain becomes a tree of forks, and the rewrite is
-            proved to preserve the heap — with no hypothesis at all.</p>
+            <p>A sequential chain becomes a tree of forks, and the rewrite is
+            proved to preserve the heap with no hypothesis.</p>
           </a>
           <a class="card" href="web/races.html">
             <h3>Finding races</h3>
-            <p>A complete scan for conflict sites, then a search aimed by it, and
-            a found schedule replayed against the real <code>step</code>.</p>
+            <p>A complete scan for conflict sites, a search aimed by it, and the
+            schedule it finds replayed against the semantics.</p>
           </a>
           <a class="card" href="web/mlir.html">
             <h3>From MLIR</h3>
-            <p>Generic form in, a verdict out, and a differential run against an
-            exact rational reference interpreter.</p>
+            <p>An MLIR file goes in and a verdict comes out, checked against an
+            exact rational interpreter.</p>
           </a>
           <a class="card" href="web/cli.html">
             <h3>The command line</h3>
@@ -279,13 +344,13 @@ parallel {
           </a>
           <a class="card" href="web/lean.html">
             <h3>The Lean library</h3>
-            <p>Module by module: what to import, which induction principle to use,
-            and the worked examples that gate the build.</p>
+            <p>Module by module: what to import, which induction principle to
+            use, and the examples that gate the build.</p>
           </a>
-          <a class="card" href="slides/">
-            <h3>The talk</h3>
-            <p>The slide deck, built from the library itself — every code block on
-            a slide is read out of the source that compiles.</p>
+          <a class="card" href="https://anirudhg07.github.io/blogs/paralever-a-language-that-proves-parallel-equals-sequential/" target="_blank" rel="noopener noreferrer">
+            <h3>Blog</h3>
+            <p>The project written up end to end: why the theorem is the one
+            worth proving, and what it took to mechanize it.</p>
           </a>
         </div>
       </section>
@@ -294,7 +359,7 @@ parallel {
 
       <!-- QUICK START -->
       <section>
-        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Checking a program</h2>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Running it yourself</h2>
         <div class="code-wrap">
           <div class="code-wrap-header">
             <span class="code-wrap-lang">console</span>
@@ -306,22 +371,11 @@ lake build paralever        # ./.lake/build/bin/paralever
 
 paralever check Examples/Language/matmul.prl</code></pre>
         </div>
-        <div class="code-wrap">
-          <div class="code-wrap-header">
-            <span class="code-wrap-lang">output</span>
-          </div>
-          <pre><code class="language-console">Examples/Language/matmul.prl
-  memory    A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
-  reads     {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
-  writes    {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
-  threads   2
-  rounds    10 parallel, 20 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)</code></pre>
-        </div>
         <p class="text-stone-600 leading-relaxed">
-          The same four reports are available as <code>#eval</code>s inside Lean,
-          over a program read at elaboration time, so a <code>.prl</code> file can
-          be the subject of a theorem without a build step in between. See
+          No solver is needed and nothing is downloaded at run time. The same
+          reports are available as <code>#eval</code>s inside Lean, over a file
+          read while Lean elaborates, so a <code>.prl</code> file can be the
+          subject of a theorem with no build step in between. See
           <a href="web/cli.html" class="prose-link">the command line</a>.
         </p>
       </section>
@@ -330,48 +384,47 @@ paralever check Examples/Language/matmul.prl</code></pre>
 
       <!-- LOAD-BEARING FACTS -->
       <section>
-        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Why the theorem is not empty</h2>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Guarding against vacuity</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          The standing risk in a development like this is proving something true
-          and vacuous. Four facts keep it honest, and each is enforced by the
-          build.
+          The standing risk in work like this is proving something true and
+          empty. Four facts rule that out, and the build enforces each one.
         </p>
         <div class="space-y-5">
           <div class="flex gap-4 items-start">
             <div class="step-num">1</div>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">Lean's <code>Task</code> cannot host the theorem.</strong>
-              <code>Task</code> is a one-field structure with a real body, so
-              <code>(Task.spawn f).get = f ()</code> holds by <code>rfl</code> —
-              parallel and sequential would be the same term. <code>Task</code> is
-              a compilation target only; nothing is ever proved about parallelism
-              there.
+              Lean's <code>Task</code> cannot host the theorem. It is a one-field
+              structure with a real body, so
+              <code>(Task.spawn f).get = f ()</code> holds by <code>rfl</code>.
+              That makes the parallel and the sequential program the same term.
+              <code>Task</code> is a compilation target here, and nothing is
+              proved about parallelism on it.
             </p>
           </div>
           <div class="flex gap-4 items-start">
             <div class="step-num">2</div>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">A racy program is exhibited, in Lean, where the conclusion fails.</strong>
-              If the hypothesis were decoration, the theorem would hold without it.
-              <code>Examples/Races/Caught.lean</code> is the witness that it does not.
+              A racy program is exhibited in Lean where the conclusion fails.
+              <code>Examples/Races/Caught.lean</code> refutes
+              <code>ParSeqEq</code> for two threads writing one cell. That is
+              what shows the hypothesis to be load-bearing.
             </p>
           </div>
           <div class="flex gap-4 items-start">
             <div class="step-num">3</div>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">A race is an absorbing <code>wrong</code>, not an assumption.</strong>
-              Following Reynolds' grainless semantics, a conflicting fork steps to
-              a configuration with no successors. That is what makes the atomic
-              grain irrelevant and keeps racy programs excluded rather than
-              silently assumed away.
+              A race reaches an absorbing <code>wrong</code>, following Reynolds'
+              grainless semantics. A conflicting fork steps to a configuration
+              with no successors. The atomic grain is therefore irrelevant, and
+              racy programs are excluded rather than assumed away.
             </p>
           </div>
           <div class="flex gap-4 items-start">
             <div class="step-num">4</div>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">No <code>sorry</code>, and no <code>native_decide</code>.</strong>
-              <code>grep -rn "sorry" Paralever/</code> is a gate in the build, and
-              every per-program obligation is discharged by the kernel.
+              There is no <code>sorry</code> and no <code>native_decide</code>.
+              <code>grep -rn "sorry" Paralever/</code> is a gate in the build,
+              and the kernel discharges every per-program obligation.
             </p>
           </div>
         </div>

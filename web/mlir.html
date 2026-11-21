@@ -114,53 +114,46 @@
 
           <line class="brace" x1="588" y1="0" x2="588" y2="160" />
 
-          <text class="t-lab" x="0" y="186">STAGE 1 — NOT OURS</text>
+          <text class="t-lab" x="0" y="186">STAGE 1 · NOT OURS</text>
           <text class="t-note" x="0" y="205">off-the-shelf, and a text format:</text>
           <text class="t-note" x="0" y="221">replaceable without touching anything downstream</text>
 
-          <text class="t-lab t-acc" x="616" y="186">STAGE 2 — MLIR/</text>
+          <text class="t-lab t-acc" x="616" y="186">STAGE 2 · MLIR/</text>
           <text class="t-note" x="616" y="205">one artifact, in Lean,</text>
           <text class="t-note" x="616" y="221">so it is the only thing to test</text>
         </svg>
         <figcaption>
-          N languages against one converter, instead of one front end per language.
-          Hand-translating a benchmark is the dominant threat to validity for any
-          claim measured on one, because the translation is part of what is being
-          measured and is itself unverified; this removes that threat by making the
-          translation mechanical and auditable.
+          N languages against one converter, instead of one front end per
+          language. The translation stays mechanical and auditable.
         </figcaption>
       </figure>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>Generic form, not each dialect's own assembly.</strong>
-          <code>--mlir-print-op-generic</code> prints every operation the same way,
-          so one reader covers <code>affine</code>, <code>memref</code>,
-          <code>arith</code> and <code>func</code>. The custom form
-          (<code>affine.for %i = 0 to 8 { … }</code>) needs a grammar per dialect,
-          so it is read by a second reader that covers those four and
-          <em>desugars</em> to the same operations — below, <a href="#custom-form">the
-          syntax people actually write</a>. Affine maps are the only piece with their
-          own grammar in either form.
+          Generic form, rather than each dialect's own assembly. Every
+          operation prints the same way there, so one reader covers four
+          dialects. The custom form needs a grammar per dialect, so a second
+          reader handles it and desugars to the same operations. See
+          <a href="#custom-form">the syntax people actually write</a> below.
         </p>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>Not LLVM IR.</strong> It sits below the level that can be
-          consumed here, for two independent reasons.
+          LLVM IR is not read. It sits below the level this can consume, for
+          two independent reasons.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th></th><th>LLVM IR</th><th>MLIR affine/scf/memref</th></tr></thead>
             <tbody>
               <tr><td>Control flow</td><td>unstructured <code>br</code>, phi nodes</td><td>structured regions</td></tr>
-              <tr><td>Representable in <code>ParM</code>?</td><td>no — <code>ParM</code> is inductive, so arbitrary jumps have no encoding at all</td><td>yes</td></tr>
+              <tr><td>Representable in <code>ParM</code>?</td><td>no: <code>ParM</code> is inductive, so arbitrary jumps
+                have no encoding</td><td>yes</td></tr>
               <tr><td>Affine maps</td><td>gone; a loop is a CFG</td><td>present, and they are what is needed</td></tr>
             </tbody>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          So consuming LLVM IR would mean writing a loop structurizer first, and
-          going through one <em>destroys</em> the information the lowering depends
-          on.
+          Consuming it would mean writing a loop structurizer first, and going
+          through one destroys the information the lowering depends on.
         </p>
       </section>
 
@@ -170,9 +163,9 @@
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">An affine map is a footprint function</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          This is the alignment the design rests on. The N-ary fork lemma asks for
-          each thread's read and write sets as two lists of locations. An
-          <code>affine.store</code> already carries exactly that:
+          This is the alignment the design rests on. The fork lemma asks for
+          each thread's read and write sets as two lists of cells. An affine
+          store already carries exactly that.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -191,12 +184,11 @@
           </div>
         </figure>
         <p class="text-stone-600 leading-relaxed">
-          The map is evaluated at each point of the index box, so the footprint
-          stays <em>exact</em> — a literal location per access, not a bound on an
-          array. That is what keeps <code>wfB</code> able to accept the program at
-          all. A <code>memref.load</code> with a <em>computed</em> index gets the
-          data-dependent form instead, whose footprint is the whole array, and the
-          lowering records that in the module's notes rather than hiding it.
+          The map is evaluated at each point of the index box, so the
+          footprint stays exact: one literal cell per access, not a bound on an
+          array. That is what keeps the check able to accept the program. A load
+          with a computed index gets the whole array instead, and the lowering
+          records that in the module's notes rather than hiding it.
         </p>
       </section>
 
@@ -224,9 +216,10 @@
         </div>
         <p class="text-stone-600 leading-relaxed">
           Buffers are placed in consecutive ranges, so array disjointness is
-          discharged once by the allocator rather than once per pair, and every
-          subscript is range-checked against its own buffer — without the check, an
-          out-of-range subscript would silently name a cell of the next buffer.
+          discharged once by the allocator rather than once per pair. Every
+          subscript is range-checked against its own buffer. Without that check
+          an out-of-range subscript would silently name a cell of the next
+          one.
         </p>
       </section>
 
@@ -267,10 +260,10 @@
 }) : () -> ()</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The <code>affine.parallel</code> unrolls to eight threads, each reading
-          its own cell of <code>A</code> and <code>B</code> and writing its own
-          cell of <code>C</code>. Read from Lean, the whole file is a program the
-          theorem applies to with nothing further to supply:
+          The parallel loop unrolls to eight threads. Each reads its own cell
+          of <code>A</code> and <code>B</code> and writes its own cell of
+          <code>C</code>. Read from Lean, the whole file is a program the
+          theorem applies to.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · Examples/Mlir/Files.lean</div>
@@ -283,9 +276,9 @@
                     src="snippets/mlir-theorem.html"></iframe>
           </div>
         <p class="text-stone-600 leading-relaxed">
-          <code>mlir_prog</code> quotes the lowered program into the term at
-          elaboration time, exactly as <code>prl_file</code> does, so
-          <code>decide</code> sees a literal and never runs the reader.
+          The lowered program is quoted into the term while Lean elaborates,
+          exactly as a <code>.prl</code> file is. So <code>decide</code> sees a
+          literal and never runs the reader.
         </p>
       </section>
 
@@ -295,11 +288,10 @@
       <section id="custom-form">
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The syntax people actually write</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Generic form is one grammar for every dialect, which is why there is one
-          reader. It is also not what anybody writes: every file in
-          <code>llvm-project</code>, in a bug report or in a compiler's output is
-          in <em>custom</em> form. The same program, in the syntax
-          <code>mlir-opt</code> prints:
+          Generic form is one grammar for every dialect, which is why there is
+          one reader. It is also not what anybody writes. Every file in
+          <code>llvm-project</code>, in a bug report, or in a compiler's output
+          is in custom form. Here is the same program in it.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -325,11 +317,10 @@
 }</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>MLIR/Pretty.lean</code> reads that, and it is a second
-          <em>reader</em> and nothing else: each construct is desugared to the
-          operation generic form carries, so the lowering, the interpreter, the
-          printer and the corpus never learn that custom form exists. Two rows do
-          most of the work.
+          A second reader handles that, and it is a reader and nothing else.
+          Each construct is desugared to the operation generic form carries, so
+          nothing downstream learns that custom form exists. Two rules do most
+          of the work.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
@@ -341,19 +332,19 @@
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          An index list becomes a map: the subscripts are parsed as affine
-          expressions and the values they mention become the map's dimensions, in
-          order of first use, which is exactly the shape the lowering already
+          An index list becomes a map. The subscripts are parsed as affine
+          expressions, and the values they mention become the map's dimensions
+          in order of first use. That is exactly the shape the lowering already
           consumes. A region argument becomes the loop index, because that is
-          where the unroller looks for it.
+          where the unroller looks.
         </p>
         <h3 class="text-xl font-semibold serif text-stone-900 mb-3">On MLIR's own test input</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>mlir/test/Dialect/Affine/parallelize.mlir</code> is the input to
-          <code>-affine-parallelize</code>, the pass Paralever is a certifying
-          replacement for: twenty functions written to exercise its edge cases.
-          <code>paralever funcs</code> reads it function by function and says what
-          happened to each.
+          One file in the MLIR repository is the input to
+          <code>-affine-parallelize</code>, the pass this is a certifying
+          replacement for. It holds twenty functions written to exercise that
+          pass's edge cases. <code>paralever funcs</code> reads it one function
+          at a time.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
@@ -368,35 +359,28 @@
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The one to look at is <code>non_affine_load</code>: a hundred iterations
-          of <code>memref.load %0[%i]</code> with a subscript the affine machinery
-          cannot read.
+          The one to look at is <code>non_affine_load</code>: a hundred
+          iterations with a subscript the affine machinery cannot read.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
-            <span class="code-wrap-lang">console</span>
-            <button class="copy-btn">Copy</button>
+            <span class="code-wrap-lang">paralever check --func non_affine_load parallelize.mlir</span>
           </div>
-          <pre><code class="language-console">$ paralever --func non_affine_load parallelize.mlir
-parallelize.mlir
+          <pre><code class="language-console">parallelize.mlir
   memory    v0[100] @0  (100 cells)
-  reads     {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], … +90 more}
+  reads     {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], &hellip; +90 more}
   writes    {}
   threads   1
   rounds    100 parallel, 100 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)
-
-PROVED. Bernstein holds at every fork, so par_seq_eq applies: every schedule of this
-program leaves the heap its sequential reading leaves.</code></pre>
+  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          MLIR's pass <strong>declines</strong> that loop — the file's own
-          <code>CHECK</code> line expects the sequential <code>affine.for</code> to
-          survive — because it cannot analyse the access. Bernstein accepts it,
-          because the loop only reads, and reads never conflict. On the pass's own
-          test input, in the pass's own syntax, the comparison is a precision gain
-          rather than a loss, and the acceptance arrives with
-          <code>par_seq_eq</code> attached.
+          MLIR's pass declines that loop, and the file's own
+          <code>CHECK</code> line expects the sequential form to survive.
+          Bernstein accepts it, because the loop only reads and reads never
+          conflict. On the pass's own test input, in the pass's own syntax, this
+          is a precision gain, and the acceptance arrives with the theorem
+          attached.
         </p>
       </section>
 
@@ -406,22 +390,22 @@ program leaves the heap its sequential reading leaves.</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Seven labelled pilots</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Each file is named for its ground truth in DataRaceBench's convention —
-          <code>-yes</code> has a race, <code>-no</code> does not — and the labels
-          are in the file headers, written before the verdicts were run. Every row
-          is a <code>#guard</code> in the build.
+          Each file is named for its ground truth, in DataRaceBench's
+          convention: <code>-yes</code> has a race, <code>-no</code> does not.
+          The labels are in the file headers, written before the verdicts were
+          run. Every row is a <code>#guard</code> in the build.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th>File</th><th>Pattern</th><th>Label</th><th><code>wfB</code></th><th>Sites</th><th>Verdict</th></tr></thead>
             <tbody>
-              <tr><td><code>doall-no</code></td><td>independent iterations</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>reduction-split-no</code></td><td>per-thread partials, then a join</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>nested-2d-no</code></td><td>a two-dimensional index box</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>stencil-f64-no</code></td><td>shared reads, floating point</td><td>race-free</td><td>true</td><td>0</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>antidep-yes</code></td><td>write-after-read across threads</td><td>racy</td><td>false</td><td>6</td><td><span class="verdict verdict-race">race</span></td></tr>
-              <tr><td><code>reduction-yes</code></td><td>a reduction with no reduction clause</td><td>racy</td><td>false</td><td>7</td><td><span class="verdict verdict-race">race</span></td></tr>
-              <tr><td><code>indirect-yes</code></td><td>an indirect write, <code>A[B[i]]</code></td><td>racy</td><td>false</td><td>3</td><td><span class="verdict verdict-race">race</span></td></tr>
+              <tr><td><code>doall-no</code></td><td>independent iterations</td><td>race-free</td><td>true</td><td>0</td><td>independent</td></tr>
+              <tr><td><code>reduction-split-no</code></td><td>per-thread partials, then a join</td><td>race-free</td><td>true</td><td>0</td><td>independent</td></tr>
+              <tr><td><code>nested-2d-no</code></td><td>a two-dimensional index box</td><td>race-free</td><td>true</td><td>0</td><td>independent</td></tr>
+              <tr><td><code>stencil-f64-no</code></td><td>shared reads, floating point</td><td>race-free</td><td>true</td><td>0</td><td>independent</td></tr>
+              <tr><td><code>antidep-yes</code></td><td>write-after-read across threads</td><td>racy</td><td>false</td><td>6</td><td>race</td></tr>
+              <tr><td><code>reduction-yes</code></td><td>a reduction with no reduction clause</td><td>racy</td><td>false</td><td>7</td><td>race</td></tr>
+              <tr><td><code>indirect-yes</code></td><td>an indirect write, <code>A[B[i]]</code></td><td>racy</td><td>false</td><td>3</td><td>race</td></tr>
             </tbody>
           </table>
         </div>
@@ -439,30 +423,27 @@ round trip     true</code></pre>
         </div>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>Zero false negatives is not a tuning result.</strong> A false
-          negative would be a program the scan calls race-free that has a race, and
-          <code>raceSites_nil_iff</code> says the scan's emptiness is
-          <em>equivalent</em> to well-formedness. The <code>fn=0</code> cell is the
-          theorem showing up in a measurement, not evidence for it.
+          Zero false negatives is not a tuning result. A false negative would
+          be a racy program the scan calls race-free, and the completeness
+          theorem rules that out. The <code>fn=0</code> cell is that theorem
+          showing up in a measurement, not evidence for it.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>over-approx [indirect-yes]</code> is the honest entry.
-          <code>A[B[i]]</code> has a footprint of all of <code>A</code>, so that
-          file is refused for its shape as much as for its race — it would be
-          refused even if the indices never met, which is the same
-          <a href="language.html" class="prose-link">precision cost</a> that
-          <code>scatter.prl</code> pays.
+          <code>over-approx [indirect-yes]</code> is the honest entry. An
+          indirect index has a footprint of the whole array, so that file is
+          refused for its shape as much as for its race. It would be refused
+          even if the indices never met. That is the same
+          <a href="language.html" class="prose-link">precision cost</a> a
+          computed address pays.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl p-6">
           <p class="text-stone-900 font-bold mb-2">The corpus is hand-written.</p>
           <p class="text-stone-600 leading-relaxed text-[0.95rem]">
-            Seven files, written against DataRaceBench's naming convention to
-            exercise the reader and the verdict path. Feeding it
-            Polygeist-emitted input from the real benchmark sources is the next
-            step and is not done. What the seven do establish is that the
-            interface is the right one: <code>expressible 7/7</code> with
-            <code>unsupported []</code> means no operation in any of them fell
-            outside the reader's rules.
+            Seven files, written to exercise the reader and the verdict path.
+            Feeding in real benchmark sources is the next step, and it is not
+            done. What the seven do establish is that the interface is the right
+            one. <code>expressible 7/7</code> with <code>unsupported []</code>
+            means no operation in any of them fell outside the reader's rules.
           </p>
         </div>
       </section>
@@ -473,12 +454,12 @@ round trip     true</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Differential execution</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          There is no preservation theorem for the lowering yet — the claim that
-          the <code>ParProg</code> means what the MLIR module means. Until there
-          is, the translation is validated by running the program twice: once as a
-          lowered <code>ParProg</code> over <code>Int</code>, and once through a
-          separate reference interpreter that evaluates the <em>same</em> module
-          over <code>ℚ</code>, exactly. The two heaps are compared cell by cell.
+          There is no preservation theorem for the lowering yet, so nothing
+          proves that the lowered program means what the MLIR module means.
+          Until there is, the translation is validated by running the program
+          twice: once lowered over integers, once through a separate reference
+          interpreter that evaluates the same module over the rationals,
+          exactly. The two heaps are compared cell by cell.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
@@ -491,18 +472,18 @@ round trip     true</code></pre>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The last row is the anti-vacuity obligation discharged through MLIR. On
-          <code>reduction-yes</code> the reference run takes the canonical schedule
-          and reaches <code>sum = 36</code>; the threaded run reaches something
-          else. The program the verdict rejects really does depend on its schedule.
+          The last row is the anti-vacuity obligation, discharged through
+          MLIR. On <code>reduction-yes</code> the reference run reaches
+          <code>sum = 36</code> and the threaded run reaches something else. The
+          program the verdict rejects really does depend on its schedule.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          The converse case is on the same corpus, and matters just as much:
-          <code>antidep-yes</code> is racy and <em>both</em> runs give
-          <code>A = [1, 1, 1, 1, 1, 1, 1, 0]</code>, because at this heap every
-          schedule reads a <code>0</code> and writes a <code>1</code>. Agreement is
-          therefore not evidence of race-freedom. The verdict comes from the scan;
-          the differential run only ever tests the translation.
+          The converse case is on the same corpus and matters just as much.
+          <code>antidep-yes</code> is racy, and both runs agree anyway, because
+          at this heap every schedule reads a <code>0</code> and writes a
+          <code>1</code>. Agreement is not evidence of race-freedom. The verdict
+          comes from the scan. The differential run only ever tests the
+          translation.
         </p>
       </section>
 
@@ -512,9 +493,9 @@ round trip     true</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What it refuses</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Each of these produces a named error rather than a plausible-looking
-          lowering, and the list of unhandled operation names a file contains is
-          itself an output — so what is missing gets <em>counted</em> rather than
+          Each of these produces a named error rather than a
+          plausible-looking lowering. The list of unhandled operation names is
+          itself an output, so what is missing gets counted rather than
           discovered one benchmark at a time.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
@@ -524,7 +505,9 @@ round trip     true</code></pre>
               <tr><td>multi-block regions, successor lists</td><td>unstructured control flow, which an inductive <code>ParM</code> cannot encode</td></tr>
               <tr><td><code>scf.if</code>, <code>affine.if</code></td><td>the conditional tests a value against zero, and the expression language has no comparison operator, so a condition from <code>arith.cmpi</code> has nowhere to go</td></tr>
               <tr><td><code>omp.parallel</code>, <code>omp.wsloop</code></td><td>not read yet; <code>affine.parallel</code> is the marker the lowering uses</td></tr>
-              <tr><td><code>func.call</code></td><td>no interprocedural handling — also why a module with several functions and no <code>main</code> is refused rather than guessed at</td></tr>
+              <tr><td><code>func.call</code></td><td>no interprocedural handling, which is also why a module
+                with several functions and no <code>main</code> is refused
+                rather than guessed at</td></tr>
               <tr><td>dynamic memref dimensions</td><td>no shape to place a buffer from</td></tr>
               <tr><td>layout maps, memory spaces</td><td>strides other than row-major are not modelled</td></tr>
               <tr><td>a computed subscript on a multi-dimensional memref</td><td>would need <code>i·stride + j</code> as an expression, and the array-reference form takes one index</td></tr>
@@ -534,15 +517,13 @@ round trip     true</code></pre>
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          The <code>async.execute</code> refusal is the load-bearing one, and it is
-          worth stating why. <code>affine.parallel</code> gives one thread per
-          point of an index box, every thread running the <em>same</em> region at a
-          different index. An unrolled program has no such uniformity —
-          <code>parallel { A[0] := 1 } | { A[1] := 2 }</code> is two different
-          bodies — so it has no <code>affine.parallel</code> spelling at all, and
-          the <code>async</code> dialect is MLIR's own construct for that shape.
-          There, a fork is a <em>group</em> of operations closed by the await that
-          names their tokens, and only that exact shape is read.
+          The <code>async.execute</code> refusal is the load-bearing one.
+          <code>affine.parallel</code> gives one thread per point of an index
+          box, every thread running the same region at a different index. An
+          unrolled program has no such uniformity: two threads with different
+          bodies have no <code>affine.parallel</code> spelling. The
+          <code>async</code> dialect is MLIR's own construct for that shape, and
+          only its exact form is read.
         </p>
       </section>
 
@@ -552,10 +533,10 @@ round trip     true</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Generic form out</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The other direction: a layout and a program as a module. A buffer becomes
-          a <code>memref.global</code> with its contents, the body goes in
-          <code>func.func @main</code> after one <code>memref.get_global</code> per
-          buffer, and a fork becomes the <code>async.execute</code> group above.
+          The other direction: a layout and a program, written out as a
+          module. A buffer becomes a global with its contents, the body goes in
+          <code>func.func @main</code>, and a fork becomes the
+          <code>async.execute</code> group above.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -567,18 +548,23 @@ round trip     true</code></pre>
      "async.await_all"(%0, %1) {paralever.label = "chunked sum"} : (…) -> ()</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Two things change on the way out, and the emitted file says so in its
-          header. Registers are assignable and SSA values are not, so a register
-          assignment with no memory in it disappears into whatever reads it, and
-          the registers that remain come back renumbered. And a computed subscript
-          wraps on the buffer's length where MLIR's does not, so the two agree on
-          every index in range — which is every index a race-free program uses.
+          Two things change on the way out, and the emitted file says so in
+          its header. Registers are assignable and SSA values are not, so a
+          register assignment with no memory in it disappears into whatever
+          reads it, and the rest come back renumbered. A computed subscript also
+          wraps on the buffer's length where MLIR's does not. The two agree on
+          every index in range, which is every index a race-free program
+          uses.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          The gate is therefore not a tree comparison. The module is emitted, read
-          back, and compared on everything a theorem would use: the memory, the
-          footprint, the verdict, and the heap a sequential run leaves. Comparing
-          trees would fail on the renumbering and tell you nothing.
+          So the gate compares behaviour, not trees. The module is emitted,
+          read back, and compared on everything a theorem would use: the memory,
+          the footprint, the verdict, and the heap a run leaves. Comparing trees
+          would fail on the renumbering alone.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/mlir.md</code> and
+          <code>docs/mlir-pretty.md</code>.
         </p>
       </section>
 

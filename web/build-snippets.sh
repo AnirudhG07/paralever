@@ -53,6 +53,7 @@ writing|Examples.Language.Writing|site-writing|a program in the surface language
 writing-theorem|Examples.Language.Writing|site-writing-theorem|its footprint, and its verdict
 prl-file|Examples.Language.Files|site-prl-file|prl_file — the nine files, read while Lean elaborates
 file-theorem|Examples.Language.Files|site-file-theorem|one theorem per accepted file
+matmul-theorem|Examples.Language.Files|site-matmul-theorem|matmul — wfB accepts, the theorem follows
 mlir-doall|Examples.Mlir.Files|site-mlir-doall|an MLIR file, lowered at elaboration time
 mlir-theorem|Examples.Mlir.Files|site-mlir-theorem|and the theorem that follows
 EOF

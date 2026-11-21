@@ -121,6 +121,41 @@ def prettyDoall : Lang.ParProg := mlir_prog "pretty-doall-no.mlir"
 
 example : Lang.ParProg.wfB prettyDoall = true := by decide
 
+/-! ## 2c · The smallest module that still says everything
+
+`square-no.mlir` is `A[i] := A[i] * A[i]` over three threads: one buffer, one `affine.parallel`,
+one `arith` op, and nothing else a module needs. It is the end-to-end example the ISP deck shows
+whole — ten lines of MLIR in, thirteen lines of `.prl` out, with no part of either elided — so the
+two texts below are gated against the readers rather than transcribed.
+-- ref: `docs/slides/isp/IspSlides.lean` -/
+
+def square : Lang.Compiled :=
+  ⟨mlir_layout "square-no.mlir", mlir_prog "square-no.mlir", [], [], none⟩
+
+/--
+info: buf A[3] = 2, 3, 4
+
+parallel {
+  %0 := A[0]
+  A[0] := (%0 * %0)
+} | {
+  %0 := A[1]
+  A[1] := (%0 * %0)
+} | {
+  %0 := A[2]
+  A[2] := (%0 * %0)
+}
+-/
+#guard_msgs in
+#eval IO.println (Lang.toPrl square)
+
+#guard !MLIR.looksGeneric (include_str "square-no.mlir")
+
+-- and the theorem the verdict stands for, on the program the deck prints
+theorem square_par_seq_eq (ρ : Regs) (σ : State) :
+    ParSeqEq (Lang.ParProg.execPar square.prog ρ) (Lang.ParProg.execSeq square.prog ρ) σ :=
+  Lang.ParProg.par_seq_eq (by decide) ρ σ
+
 /-! ## 3 · All seven pilots
 
 Seven hand-written files in this directory, each named with the verdict it is expected to get, in

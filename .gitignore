@@ -9,3 +9,7 @@
 
 # paralever-bench --prove writes the generated modules and their sources here
 /bench-proofs/
+
+# Local state for the Impeccable design-lint plugin: a per-session cache, and the
+# rule suppressions that session recorded. Tool state, not project content.
+/.impeccable/

@@ -50,6 +50,19 @@ out [3] @6  [3, 7, 11]
 #guard_msgs in
 #eval IO.println (runReport sum false)
 
+-- the program the website opens with: disjoint writes, overlapping reads
+/--
+info: matmul.prl
+  memory    A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
+  reads     {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
+  writes    {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
+  threads   2
+  rounds    10 parallel, 20 sequential
+  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+-/
+#guard_msgs in
+#eval IO.println (checkReport "matmul.prl" matmul)
+
 /-! ## 2 · The payoff: one theorem per accepted file
 
 Nothing is supplied by hand. `wfB` decides Bernstein on the quoted program and `par_seq_eq` turns
@@ -61,9 +74,11 @@ theorem sum_ok (ρ : Regs) (σ : State) :
   ParProg.par_seq_eq (by decide) ρ σ
 -- ANCHOR_END: site-file-theorem
 
-theorem matmul_ok (ρ : Regs) (σ : State) :
+-- ANCHOR: site-matmul-theorem
+theorem matmul_parseqeq (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar matmul.prog ρ) (ParProg.execSeq matmul.prog ρ) σ :=
   ParProg.par_seq_eq (by decide) ρ σ
+-- ANCHOR_END: site-matmul-theorem
 
 theorem stencil_ok (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar stencil.prog ρ) (ParProg.execSeq stencil.prog ρ) σ :=

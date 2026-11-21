@@ -2,17 +2,27 @@
 
 `index.html`, `web/` and `slides/` are the published site, served from the repository root at
 <https://anirudhg07.github.io/paralever/>. There is no generator and no build step for the prose:
-the pages are hand-written HTML. Two things *are* built — the deck, by `lake exe slides`, and the
-Lean snippets, by `web/build-snippets.sh`.
+the pages are hand-written HTML. Two things *are* built — the decks, by `lake exe slides`, and the
+Lean snippets, by `web/build-snippets.sh`. `lake exe slides` writes **both** decks:
+`docs/slides/main/Slides.lean` to `slides/main/` and `docs/slides/isp/IspSlides.lean` to
+`slides/isp/`. `slides/index.html` lists them and is hand-written like the rest of the prose.
+
+A further deck is one folder under `docs/slides/`, one `lean_lib` in `lakefile.toml` naming that
+folder as its `srcDir`, and two lines in `SlidesMain.lean` — the `slidesMain` call and the
+`shareWithParent` that follows it.
 
 ```text
 index.html              the cover
 web/*.html              seven pages: concept, language, autopar, races, mlir, cli, lean
 web/css/site.css        every rule the pages use that the main site does not already give
 web/js/site.js          the top bar, the sidebar, the footer, the embeds, the .prl/.mlir grammars
-web/snippets/*.html     22 verso-snippets files — one per Lean block on the site
+web/snippets/*.html     24 verso-snippets files — one per Lean block on the site
 web/build-snippets.sh   what writes them
-slides/                 the deck (`lake exe slides`)
+slides/index.html       the deck list, hand-written
+slides/{lib,assets}/    reveal.js and the deck scripts, shared by every deck
+slides/*.css            lean.css and paralever.css, shared the same way
+slides/main/            the project deck: index.html and its snippet data, nothing else
+slides/isp/             the ISP deck, the same two files
 .nojekyll               required: GitHub Pages' Jekyll step skips `_`-prefixed paths
 ```
 
@@ -173,6 +183,39 @@ in these blocks are `paralever` and `lake`, not shell builtins, so one block cam
 highlighted token. No grammar uses lookbehind — Safari did not support it until 16.4, and one
 unsupported regex throws and leaves the whole page unhighlighted.
 
+## A section leads with its example
+
+Every section on every page is the same shape, and the order is the point:
+
+1. the heading, a noun phrase;
+2. one lead sentence, under twenty words;
+3. **the example** — a real `.prl` or `.mlir` program, a real console capture, or a
+   verso-snippets embed, ten lines or fewer;
+4. two to four short sentences on what the example shows;
+5. at most one table or one figure, where it replaces prose rather than adding to it;
+6. one line out: `Full detail: docs/<file>.md`.
+
+The site is the tour and `docs/` is the reference. Detail that a section would need a long
+paragraph for belongs in the `docs/` file the last line names, not on the page.
+
+**A quoted program is the file, not a paraphrase.** A `<pre>` whose `code-wrap-lang` header is a
+bare filename holds that file's text, with only its comment header and runs of blank lines
+dropped. A block that shows less than the file says so in its header (`funcs.prl (the first of its
+two defs)`). A header that is a *command* rather than a path — `paralever check …` — labels that
+command's output, and the output is what the binary prints today.
+
+The cover's `check` report for `matmul.prl`, and the ones on the other pages, are gated:
+`Examples/Language/Files.lean` carries a `#guard_msgs` block per quoted report, so the build fails
+if the tool's wording drifts from the page. A capture with no gate behind it goes stale silently,
+which is what happened to the old `verdict independent — par = seq …` line.
+
+## Design lint
+
+`.impeccable/` is the Impeccable plugin's local state and is gitignored, so the one suppression it
+holds is recorded here instead. `flat-type-hierarchy` is suppressed on `slides/index.html`: the
+h1/h2 step there is the site's existing scale, `text-4xl md:text-6xl` over `text-3xl`, used
+verbatim by `index.html` and all seven `web/*.html` pages.
+
 ## Figures
 
 Every figure is HTML or inline SVG — `.dgm` in `site.css` — never a `<pre>` of box-drawing
@@ -183,6 +226,29 @@ Figures name things in plain language, because a figure is the one place a reade
 name up: the box both front ends converge on says *a Paralever program*, not `Layout × ParProg`.
 Module names belong in the small captions beside a step, which is where "where this lives in the
 code" goes.
+
+## Every deck is a folder, and the files they share sit above them
+
+A deck's folder holds two files — `index.html` and `-verso-docs.json` — and references everything
+else one directory up. `slidesMain` gives each deck its own full copy of the vendored reveal.js
+(`lib/`, 2.9 MB), the theme stylesheet, the `extraCss` files and the theme assets, and names them
+in `index.html` by a bare relative path; it has no base-path setting. So `SlidesMain.lean`'s
+`shareWithParent` runs after each write: it prefixes each of those references with `../` and moves
+the file itself up into `slides/`. Thirty references move per deck, which is every asset reference
+on the page. Both decks write the same bytes, so whichever runs last is the copy that is kept, and
+two decks cost what one does.
+
+`-verso-docs.json` is the one file that stays down. The three scripts that read it call
+`fetch("-verso-docs.json")`, which resolves against the *page*, not the script, so each deck's
+hover data is read from its own folder. It is per-deck data and sharing it would be wrong.
+
+Two consequences. The decks must keep the same theme, `lean.css` and `paralever.css`, since there
+is one copy of each. And every deck must be built by the same `lake exe slides` run, because the
+shared files a deck points at are written by the run, not committed as a deck's own output.
+
+`slides/index.html` is outside all of this: it is prose, written by hand, and `lake exe slides`
+never touches it. It is also what keeps the published `/paralever/slides/` URL working now that
+the project deck has moved down into `slides/main/`.
 
 ## The deck's sizes
 

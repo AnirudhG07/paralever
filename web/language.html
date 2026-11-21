@@ -61,10 +61,10 @@
         The language
       </h1>
       <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
-        <code>ParProg</code> is a first-order imperative language with one
-        unusual property: a statement's footprint is computable from its syntax,
-        so "may these two run together?" is a <code>Bool</code>. It is written
-        either as Lean notation or as a <code>.prl</code> file.
+        A small imperative language with one unusual property. A statement's
+        footprint is computable from its syntax, so &ldquo;may these two run
+        together?&rdquo; is a <code>Bool</code>. It is written either as a
+        <code>.prl</code> file or as Lean notation.
       </p>
     </header>
 
@@ -74,11 +74,10 @@
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">A file, read while Lean elaborates</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          There is no second compiler and no separate toolchain.
-          <code>prl_file "sum.prl"</code> parses and compiles the file
-          <em>during</em> elaboration of the Lean module that mentions it, and the
-          declaration it defines holds the resulting program as a literal. So
-          <code>by decide</code> sees a program, never the reader.
+          There is no second compiler. <code>prl_file "sum.prl"</code> parses
+          and compiles the file while Lean elaborates the module that mentions
+          it. The declaration then holds the program as a literal, so
+          <code>by decide</code> sees a program and never the reader.
         </p>
 
         <figure class="dgm">
@@ -132,12 +131,13 @@
       </figure>
 
         <p class="text-stone-600 leading-relaxed">
-          The file exists because a <code>ParProg</code> is first-order and can
-          therefore be printed. <code>Lang.print</code> emits <code>.prl</code> text
-          and <code>prl_file</code> reads it back, so a program can leave the
-          repository — into a bug report, a paper appendix, another tool's output —
-          and come back as the same program. <code>Lang.roundTrips src</code> is the
-          gate on the reader, and it runs on every example in the build.
+          A program is first-order, so it can also be printed back out. A
+          program can leave the repository as text and come back as the same
+          program. That round trip is a gate in the build, and it runs on every
+          example.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/prl.md</code>.
         </p>
       </section>
 
@@ -181,17 +181,16 @@ exp     ::= exp ("+"|"-"|"*"|"/"|"%") exp | "-"? number | name | "%" reg
 reg     ::= number | name</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Comments run from <code>--</code> to end of line. Statements are
-          separated by a line break, by <code>;</code>, or by both. The optional
-          <code>paralever { … }</code> wrapper means a program pasted out of a Lean
-          file is already a valid <code>.prl</code> file.
+          Comments run from <code>--</code> to end of line. A line break or a
+          <code>;</code> separates statements. The optional
+          <code>paralever { &hellip; }</code> wrapper means a program pasted out
+          of a Lean file is already a valid <code>.prl</code> file.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          Declarations are statements because <code>free</code> is one: a buffer
-          has a lifetime in the program <em>text</em>. They are allowed only at
-          the top level, where the whole program sees them — a <code>buf</code> or
-          a <code>free</code> inside one thread of a <code>parallel</code> would be
-          visible to that thread alone, and is rejected.
+          Declarations are statements, because <code>free</code> is one: a
+          buffer has a lifetime in the program text. They are allowed only at
+          the top level. A declaration inside one thread of a fork would be
+          visible to that thread alone, so it is rejected.
         </p>
       </section>
 
@@ -201,11 +200,9 @@ reg     ::= number | name</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Memory is declared, not allocated</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>State</code> is <code>Loc → Val</code> and total: every location
-          exists and holds <code>0</code> until written. A program cannot create or
-          destroy a location, because there is nothing to create. What a
-          <code>.prl</code> file does is <em>declare</em> ranges and end their
-          lifetimes, which is what a <code>Layout</code> plus a cursor is.
+          Memory is total. Every cell exists and holds <code>0</code> until
+          written, so a program cannot create or destroy one. A file declares
+          ranges and ends their lifetimes. That is all a layout is.
         </p>
 
         <div class="code-wrap">
@@ -226,82 +223,68 @@ free C                        -- C's lifetime ends here</code></pre>
 
         <p class="text-stone-600 leading-relaxed mb-4">
           <code>let</code> is <code>buf</code> with the shape read off the
-          initializer, and nothing more — a variable is a cell of memory, because
-          there is no second kind of state for one to live in. A buffer with no
-          <code>at</code> begins where the previous one ended, so
-          no two <em>live</em> buffers can overlap. A buffer with an
-          <code>at</code> was placed by the author, so the compiler checks it
-          against every live buffer and names both on failure.
+          initializer. A variable is a cell of memory, because there is no
+          second kind of state for one to live in. A buffer with no
+          <code>at</code> begins where the previous one ended, so no two live
+          buffers can overlap. One placed by hand is checked against every live
+          buffer, and both are named on failure.
         </p>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          A <code>slice</code> is a name for a range of a buffer's cells, and a
-          view rather than a copy: it compiles to a base and a length, so
-          <code>half[i]</code> <em>is</em> <code>C[i]</code>. That is what makes
-          it more than shorthand. A subscript held in a register is not known
-          until the program runs, so the independence check bounds it by every
-          cell the access could reach — the whole buffer when the range is the
-          whole buffer, and one quarter of it when the range is a quarter. Four
-          threads with a computed index into four disjoint quarters have four
-          disjoint footprints, so a program that is reported
-          <em>over-approximated</em> when written against the whole buffer is
-          reported <em>independent</em> when each thread names the range it owns.
-          It is also the one declaration a thread may make, because it places no
-          cells and ends no lifetime.
+          A <code>slice</code> is a view, not a copy. It compiles to a base and
+          a length, so <code>half[i]</code> <em>is</em> <code>C[i]</code>. That
+          is what makes it more than shorthand. A computed subscript is bounded
+          by the range it is written against, so four threads naming four
+          disjoint quarters get four disjoint footprints. The same program
+          written against the whole buffer is refused. A slice is also the one
+          declaration a thread may make, because it places no cells.
         </p>
 
         <p class="text-stone-600 leading-relaxed mb-3">
-          <code>free A</code> ends <code>A</code>'s lifetime. Two things follow,
+          <code>free A</code> ends that buffer's lifetime. Two things follow,
           and nothing else does.
         </p>
         <ul class="list-none space-y-3 mb-6">
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">The name is gone.</strong> Any later
-              mention of <code>A</code> is a compile error — which is the useful
-              half, since it is how a file states that nothing below this line may
-              touch that memory.
+              The name is gone, so any later mention of it is a compile error.
+              That is the useful half: it is how a file says that nothing below
+              this line may touch that memory.
             </p>
           </li>
           <li class="flex gap-3 items-start">
             <span class="text-mustard-700 font-bold mt-0.5">▸</span>
             <p class="text-stone-600 leading-relaxed">
-              <strong class="text-stone-900">The space comes back</strong> when
-              <code>A</code> is the most recent buffer placed, so
-              <code>buf</code>/<code>free</code> is a stack and the next
-              declaration lands on <code>A</code>'s cells. Freeing out of order
-              ends the name's scope and leaves the hole, because the cursor only
-              moves back from the top.
+              The space comes back when it was the most recent buffer placed.
+              Declarations are a stack, so the next one lands on those cells.
+              Freeing out of order ends the name and leaves the hole.
             </p>
           </li>
         </ul>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          Nothing is zeroed and no location goes away: a buffer declared on a freed
-          range begins holding whatever the previous occupant left. This is an
+          Nothing is zeroed and no cell goes away. A buffer declared on a freed
+          range begins holding whatever the last occupant left. The model is an
           arena, not a heap.
         </p>
 
         <div class="bg-white/55 border border-stone-200 rounded-2xl p-6 mb-6">
           <p class="text-stone-900 font-bold mb-2">There is deliberately no run-time <code>alloc</code>.</p>
           <p class="text-stone-600 leading-relaxed text-[0.95rem]">
-            Adding one would cost the main theorem twice over.
-            <code>alloc</code> has to choose an address; two schedules choose
-            differently, so the final heaps differ and <code>par_seq_eq</code> — an
-            equality of heaps — becomes false for reasons that have nothing to do
-            with races. A run-time <code>free</code> is worse: Bernstein's
-            conditions are about reads and writes of locations, so two threads
-            freeing one block, or one freeing while another reads, is a race that
-            <code>w₁∩w₂ = w₁∩r₂ = w₂∩r₁ = ∅</code> cannot see. The
-            <code>free</code> above avoids both because it happens at compile time
-            and leaves no trace in the program.
+            It would cost the main theorem twice. An allocator has to choose an
+            address, and two schedules would choose differently, so the final
+            heaps would differ for reasons that have nothing to do with races. A
+            run-time <code>free</code> is worse: Bernstein's conditions are about
+            reads and writes, so two threads freeing one block is a race the
+            three clauses cannot see. The <code>free</code> above happens at
+            compile time and leaves no trace in the program.
           </p>
         </div>
 
         <p class="text-stone-600 leading-relaxed mb-4">
-          <strong>Both <code>buf</code> and <code>free</code> are erased.</strong>
-          Neither emits a node, so the compiled program of
+          Both <code>buf</code> and <code>free</code> are erased. Neither emits
+          a node, so the compiled program of
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -312,15 +295,15 @@ A[0] := 1
 free A</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          is <code>[0] := 1</code> on the nose, and the build pins that equality.
-          Consequently no theorem about a program can depend on either declaration:
-          <code>wfB</code>, <code>footprintOf</code>, <code>par_seq_eq</code>,
-          <code>time_le</code> and <code>runTask_eq</code> are statements about the
-          <code>ParProg</code>, proved exactly as they are for a program written in
-          Lean. What a declaration <em>does</em> decide is which addresses the
-          program names and what the initial heap is. The theorems are parametric
-          in the heap, so a different layout changes the numbers in a
-          <code>#guard</code>, never a proof obligation.
+          is <code>[0] := 1</code> on the nose, and the build pins that
+          equality. So no theorem can depend on a declaration. What a
+          declaration decides is which addresses the program names and what the
+          initial heap holds. The theorems are parametric in the heap, so a
+          different layout changes numbers in a <code>#guard</code>, never a
+          proof obligation.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/layout.md</code>.
         </p>
       </section>
 
@@ -330,22 +313,19 @@ free A</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Registers are thread-private</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A register needs no declaration. Every <code>%name</code> in the file is
-          collected before anything is compiled and given the lowest index no
-          numbered register uses, in order of first appearance — so
-          <code>%acc</code> is a register wherever it occurs and <code>%0</code> is
-          register <code>0</code> as always. <code>reg acc = 3</code> pins a name
-          to an index when that matters.
+          A register needs no declaration. Every <code>%name</code> in the file
+          is collected first and given the lowest free index, in order of first
+          appearance. So <code>%acc</code> is one register wherever it occurs,
+          and <code>%0</code> is register <code>0</code> as always.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A <code>parallel</code> block hands each thread the pre-fork register
-          file and discards what the threads leave. Two threads using
-          <code>%acc</code> therefore do not interfere, <strong>and that is why
-          independence is about memory alone</strong>. It also means a register
-          written on one side of a fork boundary and read on the other reads a
-          stale value — not a race, so <code>wfB</code> cannot see it, which is
-          why the
-          <a href="autopar.html" class="prose-link">autoparallelizer</a> places
+          A fork hands every thread the register file as it stood before the
+          fork, and discards what the threads leave. Two threads using
+          <code>%acc</code> therefore do not interfere, which is why
+          independence is about memory alone. It also means a register written
+          on one side of a fork and read on the other reads a stale value. That
+          is not a race, so the check cannot see it. The
+          <a href="autopar.html" class="prose-link">parallelizing pass</a> puts
           its boundaries where no register is live across them.
         </p>
       </section>
@@ -356,37 +336,30 @@ free A</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Addresses, values, and the two readings of <code>%</code></h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          An address is a compile-time number. The lowering folds it: literals,
-          <code>const</code>s, enclosing loop variables, and
-          <code>+ - * / %</code>. A buffer subscript <code>A[i, j]</code> becomes
-          <code>Layout.at "A" [i, j]</code>, and the subscript is range-checked
-          then and there — <code>A[9]</code> on <code>buf A[6]</code> is a compile
-          error, not a stray write.
+          An address is a compile-time number. Literals, constants, loop
+          variables and arithmetic are all folded. A subscript is range-checked
+          while the file compiles, so <code>A[9]</code> on a six-cell buffer is
+          a compile error rather than a stray write.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A value is an arithmetic expression over registers and folded constants.
-          It has no modulo, so <code>%</code> in a <em>value</em> position is
-          rejected rather than approximated. <code>%</code> therefore reads two
-          ways, decided by position: in operand position <code>%0</code> and
-          <code>%acc</code> are registers, and in operator position
-          <code>n % 4</code> is modulo.
+          A value is arithmetic over registers and folded constants. It has no
+          modulo. So <code>%</code> reads two ways, decided by position: before
+          a name it is a register, between two values it is modulo.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A subscript that mentions a register cannot be folded and compiles to the
-          data-dependent form, which is confined to its array by construction. It
-          must be the only subscript, and it indexes the buffer flat, wrapping on
-          its size. A <em>bare</em> address that mentions a register
-          (<code>[%0] := 1</code>) is rejected: there is no array to confine it to,
-          so its footprint would be the whole heap.
+          A subscript holding a register cannot be folded. It compiles to a
+          form confined to its own buffer, and it indexes that buffer flat. A
+          bare address holding a register, <code>[%0] := 1</code>, is rejected:
+          there is no buffer to confine it to, so its footprint would be the
+          whole heap.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl p-6">
           <p class="text-stone-900 font-bold mb-2">The price of a computed address is precision, not soundness.</p>
           <p class="text-stone-600 leading-relaxed text-[0.95rem]">
             The footprint of <code>dst[%i] := 1</code> is every cell of
-            <code>dst</code>, so <code>scatter.prl</code> is
-            <span class="verdict verdict-heap">this heap only</span> although its
-            three threads write three distinct cells. The reports say so in those
-            words, because the exact per-heap check finds nothing.
+            <code>dst</code>. So <code>scatter.prl</code> is proved at the
+            declared heap only, although its three threads write three distinct
+            cells. The report says exactly that, in those words.
           </p>
         </div>
       </section>
@@ -397,12 +370,11 @@ free A</code></pre>
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Loops are unrolled; <code>while</code> is bounded</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>for</code> and <code>parfor</code> take a compile-time bound and
-          are unrolled, so the program a theorem is about has no loop in it.
-          <code>while c in n</code> runs at most <code>n</code> iterations and
-          compiles to nested conditionals. The bound is not a limitation of the
-          implementation: <code>ParM</code> is inductive and Lean 4 has no native
-          coinductive types, so an unbounded loop is unrepresentable.
+          <code>for</code> and <code>parfor</code> take a compile-time bound
+          and are unrolled, so the program a theorem is about has no loop in it.
+          <code>while c in n</code> runs at most <code>n</code> times and
+          compiles to nested conditionals. The bound is not a shortcut: the
+          program type is inductive, so an unbounded loop cannot be written.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -421,11 +393,13 @@ while %i in 8 {
 }</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          A conditional's footprint is the union of its branches, so
-          <code>whileAtMost</code> reports every cell any iteration could touch.
-          Conservative, never unsound — and it is the reason a loop whose
-          iterations are in fact independent can still look dependent to the
-          scheduler.
+          A conditional's footprint is the union of its branches, so the
+          bounded loop reports every cell any iteration could touch. That is
+          never unsound, and it is why a loop whose iterations really are
+          independent can still look dependent.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/loops.md</code>.
         </p>
       </section>
 
@@ -435,16 +409,15 @@ while %i in 8 {
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Functions are written out, not called</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>def</code> names a statement list and a call writes it out.
-          <code>ParM</code> has no call constructor and the machine has no stack,
-          so a <code>def</code> is a named piece of program text — closer to a
-          Lean <code>macro</code> than to a C function, and the comparison holds
-          in both directions: it costs nothing at run time, and it cannot recurse.
-          A cycle of calls is refused with the chain that closes it.
+          <code>def</code> names a list of statements, and a call writes them
+          out where it stands. There is no call constructor and no stack, so a
+          <code>def</code> is a named piece of program text. It costs nothing at
+          run time and it cannot recurse. A cycle of calls is refused, with the
+          chain that closes it.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
-            <span class="code-wrap-lang">funcs.prl</span>
+            <span class="code-wrap-lang">funcs.prl (the first of its two defs)</span>
             <button class="copy-btn">Copy</button>
           </div>
           <pre><code class="language-prl">const n = 4
@@ -469,23 +442,23 @@ parfor i in n {
 } :: "rows"</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A parameter is a name or a register, told apart by its spelling. A name
-          parameter takes a buffer, a slice or a compile-time value, and is
-          substituted wherever the body writes that name — which is why
-          <code>for j in m</code> can unroll inside a body at all. A register
-          parameter is how a result leaves a call without going through memory.
+          A parameter is a name or a register, told apart by its spelling. A
+          name takes a buffer, a slice or a compile-time value, and is
+          substituted wherever the body uses it. That is why <code>for j in
+          m</code> can unroll inside a body. A register parameter is how a
+          result leaves a call without going through memory.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          Every register the body names and did not take as a parameter is renamed
-          per call site, so two calls never share one and a call cannot clobber a
-          register the caller is holding. That is not only tidiness: the
-          parallelizing pass refuses to split a chain whose statements share a
-          register, so three calls that all wrote the body's <code>%v</code> would
-          be sequential by construction, and the rename is what lets the pass put
-          them in one fork. Everything downstream — <code>footprintOf</code>,
-          <code>wfB</code>, <code>par_seq_eq</code>, <code>execTask</code> — sees a
-          program with no trace of a <code>def</code> in it, exactly as it sees no
-          trace of the loops once they are unrolled.
+          Every register the body names, and did not take as a parameter, is
+          renamed per call site. Two calls never share one, and a call cannot
+          clobber a register the caller is holding. That also decides what can
+          be scheduled: the pass will not split a chain whose statements share a
+          register, so without the rename three calls would be sequential by
+          construction. Everything downstream sees a program with no trace of a
+          <code>def</code> in it.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/prl.md</code> &sect; Functions.
         </p>
       </section>
 
@@ -495,12 +468,11 @@ parfor i in n {
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Two programs, one claim</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Everything above answers a question about <em>one</em> program: read its
-          <code>parallel</code> blocks in parallel, and does it reach the outcomes
-          reading them in order does? A reader who has written a sequential sort
-          and a parallel one is asking something else — do <em>these two
-          programs</em> compute the same thing? <code>assert</code> states that
-          question.
+          Everything above is about one program: does running its forks in
+          parallel reach what running them in order reaches? Someone who has
+          written a sequential sort and a parallel one is asking something else.
+          Do these two programs compute the same thing? That is what
+          <code>assert</code> states.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -536,25 +508,23 @@ def oddeven(A, m) {
 
 buf A[8] = 5, 3, 8, 1, 7, 2, 6, 4
 
-assert bubble(A, n) == oddeven(A, n) on A</code></pre>
+assert bubble(A, n) == oddeven(A, n) on A
+
+print A</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          The file is compiled twice: once with the left call's body written out
-          where the <code>assert</code> stands, once with the right's. Every
-          declaration and every initializer is shared, so the two programs start
-          from one heap. <code>on A</code> names the buffers compared — a parallel
-          version commonly needs scratch its sequential counterpart does not, and
-          the two will leave that scratch differing while agreeing on everything a
-          reader cares about.
+          The file is compiled twice, once per side. Declarations and
+          initializers are shared, so both programs start from one heap.
+          <code>on A</code> names the buffers compared. A parallel version often
+          needs scratch the sequential one does not, and those cells are allowed
+          to differ.
         </p>
         <p class="text-stone-600 leading-relaxed mb-5">
-          What makes the claim cheap is that the question factors into three, and
-          only the first two are about parallelism. Each side's schedules agree
-          with its own sequential reading — that is the main theorem, applied
-          twice — so what is left is whether two programs with <em>no fork in
-          them</em> compute the same thing. That last question has nothing to do
-          with parallelism, and it is the one a reader comparing two sequential
-          programs would have had anyway.
+          The claim is cheap because it factors into three checks, and only
+          two of them are about parallelism. Each side agrees with its own
+          sequential reading, which is the main theorem applied twice. What is
+          left is whether two programs with no fork in them compute the same
+          thing.
         </p>
         <figure class="dgm">
         <svg viewBox="0 0 830 272" role="img"
@@ -591,11 +561,11 @@ assert bubble(A, n) == oddeven(A, n) on A</code></pre>
           <rect class="box" x="570" y="112" width="240" height="88" rx="8" />
           <text class="t-lab" x="690" y="136" text-anchor="middle">agreeB cells p q</text>
           <text class="t-note" x="690" y="158" text-anchor="middle">the two sequential readings</text>
-          <text class="t-note" x="690" y="174" text-anchor="middle">agree — one run of each</text>
+          <text class="t-note" x="690" y="174" text-anchor="middle">agree: one run of each</text>
           <text class="t-sm" x="690" y="192" text-anchor="middle">no fork in either</text>
 
           <path class="brace" d="M20,214 L535,214" />
-          <text class="t-sm t-acc" x="277" y="236" text-anchor="middle">about parallelism — proved once, for every program</text>
+          <text class="t-sm t-acc" x="277" y="236" text-anchor="middle">about parallelism: proved once, for every program</text>
           <text class="t-sm" x="690" y="236" text-anchor="middle">not about parallelism at all</text>
 
           <text class="t-note" x="415" y="262" text-anchor="middle">three decidable checks; the conclusion is AgreeOn cells p q</text>
@@ -605,13 +575,15 @@ assert bubble(A, n) == oddeven(A, n) on A</code></pre>
         </figure>
         <p class="text-stone-600 leading-relaxed">
           <code>paralever check</code> reports the claim beside the verdict and
-          exits non-zero when it fails; <code>paralever prove</code> writes
-          <code>AgreeOn</code>, which says that every outcome either program
-          reaches, under every schedule of either, holds the same values at the
-          named cells. The third check runs both programs on the heap the file
-          declares, so that is the heap the claim is about — lifting it to every
-          heap is the general program-equivalence question, and
-          <code>docs/equivalence.md</code> records what it would take.
+          exits non-zero when it fails. <code>paralever prove</code> writes the
+          conclusion: every outcome either program reaches, under every schedule
+          of either, holds the same values at the named cells. The third check
+          runs both programs on the declared heap, so that is the heap the claim
+          is about.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/equivalence.md</code>, including what lifting
+          the claim to every heap would take.
         </p>
       </section>
 
@@ -622,35 +594,36 @@ assert bubble(A, n) == oddeven(A, n) on A</code></pre>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Eleven files, each for one reason</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
           <code>Examples/Language/</code> is a build gate. Each file compiles,
-          prints back as itself, carries the verdict its header claims, and — for
-          each one <code>wfB</code> accepts — proves its instance of
-          <code>par_seq_eq</code>. The last two state a claim as well, and prove
-          that.
+          prints back as itself, and carries the verdict its header claims. Each
+          accepted file also proves its own instance of the theorem. The last
+          two state a claim as well, and prove that.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
             <thead><tr><th>File</th><th>What it is there for</th><th>Verdict</th></tr></thead>
             <tbody>
-              <tr><td><code>sum.prl</code></td><td><code>parfor</code> with a nested <code>for</code>; one thread per chunk, each writing its own cell</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>matmul.prl</code></td><td>disjoint writes over overlapping reads — the case <code>∗</code>-disjointness rejects</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>stencil.prl</code></td><td>neighbouring threads reading the same cell</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>pipeline.prl</code></td><td>a fork, then a join that reads what both threads wrote</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>control.prl</code></td><td><code>while c in n</code>, bounded because <code>ParM</code> is inductive</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>chain.prl</code></td><td>written sequentially, for the rewrite to regroup</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>arena.prl</code></td><td><code>free</code>, and the next buffer placed on the freed cells</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>scatter.prl</code></td><td>a computed address, rejected by over-approximation rather than by a race</td><td><span class="verdict verdict-heap">this heap only</span></td></tr>
-              <tr><td><code>race.prl</code></td><td>two threads, one cell: <code>wfB</code> false, and a counterexample</td><td><span class="verdict verdict-race">race</span></td></tr>
-              <tr><td><code>equiv.prl</code></td><td><code>assert</code>: a sequential sort against a parallel one, from one comparator</td><td><span class="verdict verdict-ok">independent</span></td></tr>
-              <tr><td><code>twofold.prl</code></td><td><code>assert</code>: two <em>different</em> parallel sums, agreeing on the cell <code>on</code> names</td><td><span class="verdict verdict-ok">independent</span></td></tr>
+              <tr><td><code>sum.prl</code></td><td><code>parfor</code> with a nested <code>for</code>; one thread per chunk, each writing its own cell</td><td>independent</td></tr>
+              <tr><td><code>matmul.prl</code></td><td>disjoint writes over overlapping reads, the case
+                <code>∗</code>-disjointness rejects</td><td>independent</td></tr>
+              <tr><td><code>stencil.prl</code></td><td>neighbouring threads reading the same cell</td><td>independent</td></tr>
+              <tr><td><code>pipeline.prl</code></td><td>a fork, then a join that reads what both threads wrote</td><td>independent</td></tr>
+              <tr><td><code>control.prl</code></td><td><code>while c in n</code>, bounded because <code>ParM</code> is inductive</td><td>independent</td></tr>
+              <tr><td><code>chain.prl</code></td><td>written sequentially, for the rewrite to regroup</td><td>independent</td></tr>
+              <tr><td><code>arena.prl</code></td><td><code>free</code>, and the next buffer placed on the freed cells</td><td>independent</td></tr>
+              <tr><td><code>scatter.prl</code></td><td>a computed address, rejected by over-approximation rather than by a race</td><td>this heap only</td></tr>
+              <tr><td><code>race.prl</code></td><td>two threads, one cell: <code>wfB</code> false, and a counterexample</td><td>race</td></tr>
+              <tr><td><code>equiv.prl</code></td><td><code>assert</code>: a sequential sort against a parallel one, from one comparator</td><td>independent</td></tr>
+              <tr><td><code>twofold.prl</code></td><td><code>assert</code>: two <em>different</em> parallel sums, agreeing on the cell <code>on</code> names</td><td>independent</td></tr>
             </tbody>
           </table>
         </div>
 
         <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">A worked file</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>sum.prl</code> uses everything at once: constants, two buffers with
-          initial data, an unrolled <code>parfor</code> over chunks with a nested
-          <code>for</code> inside each thread, a private accumulator, and a label.
+          <code>sum.prl</code> uses everything at once: constants, two buffers
+          with data, an unrolled <code>parfor</code> with a nested
+          <code>for</code> inside each thread, a private accumulator, and a
+          label.
         </p>
         <div class="code-wrap">
           <div class="code-wrap-header">
@@ -682,12 +655,12 @@ parfor c in chunks {
   writes    {out[0], out[1], out[2]}
   threads   3
   rounds    3 parallel, 9 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)</code></pre>
+  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          Each thread reads its own slice of <code>A</code> and writes its own cell
-          of <code>out</code>, so the three footprints are pairwise independent and
-          the <code>parfor</code> collapses nine sequential memory operations into
+          Each thread reads its own slice of <code>A</code> and writes its own
+          cell of <code>out</code>. The three footprints are pairwise
+          independent, and the fork turns nine sequential memory operations into
           three parallel rounds.
         </p>
       </section>
@@ -698,7 +671,7 @@ parfor c in chunks {
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">What is rejected, and why</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          Each of these is a compile error with a <code>line:column</code>, and
+          Each of these is a compile error carrying a line and a column, and
           each is pinned as a test. The boundary is as much the specification as
           the grammar is.
         </p>
@@ -746,13 +719,10 @@ buf S[4] at 100                 -- hand placement, clear of everything live
       <section>
         <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The same language, as Lean notation</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
-          A <code>paralever { … }</code> block takes Lean <em>terms</em> for its
-          addresses and values, so any Lean expression of the right type works:
-          <code>[n * 2 + 1]</code>, an address computed by a Lean function, or a
-          combinator spliced in. A <code>.prl</code> file has none of that, because
-          the reader cannot call the elaborator. The closed expression language,
-          <code>const</code>, and <code>for</code>/<code>parfor</code> unrolling are
-          what it has instead.
+          A <code>paralever { &hellip; }</code> block takes Lean terms for its
+          addresses and values, so any Lean expression of the right type works.
+          A <code>.prl</code> file has none of that, because the reader cannot
+          call the elaborator. It gets constants and loop unrolling instead.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · Examples/Language/Writing.lean</div>
@@ -765,29 +735,25 @@ buf S[4] at 100                 -- hand placement, clear of everything live
                     src="snippets/writing-theorem.html"></iframe>
           </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          All three threads read <code>[2]</code> and each writes a cell of its
-          own — the shared-read case. <code>footprintOf</code> is a fold over the
-          syntax, so the footprint is <code>rfl</code> and the Bernstein check is
-          <code>decide</code>; nothing in those two lines mentions a heap.
+          All three threads read cell <code>2</code> and each writes a cell of
+          its own. The footprint is a fold over the syntax, so it holds by
+          <code>rfl</code> and the check is <code>decide</code>. Neither line
+          mentions a heap.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Memory in the Lean notation is written <code>[l]</code> and a register
-          <code>%n</code>. That is not a style choice: a
-          <code>syntax "foo"</code> declaration reserves <code>foo</code> as a
-          token for the whole project, so no declaration anywhere could then be
-          named <code>foo</code>. Writing memory as <code>mem l</code> made
-          <code>def mem</code> impossible — the obvious name for a
-          <code>Layout</code> — so the notation uses brackets, which reserve
-          nothing.
+          Memory in the Lean notation is <code>[l]</code> and a register is
+          <code>%n</code>. That is not a style choice. Declaring a syntax
+          keyword reserves that word for the whole project, so nothing anywhere
+          can be named it afterwards. Writing memory as <code>mem l</code> made
+          <code>def mem</code> impossible, and that was the obvious name for a
+          layout. Brackets reserve nothing.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
-          Every constructor has a form on both surfaces, so a file and a block say
-          the same things. Two of the Lean forms are not translations of a
-          <code>.prl</code> spelling, and neither reserves a token:
-          <code>[A, e]</code> names a cell by range and index — the pair
-          <code>loadAt</code> and <code>storeAt</code> take, since Lean cannot
-          spell it <code>A[e]</code>, which is <code>GetElem</code> — and
-          <code>{ … } :: "name"</code> names a region that is not a fork.
+          Every constructor has a form on both surfaces, so a file and a block
+          say the same things. Two Lean forms have no <code>.prl</code> spelling.
+          <code>[A, e]</code> names a cell by range and index, because Lean
+          cannot spell it <code>A[e]</code>. <code>{ &hellip; } :: "name"</code>
+          labels a region that is not a fork.
         </p>
         <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
           <table class="opts-table">
@@ -804,23 +770,19 @@ buf S[4] at 100                 -- hand placement, clear of everything live
           </table>
         </div>
         <p class="text-stone-600 leading-relaxed mb-4">
-          <code>paralever to-lean FILE</code> prints that pair for any file, and
-          the layout it prints keeps the file's addresses: <code>Layout.of</code>
-          allocates consecutively from 0, so a file that placed a buffer with
-          <code>at</code> or freed one — where <code>arena.prl</code>'s
-          <code>out</code> and <code>tmp</code> share base 4 — gets its bases
-          written out instead. A layout that moved an address would be a different
-          program. <code>Test/LeanForm.lean</code> writes three files out by hand
-          and gates each against the compiled file: same addresses, same initial
-          cells, same program up to the associativity of <code>;</code>, same heap
-          after a run.
+          <code>paralever to-lean FILE</code> prints that pair for any file,
+          and keeps the file's addresses. A layout that moved an address would
+          be a different program, so a file that placed a buffer by hand, or
+          freed one, gets its bases written out. <code>Test/LeanForm.lean</code>
+          writes three files out by hand and gates each against the compiled
+          file: same addresses, same initial cells, same heap after a run.
         </p>
         <p class="text-stone-600 leading-relaxed">
-          Reading a file from Lean is three lines, and the theorem is the fourth:
+          Reading a file from Lean is three lines. The theorem is the fourth.
         </p>
         <div class="lean-embed">
             <div class="lean-embed-label">Lean 4 · Examples/Language/Files.lean</div>
-            <iframe class="lean-demo" loading="lazy" title="prl_file — read while Lean elaborates"
+            <iframe class="lean-demo" loading="lazy" title="prl_file: read while Lean elaborates"
                     src="snippets/prl-file.html"></iframe>
           </div>
           <div class="lean-embed">
@@ -832,8 +794,10 @@ buf S[4] at 100                 -- hand placement, clear of everything live
           A file that does not compile is an elaboration error at the
           <code>prl_file</code> term, carrying the position the reader reported.
           <code>prl_prog</code> and <code>prl_layout</code> give the two halves
-          alone, and <code>Lang.load</code> is the same compiler behind
-          <code>IO</code> for reading a path at run time.
+          alone.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/prl.md</code> &sect; The Lean form.
         </p>
       </section>
 
