@@ -450,6 +450,14 @@ body {
   font-weight: 700;
 }
 
+/* The three links at the foot of the sidebar carry no heading, so a rule and a
+   little air are what separate them from the documentation list above. */
+.side-list-extra {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid #e7e5e4;
+}
+
 .side-note {
   display: block;
   font-size: 0.7rem;
@@ -664,27 +672,18 @@ body {
   width: 100%;
   border: none;
   min-height: 220px;
+  /* A snippet is as tall as its content, and the long ones ran further down the
+     page than anything else on it. Past this the frame scrolls on its own. */
+  max-height: 30rem;
   background: #fff;
   border-radius: 0 0 calc(0.6rem - 1px) calc(0.6rem - 1px);
 }
 
-/* Code is wider than prose. The embed cancels the section's own gutters so it
-   spans the full column, which is also what puts it over the 560px the snippet
-   needs to seat its infoview panel beside the code instead of under it. The
-   gutters are Tailwind's `px-6 md:px-12 lg:px-24`, less a margin so the frame
-   never touches the viewport edge. */
-@media (min-width: 768px) {
-  .lean-embed {
-    margin-left: -2rem;
-    margin-right: -2rem;
-  }
-}
-@media (min-width: 1024px) {
-  .lean-embed {
-    margin-left: -6rem;
-    margin-right: -6rem;
-  }
-}
+/* The embed sits inside the prose column, so it lines up with the text and
+   keeps the page's own padding on both sides. At a desktop width that is 704px,
+   still well over the 560px a snippet needs to seat its infoview panel beside
+   the code rather than under it, so nothing is lost by not bleeding into the
+   gutters. */
 
 /* ── page rhythm ─────────────────────────────────────────────────────────────
    Nothing below adds an element; it changes the spacing and weight of the
@@ -722,6 +721,34 @@ main > section:first-of-type > p:first-of-type {
    read as one unit, so the gap inside a pair is smaller than the gap between
    pairs. */
 
+/* The goal, stated before the example that answers it. A rule rather than a
+   box: the cover already has enough boxes, and this is one line of emphasis. */
+.hero-goal {
+  max-width: 44rem;
+  margin: 0 0 2rem;
+  padding: 0.1rem 0 0.1rem 1.1rem;
+  border-left: 3px solid #a16207;
+}
+.hero-goal-eq {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1c1917;
+  line-height: 1.4;
+}
+.hero-goal-note {
+  margin-top: 0.3rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #78716c;
+}
+.hero-goal-note em { color: #a16207; font-style: normal; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .hero-goal-eq { font-size: 1.1rem; }
+}
+
 /* the hero's opening program, and the question under it */
 .hero-ex { max-width: 44rem; }
 .hero-ask {
@@ -731,6 +758,60 @@ main > section:first-of-type > p:first-of-type {
   color: #57534e;
 }
 .hero-ask strong { color: #1c1917; font-weight: 700; }
+
+/* The question the rest of the page answers. It separates the counterexample
+   from the kernel, so it carries more weight than either caption. */
+.hero-q {
+  max-width: 44rem;
+  margin: 2.25rem 0 1.5rem;
+  font-family: Lora, serif;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: #1c1917;
+}
+.hero-q em { color: #a16207; font-style: italic; }
+
+/* The cover's counterexample: two jobs over one shared variable, drawn rather
+   than written as a program, because it is not a paralever file. */
+.pp-fig { max-width: 44rem; margin: 1.5rem 0 0; }
+.pp-grid { display: flex; align-items: stretch; gap: 0.9rem; flex-wrap: wrap; }
+.pp-box {
+  flex: 1 1 10rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.8rem 1rem 0.9rem;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 0.5rem;
+}
+.pp-name {
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #a8a29e;
+}
+.pp-code {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 1rem;
+  color: #1c1917;
+}
+.pp-bar { align-self: center; font-size: 1.25rem; font-weight: 700; color: #a16207; }
+.pp-start { margin: 0.95rem 0 0.7rem; font-size: 0.88rem; color: #78716c; }
+.pp-out { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.pp-out td {
+  padding: 0.45rem 0 0.45rem 0;
+  border-top: 1px solid #f0efec;
+  vertical-align: top;
+  color: #57534e;
+}
+.pp-out td.pp-th {
+  white-space: nowrap;
+  padding-right: 1.4rem;
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  color: #1c1917;
+}
 
 /* prose that follows a capture is that capture's caption: keep it close */
 main .code-wrap + p,

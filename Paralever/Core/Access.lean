@@ -231,6 +231,7 @@ mutual
 /-- Bernstein independence checked at *every* `par` node, each against the heap that node sees along
 the canonical run. The outermost check alone would be unsound — `docs/decomposition.md` has the
 counterexample. -/
+-- ANCHOR: site-wellformed
 @[simp, grind .]
 def WellFormed {τ : Type} : ParM τ → State → Prop
   | .pure _,      _ => True
@@ -245,6 +246,7 @@ def WellFormed {τ : Type} : ParM τ → State → Prop
 def WellFormedChilds {αs : List Type} : Childs ParM αs → State → Prop
   | .nil,       _ => True
   | .cons p ps, σ => WellFormed p σ ∧ WellFormedChilds ps (runSeq p σ).2
+-- ANCHOR_END: site-wellformed
 
 end
 

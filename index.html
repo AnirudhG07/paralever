@@ -69,39 +69,60 @@
       <h1 class="text-5xl md:text-7xl font-bold serif text-stone-900 tracking-tight leading-[1.0] mb-6">
         paralever
       </h1>
-      <p class="text-xl md:text-2xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl mb-8">
-        A parallel program should leave behind what the sequential one left
-        behind. Paralever proves that in Lean 4, for every schedule at once.
+      <p class="text-xl md:text-2xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl mb-7">
+        Paralever is a small language that exists to prove one thing: running a
+        program's threads in parallel leaves exactly what running them in order
+        leaves, and Lean 4 checks it.
       </p>
 
-      <div class="hero-ex">
-        <div class="code-wrap" style="margin-top:0">
-          <div class="code-wrap-header">
-            <span class="code-wrap-lang">Examples/Language/matmul.prl</span>
-            <button class="copy-btn">Copy</button>
+      <p class="text-base text-stone-500 leading-relaxed max-w-2xl mb-5">
+        Consider two jobs, <code>P1</code> and <code>P2</code>, sharing one
+        variable <code>x</code>:
+      </p>
+
+      <figure class="dgm pp-fig">
+        <div class="pp-grid">
+          <div class="pp-box">
+            <span class="pp-name">P1</span>
+            <span class="pp-code">x := 1</span>
           </div>
-          <pre><code class="language-prl">const n = 2
-
-buf A[2, 2] = 1, 2, 3, 4
-buf B[2, 2] = 5, 6, 7, 8
-buf C[2, 2]
-
-parfor i in n {
-  for j in n {
-    %acc := 0
-    for k in n {
-      %x := A[i, k]
-      %y := B[k, j]
-      %acc := %acc + %x * %y
-    }
-    C[i, j] := %acc
-  }
-} :: "matmul 2x2"</code></pre>
+          <span class="pp-bar">&#8214;</span>
+          <div class="pp-box">
+            <span class="pp-name">P2</span>
+            <span class="pp-code">y := x</span>
+          </div>
         </div>
-        <p class="hero-ask">
-          One thread per row. Each thread writes its own row of <code>C</code>.
-          Every thread reads all of <code>B</code>. <strong>Is that a race?</strong>
-        </p>
+        <p class="pp-start">both start from <code>x = 0</code> and <code>y = 0</code></p>
+        <table class="pp-out">
+          <tr>
+            <td class="pp-th">P1 then P2</td>
+            <td>always <code>x = 1</code>, <code>y = 1</code></td>
+          </tr>
+          <tr>
+            <td class="pp-th">P1 &#8214; P2</td>
+            <td><code>y = 1</code>, or <code>y = 0</code> when P2 reads
+                <code>x</code> before P1 writes it</td>
+          </tr>
+        </table>
+      </figure>
+
+      <p class="hero-ask">
+        Running them in parallel can leave an outcome the sequential run never
+        produces. So for this program you cannot say parallel = sequential.
+      </p>
+
+      <p class="hero-q">
+        So the question is: for a given program, <em>is</em> parallel equal to
+        sequential, under every schedule rather than just the one that ran?
+      </p>
+
+      <div class="hero-goal">
+        <div class="hero-goal-eq">par p &nbsp;&equiv;&nbsp; seq p</div>
+        <div class="hero-goal-note">
+          <code>ParSeqEq</code>: from the same starting heap, the parallel and
+          the sequential program reach exactly the same <em>(result, final
+          heap)</em> pairs. Every schedule, not one of them.
+        </div>
       </div>
 
       <div class="flex flex-wrap gap-4 mt-10">
@@ -127,10 +148,35 @@ parfor i in n {
 
       <!-- MATMUL, PROVED -->
       <section>
-        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Matrix multiply, proved</h2>
+        <h2 class="text-3xl md:text-4xl font-bold serif text-stone-900 mb-5">Matrix multiply is ParSeqEq, proved</h2>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">Examples/Language/matmul.prl (without its header comment)</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-prl">const n = 2
+
+buf A[2, 2] = 1, 2, 3, 4
+buf B[2, 2] = 5, 6, 7, 8
+buf C[2, 2]
+
+parfor i in n {
+  for j in n {
+    %acc := 0
+    for k in n {
+      %x := A[i, k]
+      %y := B[k, j]
+      %acc := %acc + %x * %y
+    }
+    C[i, j] := %acc
+  }
+} :: "matmul 2x2"</code></pre>
+        </div>
         <p class="text-stone-600 leading-relaxed mb-6">
-          It is not a race. Three steps show why: measure what each thread
-          touches, check the three conditions, then state the theorem.
+          One thread per row. Each thread writes its own row of <code>C</code>,
+          and every thread reads all of <code>B</code>. That is not a race, and
+          three steps show why: measure what each thread touches, check the
+          three conditions, then state the theorem.
         </p>
 
         <h3 class="text-lg font-bold serif text-stone-900">1 &middot; What each thread touches</h3>

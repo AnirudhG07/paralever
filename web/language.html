@@ -591,32 +591,13 @@ print A</code></pre>
 
       <!-- 6 the examples -->
       <section>
-        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Eleven files, each for one reason</h2>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Examples</h2>
         <p class="text-stone-600 leading-relaxed mb-6">
-          <code>Examples/Language/</code> is a build gate. Each file compiles,
-          prints back as itself, and carries the verdict its header claims. Each
-          accepted file also proves its own instance of the theorem. The last
-          two state a claim as well, and prove that.
+          <code>Examples/Language/</code> is a build gate. Every file there
+          compiles, prints back as itself, and carries the verdict its header
+          claims, and every accepted file proves its own instance of the
+          theorem.
         </p>
-        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
-          <table class="opts-table">
-            <thead><tr><th>File</th><th>What it is there for</th><th>Verdict</th></tr></thead>
-            <tbody>
-              <tr><td><code>sum.prl</code></td><td><code>parfor</code> with a nested <code>for</code>; one thread per chunk, each writing its own cell</td><td>independent</td></tr>
-              <tr><td><code>matmul.prl</code></td><td>disjoint writes over overlapping reads, the case
-                <code>∗</code>-disjointness rejects</td><td>independent</td></tr>
-              <tr><td><code>stencil.prl</code></td><td>neighbouring threads reading the same cell</td><td>independent</td></tr>
-              <tr><td><code>pipeline.prl</code></td><td>a fork, then a join that reads what both threads wrote</td><td>independent</td></tr>
-              <tr><td><code>control.prl</code></td><td><code>while c in n</code>, bounded because <code>ParM</code> is inductive</td><td>independent</td></tr>
-              <tr><td><code>chain.prl</code></td><td>written sequentially, for the rewrite to regroup</td><td>independent</td></tr>
-              <tr><td><code>arena.prl</code></td><td><code>free</code>, and the next buffer placed on the freed cells</td><td>independent</td></tr>
-              <tr><td><code>scatter.prl</code></td><td>a computed address, rejected by over-approximation rather than by a race</td><td>this heap only</td></tr>
-              <tr><td><code>race.prl</code></td><td>two threads, one cell: <code>wfB</code> false, and a counterexample</td><td>race</td></tr>
-              <tr><td><code>equiv.prl</code></td><td><code>assert</code>: a sequential sort against a parallel one, from one comparator</td><td>independent</td></tr>
-              <tr><td><code>twofold.prl</code></td><td><code>assert</code>: two <em>different</em> parallel sums, agreeing on the cell <code>on</code> names</td><td>independent</td></tr>
-            </tbody>
-          </table>
-        </div>
 
         <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">A worked file</h3>
         <p class="text-stone-600 leading-relaxed mb-4">
@@ -662,6 +643,58 @@ parfor c in chunks {
           cell of <code>out</code>. The three footprints are pairwise
           independent, and the fork turns nine sequential memory operations into
           three parallel rounds.
+        </p>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">Kernels, and programs built from them</h3>
+        <p class="text-stone-600 leading-relaxed mb-6">
+          Writing a fork by hand means discharging its obligation by hand. A
+          kernel is a parallel shape whose obligation is proved once, for every
+          size, so a program assembled out of kernels needs no proof of its own.
+        </p>
+        <div class="bg-white/55 border border-stone-200 rounded-2xl overflow-hidden mb-6">
+          <table class="opts-table">
+            <thead><tr><th>Kernel</th><th>What thread <code>i</code> does</th></tr></thead>
+            <tbody>
+              <tr><td><code>parFor n body</code></td><td>one thread per index below <code>n</code>; every kernel below is built from it</td></tr>
+              <tr><td><code>mapK</code></td><td><code>dst[i] := f src[i]</code></td></tr>
+              <tr><td><code>zipK</code></td><td><code>out[i] := f a[i] b[i]</code></td></tr>
+              <tr><td><code>reduceK</code></td><td>folds <code>K</code> inputs into one output cell</td></tr>
+              <tr><td><code>conv1dK</code></td><td><code>out[i] := &Sigma;&#8342; wts[k] &middot; inp[i+k]</code>, every thread reading all the weights</td></tr>
+              <tr><td><code>denseK</code></td><td><code>out[i] := &Sigma;&#8341; W[i,j] &middot; x[j] + b[i]</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>Lang/Core/Kernels.lean</code> has the rest, among them
+          <code>gridK</code>, <code>stencilK</code>, <code>transposeK</code>,
+          <code>biasAddK</code> and <code>outerUpdateK</code>. A neural network's
+          forward pass is three of them in a row:
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Examples/Language/NeuralNet.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="a net assembled from premade kernels"
+                  src="snippets/kernels-net.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Every address is a literal by the time a thread exists, so the
+          footprint is a fold and the obligation is a <code>Bool</code>. The
+          theorem follows from <code>decide</code>, with no fork-specific
+          reasoning written out.
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Examples/Language/NeuralNet.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="the check, and the theorem it earns"
+                  src="snippets/kernels-theorem.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>conv1dK</code> is the case plain disjointness refuses. Every
+          thread reads the whole weight array and its own window of the input,
+          and shared reads cost nothing, because independence constrains writes
+          only.
+        </p>
+        <p class="text-sm text-stone-500 leading-relaxed">
+          Full detail: <code>docs/prl.md</code> and
+          <code>Examples/Language/NeuralNet.lean</code>.
         </p>
       </section>
 

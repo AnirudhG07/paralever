@@ -280,6 +280,55 @@
           exactly as a <code>.prl</code> file is. So <code>decide</code> sees a
           literal and never runs the reader.
         </p>
+
+        <h3 class="text-xl font-bold serif text-stone-900 mb-3 mt-10">The same module as a <code>.prl</code> file</h3>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          <code>mlir_prog</code> is not the only route. <code>to-prl</code>
+          writes the lowered program out as Paralever source, so an MLIR module
+          becomes a file you can read, edit, check and prove on its own.
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever to-prl Examples/Mlir/doall-no.mlir -o doall.prl</span>
+          </div>
+          <pre><code class="language-prl">buf A[8] = 1, 2, 3, 4, 5, 6, 7, 8
+buf B[8] = 10, 20, 30, 40, 50, 60, 70, 80
+buf C[8]
+
+parallel {
+  %0 := A[0]
+  %1 := B[0]
+  C[0] := (%0 + %1)
+} | {
+  %0 := A[1]
+  %1 := B[1]
+  C[1] := (%0 + %1)
+} | {
+  &#8230;                        &#8592; five more threads, one per iteration
+}</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed mb-4">
+          The parallel loop is already unrolled, because a thread exists only
+          once its addresses are literals. Checking the written file and
+          checking the module it came from give the same report, line for line:
+        </p>
+        <div class="code-wrap">
+          <div class="code-wrap-header">
+            <span class="code-wrap-lang">paralever check doall.prl</span>
+          </div>
+          <pre><code class="language-console">  memory    A[8] @0, B[8] @8, C[8] @16  (24 cells)
+  reads     {A[0], B[0], A[1], B[1], A[2], B[2], A[3], B[3], A[4], B[4], &#8230; +6 more}
+  writes    {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
+  threads   8
+  rounds    3 parallel, 24 sequential
+  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          <code>to-mlir</code> goes the other way, and <code>to-lean</code>
+          writes the same program as a <code>Layout</code> and a
+          <code>paralever { &#8230; }</code> block. Each front end is a reader;
+          after that there is one program and one verdict.
+        </p>
       </section>
 
       <hr class="divider" />
@@ -388,7 +437,7 @@
 
       <!-- the corpus -->
       <section>
-        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Seven labelled pilots</h2>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The labelled pilots</h2>
         <p class="text-stone-600 leading-relaxed mb-4">
           Each file is named for its ground truth, in DataRaceBench's
           convention: <code>-yes</code> has a race, <code>-no</code> does not.

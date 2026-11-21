@@ -72,8 +72,9 @@
   ];
 
   var EXTRAS = [
+    ["Slides", "@base@slides/", "the two decks"],
     ["Blog", "https://anirudhg07.github.io/blogs/paralever-a-language-that-proves-parallel-equals-sequential/", "the project, written up"],
-    ["Source", "https://github.com/AnirudhG07/paralever", "the repository"]
+    ["GitHub", "https://github.com/AnirudhG07/paralever", "the repository"]
   ];
 
   function renderSide() {
@@ -94,7 +95,7 @@
         p[1] + '</span><span class="side-note">' + p[2] + "</span></a></li>";
     });
 
-    html += '</ul><p class="side-head">Elsewhere</p><ul class="side-list">';
+    html += '</ul><ul class="side-list side-list-extra">';
     EXTRAS.forEach(function (e) {
       var href = e[1].replace("@base@", base);
       var ext = /^https?:/.test(href) ? ' target="_blank" rel="noopener noreferrer"' : "";
@@ -187,7 +188,9 @@
       var apply = function () {
         try {
           var h = frame.contentWindow.document.body.scrollHeight;
-          if (h > 0) frame.style.height = h + 32 + "px";
+          // Capped to match `.lean-embed iframe`'s max-height: a snippet taller
+          // than this scrolls inside its own frame.
+          if (h > 0) frame.style.height = Math.min(h + 32, 480) + "px";
         } catch (e) {
           /* not loaded yet, or not same-origin */
         }

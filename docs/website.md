@@ -16,7 +16,7 @@ index.html              the cover
 web/*.html              seven pages: concept, language, autopar, races, mlir, cli, lean
 web/css/site.css        every rule the pages use that the main site does not already give
 web/js/site.js          the top bar, the sidebar, the footer, the embeds, the .prl/.mlir grammars
-web/snippets/*.html     24 verso-snippets files — one per Lean block on the site
+web/snippets/*.html     28 verso-snippets files — one per Lean block on the site
 web/build-snippets.sh   what writes them
 slides/index.html       the deck list, hand-written
 slides/{lib,assets}/    reveal.js and the deck scripts, shared by every deck
@@ -46,6 +46,9 @@ Home`. If the script never arrives, `site.js` renders the same bar from the same
 bar cannot go missing.
 
 The section nav is a fixed left column below the bar, rendered from `site.js`'s `PAGES` table.
+Below it, `EXTRAS` carries exactly three links, under no heading and separated by a rule: Slides,
+Blog, GitHub. A new page is one HTML file plus one row in `PAGES`; `EXTRAS` is not where a page
+goes.
 Adding a page is one HTML file plus one row in that table.
 
 ## Every Lean block is a verso-snippets embed
@@ -86,10 +89,17 @@ styles, by `build-snippets.sh`:
 | long lines scroll horizontally inside the box | a scrollbar inside a frame inside a page is unreachable | lines wrap, with a hanging indent so a continuation is visibly not a new line |
 | the body centres itself in 880px and pads for a window | the frame already is the window | fill the width given |
 
-The embed is also let out of the prose column: `.lean-embed` cancels the section's `px-6 md:px-12
-lg:px-24` gutters, so code gets the full column width (896px at a desktop width) rather than the
-704px the text gets. Together with the 560px stack point, the panel now seats beside the code from
-a 640px viewport up, where before it did so at no width at all.
+The embed sits **inside** the prose column, lined up with the text and keeping the page's padding
+on both sides. That is 704px at a desktop width, still well over the 560px stack point, so the
+panel seats beside the code anyway. An earlier version let the embed out into the `px-6 md:px-12
+lg:px-24` gutters for the extra 192px; it bought nothing the stack point had not already bought,
+and a box wider than every other box on the page read as a mistake.
+
+A snippet is as tall as its content, and the long ones (`race-site-cases`, 29 lines) ran further
+down the page than anything else on it. The frame is capped at 30rem by `.lean-embed iframe`'s
+`max-height`, and `sizeEmbeds` in `site.js` caps the height it measures to match, so a taller
+snippet scrolls inside its own frame. Change the two together or the frame and its content
+disagree.
 
 Editing a file under `web/snippets/` by hand is lost on the next build. Change
 `web/snippet-overrides.css` and rebuild.

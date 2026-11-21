@@ -61,9 +61,10 @@
         The theorem
       </h1>
       <p class="text-lg md:text-xl text-stone-500 font-light leading-relaxed serif italic max-w-2xl">
-        Six definitions and one proof. The definitions say what a parallel
-        program is, how it runs, and when a fork is safe. The proof says a safe
-        fork can be read sequentially without changing any outcome.
+        Parallel and sequential agree when every fork in the program is
+        independent: no two threads write one cell, and no thread writes a cell
+        another reads. That condition makes the program's outcome unique, and a
+        unique outcome is what collapses the two readings into one equality.
       </p>
     </header>
 
@@ -314,10 +315,20 @@ parallel {
         </div>
 
         <p class="text-stone-600 leading-relaxed">
-          <code>WellFormed p &sigma;</code> asks for independence at
-          <em>every</em> fork in the term, not only the outermost one. Checking
-          the outermost fork alone would be unsound, because a branch can race
-          with itself while the two branches' totals stay disjoint.
+          <strong>Well-formedness</strong> is that condition applied to a whole
+          program. At a fork it asks three things: the children's footprints are
+          pairwise independent, each child is itself well-formed, and so is
+          whatever runs after the fork, from the heap the fork leaves.
+        </p>
+        <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Paralever/Core/Access.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="WellFormed: independence at every fork"
+                  src="snippets/wellformed.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          Every fork is checked, not only the outermost one. Checking the
+          outermost alone would be unsound: a branch can race with itself while
+          the two branches' totals stay disjoint.
         </p>
         <p class="text-sm text-stone-500 leading-relaxed">
           Full detail: <code>docs/access.md</code>, and
@@ -400,6 +411,16 @@ parallel {
         </div>
 
         <div class="lean-embed">
+          <div class="lean-embed-label">Lean 4 &middot; Paralever/Theory/WellFormedCanonical.lean</div>
+          <iframe class="lean-demo" loading="lazy" title="wellFormed_canonical: one outcome, and runSeq names it"
+                  src="snippets/wellformed-canonical.html"></iframe>
+        </div>
+        <p class="text-stone-600 leading-relaxed">
+          That is <code>wellFormed_canonical</code>, and it is the hard theorem
+          of the project. Both directions are there: the canonical pair is
+          reachable, and nothing else is.
+        </p>
+        <div class="lean-embed">
           <div class="lean-embed-label">Lean 4 &middot; Paralever/Theory/Sequentialize.lean</div>
           <iframe class="lean-demo" loading="lazy" title="par_seq_eq: the metatheorem"
                   src="snippets/par-seq-eq.html"></iframe>
@@ -471,7 +492,7 @@ parallel {
 
       <!-- 6 from ParM to the surface -->
       <section>
-        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">From the term to a <code>Bool</code></h2>
+        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">The final <code>ParSeqEq</code> theorem</h2>
         <p class="text-stone-600 leading-relaxed">
           <code>WellFormed</code> quantifies over a heap, so it is not decidable
           as written. The surface language is first-order: addresses are numbers,

@@ -42,6 +42,8 @@ runseq|Paralever.Core.Access|site-runseq|runSeq — the sequential reading
 step|Paralever.Core.Semantics|site-step|step — every schedule at once
 footprint|Paralever.Core.Access|site-footprint|Footprint — what a computation touches
 accesses-childs|Paralever.Core.Access|site-accesses-childs|accessesChilds — staggered measurement
+wellformed|Paralever.Core.Access|site-wellformed|WellFormed — independence at every fork
+wellformed-canonical|Paralever.Theory.WellFormedCanonical|site-wellformed-canonical|wellFormed_canonical — one outcome, and runSeq names it
 par-seq-eq|Paralever.Theory.Sequentialize|site-par-seq-eq|par_seq_eq — the metatheorem
 wfb-par-seq-eq|Lang.Core.Prog|site-wfb-par-seq-eq|par_seq_eq — one Bool, then the theorem
 rewrite-sound|Paralever.AutoPar.Rewrite|site-rewrite-sound|rewrite_sound — no hypothesis
@@ -50,6 +52,8 @@ follow-sound|Paralever.Search.RaceSearch|site-follow-sound|follow_sound — a sc
 race-sites-iff|Paralever.Search.RaceSearch|site-race-sites-iff|raceSites_nil_iff — the scan is complete
 race-site-cases|Paralever.Search.RaceSearch|site-race-site-cases|what the scan finds, as #guards
 writing|Examples.Language.Writing|site-writing|a program in the surface language
+kernels-net|Examples.Language.NeuralNet|site-kernels-net|a net assembled from premade kernels
+kernels-theorem|Examples.Language.NeuralNet|site-kernels-theorem|the check, and the theorem it earns
 writing-theorem|Examples.Language.Writing|site-writing-theorem|its footprint, and its verdict
 prl-file|Examples.Language.Files|site-prl-file|prl_file — the nine files, read while Lean elaborates
 file-theorem|Examples.Language.Files|site-file-theorem|one theorem per accepted file

@@ -39,11 +39,13 @@ window — two kinds of read sharing at once, and neither costs anything, becaus
 writes only. -/
 
 /-- Forward pass: convolution, ReLU, dense layer. -/
+-- ANCHOR: site-kernels-net
 def forward : ParProg :=
   ParProg.block
     [ ParProg.conv1dK 6 3 X CW C
     , ParProg.mapK 6 C Rl (fun v => AExp.max v (.lit 0))
     , ParProg.denseK 2 6 W2 Rl B2 Y ]
+-- ANCHOR_END: site-kernels-net
 
 /-- One SGD step: forward, then the error, then an in-place weight update with learning rate
 `1 / lrDen`. The update's thread `(i,j)` reads and writes `W[i,j]` *in place* — admissible only
@@ -59,6 +61,7 @@ def trainStep (lrDen : Int) : ParProg :=
 The obligation is decidable because every address is a literal by the time the thread exists, so
 `footprintOf` is a fold and `wfB` is a `Bool`. -/
 
+-- ANCHOR: site-kernels-theorem
 example : ParProg.wfB forward = true := by decide
 example : ParProg.wfB (trainStep 36) = true := by decide
 
@@ -67,6 +70,7 @@ reaches exactly the outcomes it reaches run thread-by-thread. -/
 theorem forward_par_seq_eq (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar forward ρ) (ParProg.execSeq forward ρ) σ :=
   ParProg.par_seq_eq (by decide) ρ σ
+-- ANCHOR_END: site-kernels-theorem
 
 /-- And for a training step, which also writes back into the weights. -/
 theorem trainStep_par_seq_eq (ρ : Regs) (σ : State) :

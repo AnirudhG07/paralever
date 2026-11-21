@@ -262,7 +262,7 @@ docs/        design rationale (program-model.md, semantics.md, access.md, theory
 index.html   the published site's cover; `web/` its pages, `slides/main` and `slides/isp` the
              two decks, with the files they share in `slides/` beside them
 web/         concept, language, autopar, races, mlir, cli, lean + css/site.css,
-             js/site.js, snippets/ (the 24 verso-snippets files) and
+             js/site.js, snippets/ (the 28 verso-snippets files) and
              build-snippets.sh — hand-written static HTML, no generator; the
              theme is *linked* from anirudhg07.github.io, never copied. site.js
              renders the top bar (the main site's own, re-linked), the left

@@ -1459,9 +1459,11 @@ theorem wellFormed_canonical_all :
       ihps (runSeq p σ).2 hwf.2 hind.2
     refine hR1.trans (reachesChilds_tail _ hRtail)
 
+-- ANCHOR: site-wellformed-canonical
 theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
     ∀ σ r σ', WellFormed p σ → (Reaches (.run p σ) (.run (.pure r) σ') ↔ (r, σ') = runSeq p σ) :=
   wellFormed_canonical_all.1 p
+-- ANCHOR_END: site-wellformed-canonical
 
 theorem reachesChilds_canonical {αs : List Type} (cs : Childs ParM αs) :
     ∀ σ, WellFormedChilds cs σ → IndepAll (childFootprints cs σ) →

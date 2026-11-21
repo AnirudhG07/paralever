@@ -54,12 +54,6 @@
       <h1 class="text-4xl md:text-6xl font-bold serif text-stone-900 tracking-tight leading-[1.05] mb-6 mt-4">
         The slides
       </h1>
-      <p class="text-lg text-stone-600 leading-relaxed max-w-2xl">
-        Both decks are built from the library by <code>lake exe slides</code>: every code block on a
-        slide is read out of the module that compiles, so a renamed theorem fails the build rather
-        than going stale on a slide. They share one stylesheet and one copy of reveal.js, kept in
-        this folder.
-      </p>
     </header>
 
     <main class="px-6 md:px-12 lg:px-24 max-w-4xl mx-auto pb-20">
@@ -77,30 +71,6 @@
           algorithm, each carrying the Lean theorem that discharges its obligation.</p>
         </a>
         </div>
-      </section>
-
-      <hr class="divider" />
-
-      <section>
-        <h2 class="text-3xl font-bold serif text-stone-900 mb-5">Reading a deck</h2>
-        <ul class="space-y-3">
-          <li class="flex gap-3 items-start">
-            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
-            <p class="text-stone-600 leading-relaxed">
-                            Arrow keys move between slides, and <code>Esc</code> opens the
-              overview. Hovering a Lean identifier shows its type.
-            </p>
-          </li>
-          <li class="flex gap-3 items-start">
-            <span class="text-mustard-700 font-bold mt-0.5">▸</span>
-            <p class="text-stone-600 leading-relaxed">
-                            Each deck is one Lean module,
-              <code>docs/slides/main/Slides.lean</code> and
-              <code>docs/slides/isp/IspSlides.lean</code>, and the executable
-              that writes both is <code>docs/slides/SlidesMain.lean</code>.
-            </p>
-          </li>
-        </ul>
       </section>
     </main>
     <div id="prl-footer" data-base="../"></div>
