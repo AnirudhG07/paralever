@@ -44,7 +44,7 @@ stmt    ::= "buf" name ( "[" exp ("," exp)* "]" )? ("at" exp)? ("=" init)?
           | "const" name "=" exp
           | "reg" name ("," name)* ("=" number)?    -- optional: pins an index
           | "slice" name "=" range                  -- a name for a sub-range; declares no memory
-          | "copy" region "from" region             -- cell by cell, in index order
+          | "copy" extent "from" extent             -- cell by cell, in index order
           | "free" name
           | "%" reg ":=" addr                       -- load
           | addr ":=" exp                           -- store
@@ -54,6 +54,7 @@ stmt    ::= "buf" name ( "[" exp ("," exp)* "]" )? ("at" exp)? ("=" init)?
           | "for" name "in" exp thread
           | "if" exp thread ("else" (thread | ifstmt))?   -- `else if` needs no braces
           | "while" exp "in" exp thread
+          | thread label                            -- a region: a named block; see below
           | "print" parg ("," parg)*                -- output; erased from the program
           | "def" name "(" param ("," param)* ")" thread   -- a named statement list
           | name "(" arg ("," arg)* ")"             -- a call, written out where it stands
@@ -71,7 +72,7 @@ arg     ::= "%" reg | exp                           -- a register, or a value
 call    ::= name "(" arg ("," arg)* ")"
 addr    ::= "[" exp "]" | name ( "[" exp ("," exp)* "]" )? | range "[" exp "]"
 range   ::= name "[" exp ".." exp? "]"              -- half-open; `hi` omitted is the last cell
-region  ::= name | range                            -- `A` alone is all of A
+extent  ::= name | range                            -- `A` alone is all of A
 exp     ::= conj ("||" conj)*
 conj    ::= cmp ("&&" cmp)*
 cmp     ::= sum (("<"|">"|"<="|">="|"=="|"!=") sum)?        -- non-associative
@@ -90,6 +91,12 @@ thread, where threads have no order between them and the value printed would be 
 first. Its argument is a buffer, a cell, a `const`, a register or an expression — with a bare name
 meaning the *whole* buffer, the one place in the language where a name without a subscript is not a
 cell. See `docs/print.md`.
+
+A braced block with a name after it is a **region**: `{ … } :: "stencil"` compiles to
+`ParProg.label "stencil" (.block …)`. Both interpreters ignore the name and `footprintOf` passes
+through it, so a region changes no meaning. What it changes is where `paralever autopar --regions`
+is allowed to rewrite — everything outside a region is left as written. A bare `{ … }` with no name
+is refused, because it would be a block that says nothing. See `docs/autopar.md` § *Regions*.
 
 Declarations are statements, because `free` is one: a buffer has a lifetime in the program text.
 They are allowed only at the top level, where the whole program sees them — a `buf` or a `free`
@@ -666,7 +673,7 @@ constructor has a surface form, so the two surfaces say the same things:
 | `dst[%i] := 1` | `[L.ref "dst", %i] := 1` | `storeAt` |
 | `parallel {…} \| {…} :: "name"` | the same | `label (par …)` |
 | `parfor i in n {…} :: "name"` | the same | `label (parFor …)` |
-| — | `{ … } :: "name"` | `label` around anything |
+| `{ … } :: "name"` | the same | `label` around anything |
 | `buf A[6] = 1, 2, 3` | `buf "A" [6] (data [1, 2, 3])` | — (a `Layout`) |
 | `buf S[4] at 100`, `free A` | an explicit `base`, or `Arena.of` | — |
 
@@ -677,7 +684,8 @@ Two of those rows are syntax rather than a translation, and neither reserves a t
   by range and index, which is the pair `loadAt` and `storeAt` take. Lean cannot spell it `A[e]` —
   that is `GetElem` — and a comma inside the brackets a cell address already uses needs no keyword.
 * `{ … } :: "name"` names a region that is not a fork. `parallel` and `parfor` carry their own
-  `::`; this is the general form, because `ParProg.label` takes any statement.
+  `::`; this is the general form, because `ParProg.label` takes any statement. Both surfaces spell
+  it the same way, so a region round-trips through `toPrl`.
 
 Initial contents print as `(data [...])` rather than as a bare list. `Init` is `List Nat → List Int`
 and `Coe (List Int) Init` is declared, but a list literal in that position elaborates as `List Nat`,

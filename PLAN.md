@@ -326,6 +326,68 @@ First PR: 1–2. Milestone 0's spike can run in parallel and gates only the Tier
   `p`,`q`; and that it hits `wrong` for random racy ones. Main defence against a vacuous `Indep`.
 - **Anti-vacuity theorem** (milestone 3) and the **failing-prefix pragma test** (milestone 6).
 
+## Open obligation: the array executor's correctness
+
+`Paralever/Compile/ExecArr.lean` runs a program on an `Array Val` instead of on `State = Loc → Val`.
+It is an addition, not a change: `Core/` and `Theory/` import nothing from `Compile/`, so no existing
+definition or theorem is touched, and `execTask` stays exactly as it was.
+
+Proved so far: `AState.toState_set` (an array write is a heap update) and **`toState_joinArr`** — the
+array merge is `joinAllStates`, with *no* independence hypothesis, which is what the right fold
+buys.
+
+Still to prove, and the reason the twin is not yet wired into `run --threads`:
+
+```lean
+theorem execArr_eq_execTask {α : Type} (p : ParM α) (a : AState)
+    (hw : WritesBelow p a.size) :
+    (execArr p a).1 = (execTask p a.toState).get.1 ∧
+    (execArr p a).2.toState = (execTask p a.toState).get.2
+```
+
+No `WellFormed` and no `Indep`: the two executors are the same walk, so they must agree on every
+program, racy or not. `WellFormed` then gives `runSeq` for free through `execTask_get`.
+
+`WritesBelow` is the one hypothesis the function heap does not need, since `State` is total over
+every `Nat` and an array is not. Reads need no bound — `AState.get` returns `.int 0` past the end,
+so `toState` agrees with the function heap there by construction. It wants a structural statement
+(a predicate over the term, closed under continuations) rather than one phrased through `accesses`,
+because `accesses` measures children in a staggered sequence while the executors run them all from
+one heap.
+
+No `sorry` stands in for any of this: the theorem is not stated in the source until it is proved.
+
+## Open gap: `--width` reaches only one of the two parallelizing routes
+
+`ParProg.autoParWith` takes a fork width and `ParProg.autoPar` fixes it at `defaultWidth = 8`,
+measured as the optimum (671 ms at n = 192, against 690 ms at 16 and 744 ms at 32). But the command
+line's `autopar` takes the *proved* route when the program is barrier-free — `AutoPar.rewrite`,
+which goes through `emit (planOf p)` and puts **one child per unit** in every stage, with no cap at
+all. So on the route the CLI actually uses, "8 threads by default" is not yet true.
+
+Capping it means a `Plan → Plan` pass that merges adjacent threads within a stage, since a stage is
+already a list of threads. Merging preserves the flattened unit order, so `planUnits` is unchanged
+and `noRegFlow` can only improve, but `emit_heap` and `rewrite_heap` in `AutoPar/Sound.lean` are
+stated about `emit (plan us)` directly and have to be restated through the capped plan. That is the
+work; a `--width N` flag on top of it is one line.
+
+## Open gap: a region is a marker, and the two sparse-join lemmas
+
+`{ … } :: "name"` compiles to `ParProg.label`, which both interpreters already ignore, so the
+construct needs no new theorem: `footprintOf`, `wfB` and `par_seq_eq` see through it. What is *not*
+yet proved is the machinery the region measurement runs on.
+
+- `execArr_eq_execTask` — `Compile/ExecArr.lean` runs a `ParM` over an array heap and
+  `Compile/Exec.lean` runs the same tree over `State`. The array route is the one every number in
+  `docs/bench.md` comes from, and `toState_joinArr` (no independence hypothesis) is as far as the
+  correspondence is carried today.
+- `joinDelta` against `joinAllStates` — the sparse join writes only the cells a child's `dirty`
+  list names. Equal to the proved full-scan join under the hypothesis that a child agrees with the
+  base outside its dirty list, which `execArrD` maintains by construction and no lemma yet states.
+
+Both are checked rather than proved at the moment: every row of the chaos sweep compares the
+checksum of the sparse join against the full-scan one and fails the row if they differ.
+
 ## Upstreamable side results
 
 - `Task.mapList_eq : (Task.mapList f ts).get = f (ts.map Task.get)` — `Task.mapList`

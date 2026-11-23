@@ -49,6 +49,7 @@ def Stmt.regTokens : Stmt → List String
   | .store a e     => a.regTokens ++ e.regTokens
   | .set r e       => r :: e.regTokens
   | .par ts _      => threadTokens ts
+  | .region b _    => stmtTokens b
   | .forIn _ n b   => n.regTokens ++ stmtTokens b
   | .parfor _ n b _ => n.regTokens ++ stmtTokens b
   | .ifElse c t e  => c.regTokens ++ stmtTokens t ++ stmtTokens e
@@ -153,6 +154,7 @@ def Stmt.info : Stmt → BodyInfo
   | .assert _ l r _ => { claims := [(l.callee, r.callee)]
                        , calls  := [(l.callee, l.args), (r.callee, r.args)] }
   | .par ts _      => threadsInfo ts
+  | .region b _    => stmtsInfo b
   | .forIn _ _ b   => stmtsInfo b
   | .parfor _ _ b _ => stmtsInfo b
   | .ifElse _ t e  => stmtsInfo t ++ stmtsInfo e
@@ -374,6 +376,7 @@ partial def expandStmt (fs : Table) (σ : Subst) : Stmt → M (List Stmt)
   | .synchronize   => pure [.synchronize]
   | .print as      => do pure [.print (← as.mapM (fun a => ok (PrintArg.subst σ a)))]
   | .par ts nm     => do pure [.par (← ts.mapM (expandStmts fs σ)) nm]
+  | .region b nm   => do pure [.region (← expandStmts fs σ b) nm]
   | .forIn i n b   => do
       pure [.forIn i (← ok (Exp.subst σ n)) (← expandStmts fs (σ.shadow i) b)]
   | .parfor i n b nm => do

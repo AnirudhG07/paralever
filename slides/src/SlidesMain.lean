@@ -4,10 +4,12 @@ import IspSlides
 
 open VersoSlides
 
+/-- Where the deck's sources live. `slides/src/` holds them; `slides/` beside it is where this
+program writes, so the two never share a path. -/
 def findBase : IO System.FilePath := do
-  for d in [("docs/slides" : System.FilePath), "."] do
+  for d in [("slides/src" : System.FilePath), "."] do
     if ← (d / "lean.css").pathExists then return d
-  throw <| IO.userError "lean.css not found — run `lake exe slides` from the repo root (or from docs/ppt)"
+  throw <| IO.userError "lean.css not found — run `lake exe slides` from the repo root"
 
 /-- Load the CSS theme fresh at RUNTIME from `lean.css`, and bundle the deck's
 images as theme assets (written verbatim to `<outputDir>/assets/…`).

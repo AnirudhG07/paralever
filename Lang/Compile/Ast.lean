@@ -135,6 +135,11 @@ inductive Stmt where
   | set    : String → Exp → Stmt
   /-- `parallel {…} | {…}`, optionally `:: "name"`. -/
   | par    : List (List Stmt) → Option String → Stmt
+  /-- `{…} :: "name"` — a named sequential region. Semantically transparent, exactly as a label on
+  a `parallel` block is: it compiles to `ParProg.label` and neither interpreter looks at it. What it
+  is *for* is `autoParIn`, which plans inside the regions a caller names and leaves everything else
+  as written. -- ref: `docs/autopar.md` § Regions -/
+  | region : List Stmt → String → Stmt
   /-- `for i in n {…}` — unrolled at compile time. -/
   | forIn  : String → Exp → List Stmt → Stmt
   /-- `parfor i in n {…}` — one thread per index. -/

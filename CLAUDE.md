@@ -245,7 +245,9 @@ Bench/       the evaluation harness as a lib plus the `paralever-bench` exe — 
              Verdict (the taxonomy and the matrices, called *by* MLIR/Corpus.lean), Run (one kernel
              → a Row, every number from code that already exists), Time (the only IO.monoMsNow in
              the repo), Scale (the rolled-against-unrolled cost curve: two texts per size, written
-             and elaborated), Report — see docs/bench.md
+             and elaborated), Threads (execTask against the same run flattened), Chaos (the
+             crossover sweep) and `chaos.prl` beside it — a thousand sequential lines the harness
+             retunes through its three `const` declarations, Report — see docs/bench.md
 Test/        Sanity, AccessSanity, RaceSearch, Lang, Tool, Tactic, Heaps (the general-heap
              search and the two-part verdict), Print (the surface, the erasure, and that the
              output walk leaves the heap the interpreter does), Smt (what the VC decides in
@@ -260,7 +262,10 @@ docs/        design rationale (program-model.md, semantics.md, access.md, theory
              diagnostics.md, race-search.md, layout.md, autopar.md, equivalence.md,
              mlir.md, scale.md, website.md, ...)
 index.html   the published site's cover; `web/` its pages, `slides/main` and `slides/isp` the
-             two decks, with the files they share in `slides/` beside them
+             two decks, with the files they share in `slides/` beside them — all generated.
+             Every slide source is `slides/src/` (SlidesMain.lean, main/, isp/, the two
+             stylesheets, autofit.js, assets/, dev.sh); nothing hand-written sits at a
+             generated file's path, because `shareWithParent` deletes its destination
 web/         concept, language, autopar, races, mlir, cli, lean + css/site.css,
              js/site.js, snippets/ (the 28 verso-snippets files) and
              build-snippets.sh — hand-written static HTML, no generator; the

@@ -204,6 +204,98 @@ asked. -/
 def canParSeg (a b : ParProg) : Bool :=
   !a.isBarrier && !b.isBarrier && indepB (footprintOf a) (footprintOf b)
 
+/-! ### The same cuts, in one pass
+
+`atomsGo` asks `cutOK (pre ++ [s]) ss` at every statement, and `cutOK` walks the whole prefix for
+`regFootprintsOf` and the whole suffix for `liveIn`. One pass over `n` statements is therefore `n²`
+list traversals, which on a phase of a few thousand statements is where the planner's time goes.
+
+The quantities both depend on are prefix-to-suffix monotone: the prefix's register writes only
+grow, and the suffix's live-in set is one backward pass. `atomsFast` carries the first and
+precomputes the second, cutting in exactly the same places. `AutoPar.rewrite` keeps `atoms`, which
+`AutoPar/Chain.lean` proves `flatten`s back to the chain; this is the greedy route's copy, and
+`Test/Lang.lean` gates the two against each other on every example. -/
+
+/-- `liveIn` of every suffix, longest first: the head is `liveIn ss` and the tail is the same for
+`ss.tail`. One backward pass. -/
+def liveSuffixes : List ParProg → List (List Reg)
+  | []      => [[]]
+  | s :: ss =>
+      let rest := liveSuffixes ss
+      ((regFootprint s).reads ++ (rest.headD []).filter (fun r => !(regKills s).contains r)) :: rest
+
+/-- `atomsGo` with the prefix's register writes carried and the suffixes' live-in sets handed in.
+`w` is `(regFootprintsOf pre).writes` up to repeats, and `lives` is `liveSuffixes` of what remains,
+so `lives.tail.headD []` is the `liveIn post` that `cutOK` asks for. -/
+def atomsFastGo : List Reg → List ParProg → List ParProg → List (List Reg) → List (List ParProg)
+  | _, acc, [],      _     => if acc.isEmpty then [] else [acc.reverse]
+  | w, acc, s :: ss, lives =>
+      let w' := (regFootprint s).writes.foldl (fun a r => if a.contains r then a else r :: a) w
+      let tl := lives.tail
+      if disjointB w' (tl.headD []) then (s :: acc).reverse :: atomsFastGo w' [] ss tl
+      else atomsFastGo w' (s :: acc) ss tl
+
+/-- `atoms`, in one pass. Same cuts, same segments. -/
+def atomsFast (ss : List ParProg) : List (List ParProg) :=
+  atomsFastGo [] [] ss (liveSuffixes ss)
+
+/-! ### The same test, linear
+
+`groupPrefix` asks `canParSeg a s` for every `a` already in the group, so one group of `k` segments
+costs `k²` independence tests, and each test is `disjointB`, which is quadratic in the footprints.
+On a program whose segments touch many cells — a matrix multiply's inner product reads `2d` of them
+— that product is what the planner spends its time on (`docs/autopar.md` § Regions).
+
+Sorting each footprint once and merging turns the inner test linear. The planner's *answer* is
+unchanged: these functions decide the same relation on the same inputs, and `wfB` re-checks
+whatever grouping comes out either way. -/
+
+/-- A sorted list with its repeats removed. -/
+def dedupSorted : List Loc → List Loc
+  | []           => []
+  | [l]          => [l]
+  | l :: l' :: ls => if l == l' then dedupSorted (l' :: ls) else l :: dedupSorted (l' :: ls)
+
+/-- Two sorted lists with no element in common. One merge, where `disjointB` is one product. -/
+def disjointSorted : List Loc → List Loc → Bool
+  | [],      _       => true
+  | _,       []      => true
+  | a :: as, b :: bs =>
+      if a == b then false
+      else if a < b then disjointSorted as (b :: bs)
+      else disjointSorted (a :: as) bs
+
+/-- `Access.indepB` over sorted footprints: Bernstein, with shared reads still allowed. -/
+def indepSorted (f₁ f₂ : Footprint) : Bool :=
+  disjointSorted f₁.writes f₂.writes
+    && disjointSorted f₁.writes f₂.reads
+    && disjointSorted f₂.writes f₁.reads
+
+/-- A statement's footprint, sorted and deduplicated, ready to be tested many times. -/
+def sortedFootprint (p : ParProg) : Footprint :=
+  let f := footprintOf p
+  ⟨dedupSorted (f.reads.mergeSort (· ≤ ·)), dedupSorted (f.writes.mergeSort (· ≤ ·))⟩
+
+/-- `canParSeg` on segments whose footprints have already been taken. -/
+def canParSegFp (a b : ParProg × Footprint) : Bool :=
+  !a.1.isBarrier && !b.1.isBarrier && indepSorted a.2 b.2
+
+/-- `groupPrefix` over segments carrying their footprints. -/
+def groupPrefixFp : List (ParProg × Footprint) → List (ParProg × Footprint) →
+    List (ParProg × Footprint)
+  | acc, []      => acc.reverse
+  | acc, s :: ss =>
+      if acc.all (fun a => canParSegFp a s) then groupPrefixFp (s :: acc) ss else acc.reverse
+
+/-- `groups` over segments carrying their footprints. -/
+def groupsFp : Nat → List (ParProg × Footprint) → List (List (ParProg × Footprint))
+  | 0,        _  => []
+  | _,        [] => []
+  | fuel + 1, ss =>
+      let g := groupPrefixFp [] ss
+      let k := g.length
+      if k = 0 then [ss] else g :: groupsFp fuel (ss.drop k)
+
 /-- The longest prefix of `ss` that is pairwise independent — the next group a greedy scheduler
 would fork. -/
 def groupPrefix : List ParProg → List ParProg → List ParProg
@@ -317,20 +409,128 @@ def noBarrierInThread : ParProg → Bool
   | .ifElse _ t e  => noBarrierInThread t && noBarrierInThread e
   | _              => true
 
-/-- **The proposal, for one phase.** The groups a greedy scheduler would fork: a singleton run stays
-a plain statement rather than a one-thread fork.
+/-- Split `xs` into at most `width` contiguous chunks of near-equal length. Contiguous, so each
+chunk is the statements it holds in their original order and `block` of it is the same program.
+At or below the budget every chunk is a singleton, which is the unbounded plan unchanged. -/
+def chunkInto {α : Type} (width : Nat) (xs : List α) : List (List α) :=
+  let w := max 1 width
+  let n := xs.length
+  if n ≤ w then xs.map ([·])
+  else
+    let per := (n + w - 1) / w
+    (List.range w).filterMap fun i =>
+      let c := (xs.drop (i * per)).take per
+      if c.isEmpty then none else some c
+
+/-- The thread budget `autoPar` plans to when the caller does not say. A **default**, not a limit:
+`autoParWith` takes any width, and the command line's `--width` passes one through.
+
+Unbounded was the wrong default, and the measurement says so: on a sequential `n × n` matmul the
+unbounded plan proposes one thread per output cell — 400 threads at `n = 20` — and that shape runs
+*slower* than a handful of fat ones, because each thread pays spawn and join costs for a few
+instructions of work. The join is the sharper of the two: `Compile/ExecArr`'s is
+O(threads × cells), so a thread per cell makes it quadratic in the heap.
+
+Eight is a placeholder for a machine-aware number, not a tuned one. -- ref: `docs/autopar.md` -/
+def defaultWidth : Nat := 8
+
+/-! ### What a group is worth
+
+A fork costs something whether or not the work inside it is worth forking, so a planner that forks
+every independent group loses on a program made of many small phases. Measured on
+`Bench/Chaos.lean`'s thousand-line program: its sorting networks contribute most of the forks and
+almost none of the work, and at `n = 10` the plan forks 2,256 times for 59,472 instructions — 26
+instructions a fork.
+
+`weight` is what a group is costed by, and `grain` is the least it must carry before it is forked.
+The gate lives in the untrusted analysis, so like the thread budget it cannot make an accepted
+program wrong: `wfB` re-checks whatever comes out. -/
+
+mutual
+
+/-- Memory operations and register assignments in a statement. Static, so a branch counts its larger
+arm and a rolled nest its whole iteration space — a bound rather than a count, which is the safe
+direction here: over-counting can only propose a fork that was not worth it, never refuse one that
+was. -/
+def weight : ParProg → Nat
+  | .load _ _      => 1
+  | .store _ _     => 1
+  | .set _ _       => 1
+  | .loadAt _ _ _  => 1
+  | .storeAt _ _ _ => 1
+  | .seq a b       => weight a + weight b
+  | .par cs        => weightAll cs
+  | .label _ b     => weight b
+  | .ifElse _ t e  => 1 + max (weight t) (weight e)
+  | .loop nst      => (nst.sizes.foldl (· * ·) 1) * nst.body.length
+  | _              => 0
+
+def weightAll : List ParProg → Nat
+  | []      => 0
+  | s :: ss => weight s + weightAll ss
+
+end
+
+/-- The grain `autoPar` plans to when the caller does not say. **Zero — no gate**, which is the
+behaviour this pass has always had, so that nothing already measured or published moves. What the
+right number is, is a measurement and not a guess; `Bench/Chaos.lean` sweeps it. -/
+def defaultGrain : Nat := 0
+
+/-- **The proposal, for one phase.** The groups a greedy scheduler would fork, each group striped
+into at most `width` threads: a singleton run stays a plain statement rather than a one-thread fork,
+and so does a group carrying less than `grain` work.
 
 The unit scheduled is the register-closed segment (`atoms`), not the statement: a load and the store
 that consumes its register are one segment and are never split across a fork. -/
-def planPhase (ss : List ParProg) : List ParProg :=
-  let ats := (atoms ss).map block
-  (groups (ats.length + 1) ats).map fun g => match g with
+def planPhaseAt (width grain : Nat) (ss : List ParProg) : List ParProg :=
+  let ats := ((atomsFast ss).map block).map fun a => (a, sortedFootprint a)
+  (groupsFp (ats.length + 1) ats).map fun g => match g.map Prod.fst with
     | [s] => s
-    | g   => .par g
+    | g   => if weightAll g < grain then block g else .par ((chunkInto width g).map block)
 
-/-- **The proposal.** Each phase planned on its own, the barriers kept. -/
-def autoPar (p : ParProg) : ParProg :=
-  block (joinPhases ((phases (flatten p)).map planPhase))
+/-- `planPhaseAt` with no grain gate. -/
+def planPhase (width : Nat) (ss : List ParProg) : List ParProg := planPhaseAt width defaultGrain ss
+
+/-- **The proposal, at a stated thread budget and grain.** Each phase planned on its own, the
+barriers kept. -/
+def autoParTuned (width grain : Nat) (p : ParProg) : ParProg :=
+  block (joinPhases ((phases (flatten p)).map (planPhaseAt width grain)))
+
+/-- **The proposal, at a stated thread budget.** Each phase planned on its own, the barriers kept. -/
+def autoParWith (width : Nat) (p : ParProg) : ParProg := autoParTuned width defaultGrain p
+
+/-- **Plan inside the named regions only**, leaving everything outside one exactly as written.
+
+A long program is mostly not worth parallelizing: its branches, its serial folds and its bookkeeping
+carry no threads, and a planner that looks at them anyway pays for every group it forks and for the
+search that found it. A region says where to look. It is a `label`, which both interpreters ignore,
+so marking one changes no meaning and cannot change an answer — it changes only which part of the
+program the *analysis* reads.
+
+What the gate still is: `wfB` on the result. A region is a hint about where threads might be, never
+a promise that they are there, and a region whose statements are not independent is refused exactly
+as the same statements would be outside one. -- ref: `docs/autopar.md` § Regions -/
+def autoParIn (width grain : Nat) (keep : String → Bool) : ParProg → ParProg
+  | .label nm s =>
+      .label nm (if keep nm then autoParTuned width grain s else autoParIn width grain keep s)
+  | .seq a b    => .seq (autoParIn width grain keep a) (autoParIn width grain keep b)
+  | p           => p
+
+/-- `autoParIn` at the default budget, over every region the program names. -/
+def autoParRegions (p : ParProg) : ParProg := autoParIn defaultWidth defaultGrain (fun _ => true) p
+
+/-- The names of the regions a program marks, outermost first. -/
+def regionNames : ParProg → List String
+  | .label nm s => nm :: regionNames s
+  | .seq a b    => regionNames a ++ regionNames b
+  | _           => []
+
+/-- **The proposal.** `autoParWith` at `defaultWidth`.
+
+Untrusted either way: `wfB` re-checks whatever comes out, and `par_block_heap` is a lemma about any
+`.par g` against `block g`, not about the grouping chosen here. So the budget is a tuning knob and
+cannot make an accepted program wrong. -/
+def autoPar (p : ParProg) : ParProg := autoParWith defaultWidth p
 
 /-! ### The analysis, evaluated
 

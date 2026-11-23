@@ -97,7 +97,7 @@ partial def stmtLines (L : Layout) (d : Nat) : ParProg → List String
   | .label nm s    =>
       match s with
       | .par ss => parLines L d ss (some nm)
-      | _       => (ind d ++ "-- " ++ nm) :: stmtLines L d s
+      | _       => (ind d ++ "{") :: stmtLines L (d + 1) s ++ [ind d ++ "} :: \"" ++ nm ++ "\""]
   | .loadAt r a e  =>
       [ind d ++ "%" ++ toString r ++ " := "
         ++ (refName L a).getD ("[" ++ toString a.base ++ "]") ++ "[" ++ expStr e ++ "]"]

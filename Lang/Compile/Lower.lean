@@ -613,6 +613,11 @@ run — and threads of one fork have no order between them"])
         noConsume E E' "a 'parallel' thread"
         pure (ParProg.block ss)
       pure ([nm.elim id ParProg.label (.par bodies)], E)
+  -- a region is a label over a sequential block: the statements inside it run exactly as they would
+  -- without it, and the cursor and environment carry through, as they do for a `for` body
+  | .region body nm => do
+      let (ss, E') ← compileStmts E site body
+      pure ([ParProg.label nm (ParProg.block ss)], E')
   -- the iterations run in order, so the cursor carries across them; `consts` is restored each
   -- round so the loop variable does not accumulate
   | .forIn i n body => do

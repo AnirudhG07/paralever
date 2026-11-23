@@ -84,6 +84,7 @@ def Stmt.usesInput : Stmt → Bool
   | .store a e       => a.usesInput || e.usesInput
   | .set _ e         => e.usesInput
   | .par ts _        => threadsUseInput ts
+  | .region b _      => stmtsUseInput b
   | .forIn _ n b     => n.usesInput || stmtsUseInput b
   | .parfor _ n b _  => n.usesInput || stmtsUseInput b
   | .ifElse c t e    => c.usesInput || stmtsUseInput t || stmtsUseInput e

@@ -209,25 +209,25 @@ subscript `Layout.at "C" [1, 2]` takes. -- ref: `docs/cli.md` § What `run` prin
 
 def stripe : Compiled := prl_file "../Examples/Language/stripe.prl"
 
-#guard runBody {} matmul (raceHint := false) == runReport matmul false
-#guard runBody {} stripe (raceHint := true) == runReport stripe false
+#guard runBody {} matmul == runReport matmul false
+#guard runBody {} stripe == runReport stripe false
 -- `--quiet` is what `print` wrote and nothing else, whichever command asked
-#guard runBody { verbose := false } stripe (raceHint := false) == quietReport stripe
+#guard runBody { verbose := false } stripe == quietReport stripe
 #guard quietReport stripe == "k = [0, 1]\n"
 -- …and a program with no `print` then says nothing at all, not a blank line
 #guard quietReport matmul == ""
--- the race caveat differs in one clause, because a bare file prints the interleaving itself
-#guard runBody {} race (raceHint := false) != runBody {} race (raceHint := true)
-#guard (runBody {} race (raceHint := true)).endsWith (runReport race false)
+-- a run executes and says nothing about the verdict, so a racy program's body is a plain run
+#guard runBody {} race == runReport race false
 
 /-! ## The version
 
 `Paralever/Version.lean` reads `lakefile.toml`, so these gates fail if the declaration is removed
 or renamed rather than silently falling back to the default. -/
 
-#guard Paralever.version == "1.34.0"
+-- the minor is Lean's, by the rule in `CLAUDE.md`, so this gate does not need touching on a bump
+#guard Paralever.version == "1." ++ toString Lean.version.minor ++ ".0"
 #guard Paralever.packageName == "paralever"
-#guard Paralever.versionParts == (1, 34, 0)
+#guard Paralever.versionParts == (1, Lean.version.minor, 0)
 -- the shape, not the toolchain: a patch bump of Lean must not fail a gate here, which is what
 -- `Version.lean`'s `#guard` on the minor is for
 #guard Paralever.versionLine == "paralever " ++ Paralever.version ++ " (" ++ Lean.toolchain ++ ")"

@@ -2,9 +2,9 @@
 # ---------------------------------------------------------------------------
 # Live-edit the paralever slides.
 #
-#   bash docs/slides/dev.sh
+#   bash slides/src/dev.sh
 #
-# Watches docs/slides/*.lean and *.css; on every save it re-runs `lake exe slides`,
+# Watches slides/src/*.lean and *.css; on every save it re-runs `lake exe slides`,
 # and a browser-sync server auto-reloads the page in your browser.
 #
 # Notes
@@ -13,18 +13,20 @@
 #   * Content edits (main/Slides.lean, isp/IspSlides.lean) recompile that deck's
 #     module (a few seconds) — inherent to a compiled-Lean deck, not something a
 #     watcher removes.
-#   * The server's root is `slides/`, so `/` is the hand-written deck list and
-#     each deck is one folder below it.
+#   * The sources are `slides/src/`; the generated decks are `slides/` beside it,
+#     which is the server's root, so `/` is the hand-written deck list and each
+#     deck is one folder below it. The watcher never sees the output, so a
+#     rebuild cannot retrigger itself.
 #   * A failed build leaves the last good page up; fix the error and save again.
 #   * Ctrl-C stops both the watcher and the server.
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-# repo root = two levels up from this script (docs/slides/dev.sh)
+# repo root = two levels up from this script (slides/src/dev.sh)
 cd "$(dirname "$(readlink -f "$0")")/../.."
 
 OUT="slides"
-SRC="docs/slides"
+SRC="slides/src"
 PORT="${PORT:-3000}"
 
 command -v inotifywait >/dev/null || { echo "need inotifywait (apt install inotify-tools)"; exit 1; }

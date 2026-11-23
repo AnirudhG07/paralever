@@ -127,7 +127,7 @@ example : Lang.ParProg.wfB prettyDoall = true := by decide
 one `arith` op, and nothing else a module needs. It is the end-to-end example the ISP deck shows
 whole — ten lines of MLIR in, thirteen lines of `.prl` out, with no part of either elided — so the
 two texts below are gated against the readers rather than transcribed.
--- ref: `docs/slides/isp/IspSlides.lean` -/
+-- ref: `slides/src/isp/IspSlides.lean` -/
 
 def square : Lang.Compiled :=
   ⟨mlir_layout "square-no.mlir", mlir_prog "square-no.mlir", [], [], none⟩

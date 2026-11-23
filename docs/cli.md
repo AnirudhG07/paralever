@@ -229,11 +229,13 @@ drift: whatever `run` says about a program, a bare invocation says too, and the 
 of the difference. `Test/Tool.lean` gates the equality. Memory, footprint, thread count and rounds
 belong to `check`, which is the command for them.
 
-One clause of the race caveat differs, because a racy program's heap is one schedule's answer and the
-caveat has to say so: `run` adds *"paralever race prints an interleaving that disagrees"* and the bare
-form does not, since it prints that interleaving itself a few lines later. Above the verdict a bare
-invocation also prints the reader's approximations, when the front end made any — those bear on why
-the verdict is what it is, so they travel with it rather than with the heap.
+`run` executes and says nothing else. It consults neither `wfB` nor the race scan, so a racy program
+runs like any other and prints whatever the schedule left, which may be a wrong answer; deciding that
+is `check`'s job and exhibiting it is `race`'s. The bare form, which has already decided the verdict,
+adds one line above the heap saying that what follows is one schedule's answer, and prints the
+interleaving below it. Above the verdict a bare invocation also prints the reader's approximations,
+when the front end made any — those bear on why the verdict is what it is, so they travel with it
+rather than with the heap.
 
 ## Verbosity
 

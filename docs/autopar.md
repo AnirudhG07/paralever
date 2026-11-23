@@ -219,6 +219,89 @@ to `ParProg.autoPar` for it. Two reasons, both recorded rather than fixed:
 So the split is the usual one: the greedy route accepts the barrier and `wfB` checks the result per
 program; the proved route refuses it and keeps `rewrite_sound` hypothesis-free.
 
+## Regions
+
+A `synchronize` tells the pass where it may *not* fork. A region tells it where to look. A braced
+block with a name after it
+
+```text
+{
+  for i in n {
+    for j in n {
+      %acc := 0
+      for k in d { … }
+      C[i, j] := %acc
+    }
+  }
+} :: "matmul AxB"
+```
+
+compiles to `ParProg.label "matmul AxB" (.block …)`. The name is inert: `execPar` and `execSeq`
+run the body and nothing else, `footprintOf (.label nm s) = footprintOf s`, and
+`wfB (.label nm s) = wfB s`. A region therefore cannot change what a program means, only where
+`autoParIn` is allowed to rewrite it:
+
+```lean
+def autoParIn (width grain : Nat) (keep : String → Bool) : ParProg → ParProg
+  | .label nm s => .label nm (if keep nm then autoParTuned width grain s
+                              else autoParIn width grain keep s)
+  | .seq a b    => .seq (autoParIn width grain keep a) (autoParIn width grain keep b)
+  | p           => p
+```
+
+The recursion descends through `seq` and `label` and stops at every other constructor, so a
+statement that is not inside a region comes back exactly as it was written. `autoParRegions` is
+this with `keep = fun _ => true` — every region, nothing outside one — and it is what
+`paralever autopar --regions FILE` prints, with the region names listed under the program.
+
+### Why a file would name them
+
+Planning is not free, and its cost does not fall on the part of the program that repays it. A
+program that is mostly straight-line glue with a few heavy loops in it — which is what real code
+looks like — pays over the glue as well, and the glue has nothing to find: a sequence of unrelated
+stores is one unit per store, and no two of them group. Marking the loops hands the planner only
+the part where a fork can pay for itself.
+
+Measuring that is what turned up the planner's own cost, which was in neither place a reading of
+the code would suggest. On `Bench/chaos.prl` at `n = 8`, `d = 32` — 12,422 units in 282
+phases — the whole pass took 501 ms with the markers in place and **99 seconds** with
+`autoParIn` looking inside them. The difference is that a region is one phase of several thousand
+statements where the glue is hundreds of phases of fifty, and the pass was quadratic in a phase:
+
+| stage | what it was | why |
+|---|---|---|
+| `flatten`, `phases` | 5 ms | linear |
+| `atoms` | 441 ms | `cutOK (pre ++ [s]) ss` walks the prefix and the suffix at every statement |
+| `groups` | 60 ms | `groupPrefix` tests each candidate against the whole group, and `disjointB` is a product |
+
+Both quadratics are now one pass. `atomsFast` carries the prefix's register writes forward and
+takes `liveIn` of every suffix in one backward sweep, cutting in exactly the same places;
+`sortedFootprint` and `disjointSorted` sort each segment's footprint once and merge thereafter,
+deciding the same relation. Neither is proved: the greedy route's grouping is approximate by
+design and `wfB` re-checks whatever comes out, so `AutoPar.rewrite` keeps `atoms` — the copy
+`AutoPar/Chain.lean` proves flattens back to its chain — and `Test/Lang.lean` gates the two against
+each other on every example in the corpus.
+
+| `autoParIn` on `chaos.prl`, `n = 8`, `d = 32` | before | after |
+|---|---|---|
+| `atoms` over the whole file | 441 ms | 443 ms |
+| `planPhaseAt` over every phase | 492 ms | 100 ms |
+| `autoParTuned`, markers in place | 501 ms | 109 ms |
+| `autoParIn`, inside the regions | 99,141 ms | 153 ms |
+
+What that buys, measured: on `chaos.prl` at `n = 8`, `d = 1024`, forking inside every marked
+region gives 1.71× against the file as written, and forking everywhere — the same program with the
+markers ignored — gives 1.23× from seven times as many threads. Taking the regions one kind at a
+time says why: the six `matmul` regions give the whole 1.71× with forty-eight threads, while the
+twelve `stencil` and seventeen `branch` regions are each a net loss at 0.89× and 0.88×, because a
+thread there is four reads and a store and finishes before its spawn has paid for itself. The
+tables are in `docs/bench.md` § *The crossover*.
+
+The grain gate (`autoParTuned width grain`) answers the same question by weight rather than by
+name, and the two are complements: `grain` decides whether a group that *was* planned is worth
+forking, and a region decides whether to plan at all. Neither is on by default — `defaultGrain` is
+`0` — so nothing published here moves unless it is asked to.
+
 ## The two routes
 
 Both survive, because neither dominates. `autoPar` here proposes and `wfB` is `decide`d on the

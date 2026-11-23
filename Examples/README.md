@@ -50,7 +50,7 @@ pure function  ──①──►  seq  ──②──►  par
 
 ## `Language/` — the surface language
 
-Twelve `.prl` files, and the Lean that reads them.
+Thirteen `.prl` files, and the Lean that reads them.
 
 | file | |
 |---|---|
@@ -114,6 +114,21 @@ its heap. The tenth, `input.prl`, reads the shell, so Lean cannot read it with `
 
 ```bash
 echo "hello, world" | paralever run Examples/Language/input.prl
+```
+
+`Bench/chaos.prl` lives outside this tree, beside the harness that reads it. It is a thousand
+lines that do many unrelated things in sequence — index arithmetic, a branch per cell, a
+four-point stencil, an odd-even sorting network, serial folds that carry a dependence, and a
+few matrix multiplies in the middle. Nothing in it is parallel; finding the threads is
+`autoPar`'s job. Its three `const` lines are its parameters, and `Bench/Chaos.lean`
+rewrites only those, so the program's shape is fixed across a sweep and only the work per line
+changes. The heavy stages are wrapped in `{ … } :: "name"` regions, which mark where
+`paralever autopar --regions` may rewrite and leave the glue between them alone
+(`docs/autopar.md` § *Regions*). No Lean module reads it — it is measured, not elaborated.
+
+```bash
+paralever check Bench/chaos.prl              # wfB = true, one thread, as written
+paralever autopar --regions Bench/chaos.prl  # the regions forked, the glue untouched
 ```
 
 ## `Mlir/` — the other front end

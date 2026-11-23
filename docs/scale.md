@@ -172,10 +172,32 @@ recursing over its first argument's whole structure, so the outer `bind` of chil
 | 128 | 3.21 s |
 
 The same loop writing to memory instead of accumulating in a register is flat (0.02 s at every
-length from 32 to 256), which is what identifies the register file rather than the loop as the cost.
-`reduce64`'s 17 s is these two multiplied together. The heap has the same shape —
-`State = Loc → Val` with `update` a closure — but it does not show here, because a `.prl` program
-reads a cell back far less often than it reads a register.
+length from 32 to 256). `reduce64`'s 17 s is these two multiplied together.
+
+**But the register file is not the cost, and the shape above is what to read off this table.**
+Measured directly, with the loop body isolated from `run`'s parsing and lowering
+(`paralever-bench reg-vs-mem`), a register is *cheaper* than a cell and both are linear:
+
+| n = 160,000 | register | memory |
+|---|---|---|
+| read-modify-write one location | 4 ms | 17 ms |
+| write only, never read back | 3 ms | 8 ms |
+
+What is quadratic in both is a **buried read**: reading a location that later writes to *other*
+locations sit on top of. `ρ.set` and `σ.update` both prepend a closure frame, so a match walks the
+frames until it hits the one it wants. Writing a location and reading it straight back hits the
+first frame and is O(1); reading one that *n* unrelated writes have buried is O(*n*):
+
+| n | `A[0]` read n times, after n writes | the same reads, nothing written |
+|---|---|---|
+| 4,000 | 62 ms | 0 ms |
+| 8,000 | 246 ms | 0 ms |
+| 16,000 | 881 ms | 1 ms |
+| 32,000 | 3,718 ms | 1 ms |
+
+Exactly four times the cost for twice the length. That is matrix multiply's shape: `A` and `B` are
+never written, so every thread reads them from below all of its own stores to `C`. The register
+accumulator in the table above is not what costs; the loop reading past its own writes is.
 
 **The race search, on refused programs only.** `paralever race` is roughly cubic in the thread count
 when the conflict is not immediate:
@@ -192,11 +214,30 @@ at any width, because `findWrongGuided` is aimed by the conflict locations phase
 above is the price of *not* finding one, which is why the scan now runs only where `wfB` refused
 (see above) and never on the accepted path.
 
-**`--threads` is slower, not faster.** `run --threads reduce64` takes 23.93 s against 16.98 s for
-the single-threaded run. Every `par` node spawns one `Task` per child and joins with
-`joinAllStates`, which is a closure per child, so a read after an *n*-way join costs O(*n*) on top of
-the work saved. The two agree on the answer by `runTask_eq_runTaskSeq`, which is what makes the
-comparison a measurement of speed and nothing else — and at this grain the fork loses.
+**`--threads` was slower, and the reason was not the join.** `run --threads reduce64` took 23.93 s
+against 16.98 s single-threaded, and this file used to attribute that to `joinAllStates` costing
+O(*n*) per read after an *n*-way join. Measurement says otherwise: the fork was getting **no cores
+at all**. `execChilds` spawned and waited in one pass over `Childs`, which put the `Task.spawn` and
+its matching `Task.get` in a single branch of a match on an indexed family; the spawn was then not
+issued until its own `get` was about to block, so the children ran one after another on the calling
+thread. The evidence, taken on `Compile/ExecArr.lean`'s twin so the two shapes could be timed
+against each other with nothing else changed:
+
+| | one pass | two passes |
+|---|---|---|
+| 16 bands of a 160×160 matmul, forked | 988 ms | 401 ms |
+| wall time from 1 to 32 children | flat (988 → 1 child, 1,010 → 32) | 988 → 401 → 452 |
+| process CPU | 99% | ~290% |
+
+The fix is in `Compile/Exec.lean`: `spawnChilds` returns a `TaskChilds` spine and `collectChilds`
+walks it, so each spawn is a value the recursion *returns* and cannot be deferred past the join.
+Nothing about the semantics changed — every proof in that file went through unaltered, and
+`execTask_par` still holds by `rfl`. Banded matmul through `execTask` at n = 96 went from 2,936 ms
+to 1,069 ms.
+
+The two runs agree on the answer by `runTask_eq_runTaskSeq`, which is what makes the comparison a
+measurement of speed and nothing else. Past the fix the fork wins, but only to about 2.4× on 16
+cores; what now limits it is named under *What would fix the rest*.
 
 ## What would fix the rest
 
@@ -211,11 +252,36 @@ cheaper of the two, but not free: a dozen theorems induct on the current shape �
 `Lib/Cost.lean`, `runSeq_seqAll` in `Theory/Sequentialize.lean` — so the accumulating version has to
 be proved equal to this one and those proofs rewritten through it.
 
-**An `Array`-backed heap and register file.** `State = Loc → Val` and `Regs = Reg → Int` are
+**An `Array`-backed heap — built, as a twin.** `State = Loc → Val` and `Regs = Reg → Int` are
 *functions*, which is how two heaps are proved equal at all (`funext`, at four sites in
 `Theory/WellFormedCanonical.lean` and `Compile/Exec.lean`) and how a fork's children share `σ`
-without copying it. Replacing them with arrays would make a read O(1) and a join a
-merge, and it would also change `State.update`, `joinStates`, `runTask_eq_runTaskSeq` and every
-`simp` lemma stated with `update_same`/`update_other` — so it is a stage of its own, not a patch, and
-nothing here needs it yet: the sizes the command line is asked for in practice are the ones in the
-table at the top, where the slowest figure is 17 s.
+without copying it. *Replacing* them would change `State.update`, `joinStates`,
+`runTask_eq_runTaskSeq` and every `simp` lemma stated with `update_same`/`update_other`, so nothing
+was replaced. `Compile/ExecArr.lean` instead runs the same `ParM` on an `Array Val` beside the
+existing executor, and `Core/` and `Theory/` import nothing from `Compile/`, so the theory cannot
+be touched by it — checked, not asserted: the diff against both directories is empty.
+
+It removes the buried-read quadratic outright. Throughput is flat where the function heap's falls
+away, and 12.3 M instructions run in 395 ms:
+
+| n | instructions | array, forked | instructions/ms |
+|---|---|---|---|
+| 64 | 794,624 | 38 ms | 20,911 |
+| 96 | 2,672,640 | 91 ms | 29,369 |
+| 128 | 6,324,224 | 210 ms | 30,115 |
+| 160 | 12,339,200 | 395 ms | 31,238 |
+| 192 | 21,307,392 | 700 ms | 30,439 |
+
+What is **not** proved is `execArr_eq_execTask`, which is what would make the twin usable for
+anything but a benchmark. `AState.toState_joinArr` — that the array join is `joinAllStates`, with
+no independence hypothesis — is proved; the executor-level statement is not, and no `sorry` stands
+in for it. See `PLAN.md`.
+
+**The remaining ceiling on the fork: about 2.4×.** At 16 bands of a 192×192 matmul the fork
+saturates at width 8 (671 ms) and gets no better at 16 (690 ms) or 32 (744 ms), which is why
+`defaultWidth` is 8. Two candidates, neither measured apart yet: the join is serial and costs one
+`Val` comparison per cell per child on the calling thread, and every cell read allocates an
+`Option Val` and refcounts a `Val` object shared across all the threads, so the reads contend on
+cache lines the writes never touch.
+
+**`seqAll` with an accumulator** remains untaken, for the reason given above it.

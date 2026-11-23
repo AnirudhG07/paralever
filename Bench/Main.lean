@@ -1,5 +1,7 @@
 import Bench.Report
 import Bench.Scale
+import Bench.Threads
+import Bench.Chaos
 
 /-! # `paralever-bench` — the harness as a binary
 
@@ -35,6 +37,18 @@ structure Opts where
   prove    : Bool := false
   /-- where the cost curve stops; both are printed with the table -/
   limits   : Scale.Limits := {}
+  /-- run the `runTask`-against-`runTaskSeq` curve instead of the corpus -/
+  exec     : Bool := false
+  /-- threads for `--exec`; the fork is one band of rows per thread -/
+  execThreads : Nat := 16
+  /-- sizes `--exec` walks, as matrix dimensions -/
+  execSizes : List Nat := [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+  /-- `--exec` stops once a row costs more than this -/
+  execCeiling : Nat := 60000
+  /-- runs per point; the median is kept -/
+  reps     : Nat := 3
+  /-- with `--exec`, also plan the program with `autoPar` and time what it proposes -/
+  execPlan : Bool := true
   files    : List String := []
   deriving Repr, Inhabited
 
@@ -50,6 +64,12 @@ def usage : String :=
     ++ "  --ceiling-ms N  stop a curve after a row taking N ms (default 8000)\n"
     ++ "  --max-unrolled N  never start an unrolled program over N points (default 65536)\n"
     ++ "  FILE...         measure these files instead of the built-in corpus\n"
+    ++ "\n  --exec          time execTask with its forks against the same run flattened\n"
+    ++ "  --exec-threads N  threads for --exec (default 16)\n"
+    ++ "  --exec-sizes a,b,c  matrix sizes to walk\n"
+    ++ "  --exec-ceiling-ms N  stop the curve after a row this slow (default 60000)\n"
+    ++ "  --reps N        runs per point, median kept (default 3)\n"
+    ++ "  --exec-no-plan  skip the autoPar column, which is cubic in the atom count\n"
 
 partial def parse (args : List String) (o : Opts) : Except String Opts :=
   match args with
@@ -72,6 +92,24 @@ partial def parse (args : List String) (o : Opts) : Except String Opts :=
       | some k => parse rest { o with limits := { o.limits with points := k } }
       | none   => .error s!"--max-unrolled wants a number, got '{n}'"
   | "--prove" :: rest     => parse rest { o with scale := true, prove := true }
+  | "--exec" :: rest      => parse rest { o with exec := true }
+  | "--exec-no-plan" :: rest => parse rest { o with exec := true, execPlan := false }
+  | "--exec-threads" :: n :: rest =>
+      match n.toNat? with
+      | some k => parse rest { o with exec := true, execThreads := max 1 k }
+      | none   => .error s!"--exec-threads wants a number, got '{n}'"
+  | "--exec-ceiling-ms" :: n :: rest =>
+      match n.toNat? with
+      | some k => parse rest { o with exec := true, execCeiling := k }
+      | none   => .error s!"--exec-ceiling-ms wants a number, got '{n}'"
+  | "--reps" :: n :: rest =>
+      match n.toNat? with
+      | some k => parse rest { o with reps := max 1 k }
+      | none   => .error s!"--reps wants a number, got '{n}'"
+  | "--exec-sizes" :: ns :: rest =>
+      let parsed := (ns.splitOn ",").filterMap (fun t => t.trimAscii.toNat?)
+      if parsed.isEmpty then .error s!"--exec-sizes wants numbers, got '{ns}'"
+      else parse rest { o with exec := true, execSizes := parsed }
   | "--help" :: _         => .error usage
   | a :: rest             =>
       if a.startsWith "--" then .error s!"unknown option '{a}'\n\n{usage}"
@@ -93,6 +131,43 @@ def main (args : List String) : IO UInt32 := do
   match parse args {} with
   | .error e => do IO.eprintln e; pure 2
   | .ok o    => do
+      if o.files == ["spawn-probe"] then
+        Threads.spawnProbe 16 20000000
+        return 0
+      if o.files == ["reg-vs-mem"] then
+        Threads.regVsMem (if o.execSizes == [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128] then [20000, 40000, 80000, 160000] else o.execSizes) o.reps
+        return 0
+      if o.files == ["chaos"] then
+        Chaos.sweep (if o.execSizes == [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+                     then [4, 6, 8, 12, 16, 24, 32, 48] else o.execSizes) o.reps o.execCeiling 8
+        return 0
+      if o.files == ["chaos-regions"] then do
+        let n := o.execThreads
+        Chaos.byRegion n (4 * n) (o.execSizes.headD 64) o.reps o.execCeiling
+        return 0
+      if o.files == ["chaos-depth"] then
+        Chaos.sweepDepth o.execThreads
+          (if o.execSizes == [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+           then [8, 16, 32, 64, 128, 256, 512] else o.execSizes) o.reps o.execCeiling
+        return 0
+      if o.files == ["disjoint-probe"] then
+        Threads.disjointProbe o.execThreads (o.execCeiling)
+        return 0
+      if o.files == ["fork-probe"] then
+        Threads.forkProbe o.execSizes o.execThreads o.reps
+        return 0
+      if o.files == ["array-only"] then
+        Threads.arrayOnly o.execSizes o.execThreads o.reps
+        return 0
+      if o.exec then
+        IO.println s!"execTask on C := A x B. band = {o.execThreads} threads, one band of rows each."
+        IO.println s!"auto = whatever autoPar proposes for the sequential program. median of {o.reps} runs."
+        IO.println ("\n" ++ Threads.header)
+        let rows ← Threads.curve o.execSizes o.execThreads o.reps o.execCeiling o.execPlan
+        if rows.any (fun r => !r.agree) then
+          IO.eprintln "a forked run disagreed with the flattened one: that contradicts runTask_eq_runTaskSeq"
+          return 1
+        return 0
       let builtIn := match o.only with
         | some "prl"  => Manifest.prlCorpus
         | some "mlir" => Manifest.mlirCorpus

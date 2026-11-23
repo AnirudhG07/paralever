@@ -7,6 +7,7 @@ The same `Report` as `Search/Explain.lean`, rendered through ProofWidgets. `repo
 this file contributes a renderer and nothing else. -- ref: `docs/race-search.md` -/
 
 namespace Paralever
+open ProofWidgets (Html)
 open ProofWidgets
 open scoped ProofWidgets.Jsx
 

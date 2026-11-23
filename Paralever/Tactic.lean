@@ -49,7 +49,7 @@ def cellsOf {α : Type} (p : ParM α) (σ : State) : List Loc :=
 rendered as text, which is what a terminal and a batch build see; `raced` is the exact check's
 verdict, and it is the one thing that distinguishes "no proof found" from "no proof exists". -/
 structure Findings where
-  html  : Html
+  html  : ProofWidgets.Html
   text  : String
   line  : String
   raced : Bool
@@ -79,11 +79,11 @@ both of which are data in the goal. -/
 
 namespace Tactic
 
-private unsafe def evalHtmlUnsafe (e : Expr) : MetaM Html :=
-  evalExpr Html (mkConst ``Html) e
+private unsafe def evalHtmlUnsafe (e : Expr) : MetaM ProofWidgets.Html :=
+  evalExpr ProofWidgets.Html (mkConst ``ProofWidgets.Html) e
 
 @[implemented_by evalHtmlUnsafe]
-private opaque evalHtmlExpr (e : Expr) : MetaM Html
+private opaque evalHtmlExpr (e : Expr) : MetaM ProofWidgets.Html
 
 private unsafe def evalFindingsUnsafe (e : Expr) : MetaM Findings :=
   evalExpr Findings (mkConst ``Findings) e
@@ -127,7 +127,7 @@ def goalFindings : TacticM Findings := do
   evalFindingsExpr (← mkAppM ``goalFindingsOf #[notesE, p, q, σ])
 
 /-- The widget, in the infoview panel, where `#html` puts it. -/
-def showHtml (h : Html) : TacticM Unit := do
+def showHtml (h : ProofWidgets.Html) : TacticM Unit := do
   Widget.savePanelWidgetInfo (hash HtmlDisplayPanel.javascript)
     (return json% { html: $(← rpcEncode h) }) (← getRef)
 

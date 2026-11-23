@@ -4,10 +4,16 @@
 <https://anirudhg07.github.io/paralever/>. There is no generator and no build step for the prose:
 the pages are hand-written HTML. Two things *are* built — the decks, by `lake exe slides`, and the
 Lean snippets, by `web/build-snippets.sh`. `lake exe slides` writes **both** decks:
-`docs/slides/main/Slides.lean` to `slides/main/` and `docs/slides/isp/IspSlides.lean` to
+`slides/src/main/Slides.lean` to `slides/main/` and `slides/src/isp/IspSlides.lean` to
 `slides/isp/`. `slides/index.html` lists them and is hand-written like the rest of the prose.
 
-A further deck is one folder under `docs/slides/`, one `lean_lib` in `lakefile.toml` naming that
+Sources and output share the `slides/` tree but never a path: everything written by hand lives in
+`slides/src/`, everything `lake exe slides` writes lives in `slides/` beside it. The separation is
+load-bearing rather than tidy — `shareWithParent` hoists each deck's shared files by *deleting* the
+destination first (`removeDirAll` on `assets/`, `removeFile` on the stylesheets), so a source file
+sitting at a generated file's path would be destroyed on the next build.
+
+A further deck is one folder under `slides/src/`, one `lean_lib` in `lakefile.toml` naming that
 folder as its `srcDir`, and two lines in `SlidesMain.lean` — the `slidesMain` call and the
 `shareWithParent` that follows it.
 
@@ -23,6 +29,8 @@ slides/{lib,assets}/    reveal.js and the deck scripts, shared by every deck
 slides/*.css            lean.css and paralever.css, shared the same way
 slides/main/            the project deck: index.html and its snippet data, nothing else
 slides/isp/             the ISP deck, the same two files
+slides/src/             every slide source: SlidesMain.lean, main/ and isp/, the two
+                        stylesheets, autofit.js, stagger.js, assets/ and dev.sh
 .nojekyll               required: GitHub Pages' Jekyll step skips `_`-prefixed paths
 ```
 
@@ -278,7 +286,7 @@ it without a scrollbar. The deck fitted on one machine and not another for no re
 source. `lean.css` § *base* now gives the conversion (`1vh` = 7.2px, `1vw` = 12.8px) and the files
 hold no viewport units.
 
-`docs/slides/autofit.js` does the two things that should still respond to the window:
+`slides/src/autofit.js` does the two things that should still respond to the window:
 
 - **The box follows the window's shape.** On a window that is not 16∶9 it enlarges the box's short
   side — 1280 × 800 for a 16∶10 window — rather than leaving reveal to letterbox it. The box only

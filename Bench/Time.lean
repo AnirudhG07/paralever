@@ -29,10 +29,13 @@ def timed {α : Type} (act : IO α) : IO (α × Ms) := do
   let t1 ← IO.monoMsNow
   pure (v, t1 - t0)
 
-/-- Time a pure computation. `act` is forced by `pure ∘ f`, which is enough because every stage this
-harness times ends in a `Bool`, a `Nat` or a `String` -- there is no lazy structure left to force.
-A stage whose result is a large unevaluated tree would need `timedForced` instead. -/
-def timedPure {α : Type} (f : Unit → α) : IO (α × Ms) := timed (pure (f ()))
+/-- Time a pure computation. The force has to happen **inside** the action: Lean is strict, so
+`timed (pure (f ()))` evaluates `f ()` while building the argument to `timed` and then measures an
+empty action, which reads as 0 ms however long `f` takes. `IO.lazyPure` defers the application into
+the action, where the clock is already running. That forces to weak head normal form, which is the
+whole value for the `Bool`, `Nat` and `String` results this harness times; a stage returning a tree
+needs `timedForced` instead. -/
+def timedPure {α : Type} (f : Unit → α) : IO (α × Ms) := timed (IO.lazyPure f)
 
 /-- Time a pure computation, forcing it through `toString` first, for a stage whose result is a
 structure rather than a scalar. The rendered size is **returned** rather than discarded: a guard

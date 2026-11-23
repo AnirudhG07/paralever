@@ -659,6 +659,230 @@ theorem wfB_gridK (rows cols K : Nat) (locs : Nat → Nat → Nat → Loc) (step
     obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hly
     exact hout x.1 x.2 y.1 y.2 hx.1 hx.2 hy.1 hy.2 k (List.mem_range.mp hk) hlx.symm
 
+/-! ### One level of tiling, at any size
+
+`gridK` forks once per output cell, which is the finest grain the shape allows and the wrong one
+once the cells outnumber the cores: 160 × 160 is 25,600 threads for 16 cores, and the fork's own
+cost is paid 25,600 times. `tiledGridK` computes exactly the same cells and stores exactly the same
+values, regrouped so that one thread owns a `t × t` block of them.
+
+The independence argument does not change and is not re-derived: a thread's writes are its block's
+cells, two blocks share no cell, and the reads are unconstrained as before. What has to be proved
+is only that the blocks partition — which is `i / t` naming the tile that owns row `i`.
+
+Why one level and not two: a second level (holding a strip of `A` in registers across the inner
+loop) changes which *registers* a thread uses, not which cells it touches, so it buys nothing a
+footprint can see and the theorem below would be unchanged. It belongs to a cost model, not here.
+-- ref: docs/autopar.md -/
+
+/-- Tiles along one axis, `t = 0` read as `t = 1`. -/
+def tilesOf (n t : Nat) : Nat := (n + max 1 t - 1) / max 1 t
+
+/-- The cells of tile `(I, J)`, clipped at the two far edges. -/
+def tileCells (rows cols t I J : Nat) : List (Nat × Nat) :=
+  (((List.range (max 1 t)).map (I * max 1 t + ·)).filter (· < rows)).flatMap fun i =>
+    (((List.range (max 1 t)).map (J * max 1 t + ·)).filter (· < cols)).map fun j => (i, j)
+
+/-- A cell of tile `(I, J)` is in range, and its own index names its tile. -/
+theorem mem_tileCells {rows cols t I J : Nat} {ij : Nat × Nat}
+    (h : ij ∈ tileCells rows cols t I J) :
+    ij.1 < rows ∧ ij.2 < cols ∧ ij.1 / max 1 t = I ∧ ij.2 / max 1 t = J := by
+  obtain ⟨i, hi, hrest⟩ := List.mem_flatMap.mp h
+  obtain ⟨j, hj, hij⟩ := List.mem_map.mp hrest
+  obtain ⟨hi', hirow⟩ := List.mem_filter.mp hi
+  obtain ⟨hj', hjcol⟩ := List.mem_filter.mp hj
+  obtain ⟨a, ha, rfl⟩ := List.mem_map.mp hi'
+  obtain ⟨b, hb, rfl⟩ := List.mem_map.mp hj'
+  have ht : 0 < max 1 t := Nat.lt_of_lt_of_le Nat.zero_lt_one (Nat.le_max_left 1 t)
+  have ha' : a < max 1 t := List.mem_range.mp ha
+  have hb' : b < max 1 t := List.mem_range.mp hb
+  subst hij
+  refine ⟨by simpa using hirow, by simpa using hjcol, ?_, ?_⟩
+  · show (I * max 1 t + a) / max 1 t = I
+    rw [Nat.mul_comm, Nat.mul_add_div ht, Nat.div_eq_of_lt ha', Nat.add_zero]
+  · show (J * max 1 t + b) / max 1 t = J
+    rw [Nat.mul_comm, Nat.mul_add_div ht, Nat.div_eq_of_lt hb', Nat.add_zero]
+
+/-- **One thread per `t × t` tile.** Thread `(I, J)` runs the cells of its tile in order, and
+`body i j` is whatever one cell does. The cells, their values and their addresses are the untiled
+kernel's; only the grouping of threads differs. -/
+def tiledK (rows cols t : Nat) (body : Nat → Nat → ParProg) : ParProg :=
+  parEach (gridIdx (tilesOf rows t) (tilesOf cols t)) fun IJ =>
+    block ((tileCells rows cols t IJ.1 IJ.2).map fun ij => body ij.1 ij.2)
+
+/-- A tile's footprint: every cell's reads, and the cells it writes. -/
+theorem tiledK_body_footprint (rows cols t : Nat) (body : Nat → Nat → ParProg)
+    (rd : Nat → Nat → List Loc) (out : Nat → Nat → Loc)
+    (hfp : ∀ i j, footprintOf (body i j) = ⟨rd i j, [out i j]⟩) (IJ : Nat × Nat) :
+    footprintOf (block ((tileCells rows cols t IJ.1 IJ.2).map fun ij => body ij.1 ij.2))
+      = ⟨(tileCells rows cols t IJ.1 IJ.2).flatMap (fun ij => rd ij.1 ij.2),
+         (tileCells rows cols t IJ.1 IJ.2).flatMap (fun ij => [out ij.1 ij.2])⟩ :=
+  footprintOf_block_map _ _ _ (fun (ij : Nat × Nat) => hfp ij.1 ij.2) _
+
+/-- **Well-formed at every size and every tile size**, under exactly the untiled kernel's two
+hypotheses. Tiling regroups the threads, so it needs nothing new about the addresses: what the
+proof adds is only that the blocks partition, which is `i / t` naming the tile that owns row `i`. -/
+theorem wfB_tiledK (rows cols t : Nat) (body : Nat → Nat → ParProg)
+    (rd : Nat → Nat → List Loc) (out : Nat → Nat → Loc)
+    (hfp : ∀ i j, footprintOf (body i j) = ⟨rd i j, [out i j]⟩)
+    (hnopar : ∀ i j, hasPar (body i j) = false)
+    (hinj : ∀ i j i' j', i < rows → j < cols → i' < rows → j' < cols →
+      (i ≠ i' ∨ j ≠ j') → out i j ≠ out i' j')
+    (hout : ∀ i j i' j', i < rows → j < cols → i' < rows → j' < cols →
+      ∀ l ∈ rd i' j', out i j ≠ l) :
+    wfB (tiledK rows cols t body) = true := by
+  refine wfB_parEach_of_lists (gridIdx (tilesOf rows t) (tilesOf cols t)) _
+    (fun IJ => (tileCells rows cols t IJ.1 IJ.2).flatMap (fun ij => rd ij.1 ij.2))
+    (fun IJ => (tileCells rows cols t IJ.1 IJ.2).flatMap (fun ij => [out ij.1 ij.2]))
+    (gridIdx_nodup _ _) (tiledK_body_footprint rows cols t body rd out hfp) ?_ ?_ ?_
+  · -- a tile is a straight-line block: no fork inside one
+    intro IJ _
+    refine wfB_block _ (fun s hs => ?_)
+    obtain ⟨ij, _, rfl⟩ := List.mem_map.mp hs
+    exact wfB_of_parFree _ (hnopar ij.1 ij.2)
+  · -- two tiles never write one cell: a cell's own index names its tile
+    intro X _ Y _ hXY l hlX hlY
+    obtain ⟨x, hx, hlx⟩ := List.mem_flatMap.mp hlX
+    obtain ⟨y, hy, hly⟩ := List.mem_flatMap.mp hlY
+    rw [List.mem_singleton] at hlx hly
+    obtain ⟨hx1, hx2, hxt1, hxt2⟩ := mem_tileCells hx
+    obtain ⟨hy1, hy2, hyt1, hyt2⟩ := mem_tileCells hy
+    refine hinj x.1 x.2 y.1 y.2 hx1 hx2 hy1 hy2 ?_ (hlx ▸ hly ▸ rfl)
+    by_cases h1 : x.1 = y.1
+    · refine Or.inr (fun h2 => hXY (Prod.ext ?_ ?_))
+      · rw [← hxt1, ← hyt1, h1]
+      · rw [← hxt2, ← hyt2, h2]
+    · exact Or.inl h1
+  · -- no cell any tile writes is a cell any tile reads
+    intro X _ Y _ _ l hlX hlY
+    obtain ⟨x, hx, hlx⟩ := List.mem_flatMap.mp hlX
+    obtain ⟨y, hy, hly⟩ := List.mem_flatMap.mp hlY
+    rw [List.mem_singleton] at hlx
+    obtain ⟨hx1, hx2, _, _⟩ := mem_tileCells hx
+    obtain ⟨hy1, hy2, _, _⟩ := mem_tileCells hy
+    exact hout x.1 x.2 y.1 y.2 hx1 hx2 hy1 hy2 l hly hlx.symm
+
+/-- **A grid of reductions, tiled.** `gridK`'s cells, `t × t` to a thread. -/
+def tiledGridK (rows cols t K : Nat) (locs : Nat → Nat → Nat → Loc) (step : AExp → AExp → AExp)
+    (out : Nat → Nat → Loc) : ParProg :=
+  tiledK rows cols t fun i j =>
+    .seq (reduceBody 0 1 (locs i j) step K) (.store (out i j) (.reg 0))
+
+/-- **Well-formed at every size**, under `wfB_gridK`'s hypotheses exactly. -/
+theorem wfB_tiledGridK (rows cols t K : Nat) (locs : Nat → Nat → Nat → Loc)
+    (step : AExp → AExp → AExp) (out : Nat → Nat → Loc)
+    (hinj : ∀ i j i' j', i < rows → j < cols → i' < rows → j' < cols →
+      (i ≠ i' ∨ j ≠ j') → out i j ≠ out i' j')
+    (hout : ∀ i j i' j', i < rows → j < cols → i' < rows → j' < cols →
+      ∀ k, k < K → out i j ≠ locs i' j' k) :
+    wfB (tiledGridK rows cols t K locs step out) = true := by
+  refine wfB_tiledK rows cols t _ (fun i j => (List.range K).map (locs i j)) out
+    (fun i j => gridK_body_footprint K locs step out (i, j)) ?_ hinj ?_
+  · intro i j
+    show hasPar (ParProg.seq (reduceBody 0 1 (locs i j) step K) _) = false
+    rw [hasPar, hasPar_reduceBody]; rfl
+  · intro i j i2 j2 hi hj hi2 hj2 l hl
+    obtain ⟨k, hk, hlk⟩ := List.mem_map.mp hl
+    exact hlk ▸ hout i j i2 j2 hi hj hi2 hj2 k (List.mem_range.mp hk)
+
+/-! ### Matrix multiply, tiled
+
+`reduceBody` loads one cell per step, and `C[i,j] := Σ_k A[i,k] · B[k,j]` needs two. `dotBody` is
+that shape: the only kernel body here whose inner step reads a pair.
+
+Why one level of tiling and not two: a second level (holding a strip of `A` in registers across the
+inner loop) changes which *registers* a thread uses, not which cells it touches, so a footprint
+cannot see it and `wfB_tiledMatmulK` below would be the same theorem. It belongs to a cost model. -/
+
+/-- `%acc := Σ_{k < K} (cell at `as k`) · (cell at `bs k`)`, through registers `l` and `r`. -/
+def dotBody (acc l r : Reg) (as bs : Nat → Loc) : Nat → ParProg
+  | 0     => .set acc (.lit 0)
+  | k + 1 => .seq (dotBody acc l r as bs k)
+               (.seq (.load l (as k))
+                 (.seq (.load r (bs k))
+                   (.set acc (.add (.reg acc) (.mul (.reg l) (.reg r))))))
+
+/-- The body reads both operands at every step and writes nothing. -/
+theorem dotBody_footprint (acc l r : Reg) (as bs : Nat → Loc) :
+    ∀ K, footprintOf (dotBody acc l r as bs K)
+      = ⟨(List.range K).flatMap (fun k => [as k, bs k]), []⟩ := by
+  intro K
+  induction K with
+  | zero => rfl
+  | succ k ih =>
+      show footprintOf (ParProg.seq (dotBody acc l r as bs k) _) = _
+      rw [footprintOf, ih]
+      simp [footprintOf, Footprint.union, Footprint.empty, List.range_succ]
+
+/-- …and contains no `parallel` block. -/
+theorem hasPar_dotBody (acc l r : Reg) (as bs : Nat → Loc) :
+    ∀ K, hasPar (dotBody acc l r as bs K) = false := by
+  intro K
+  induction K with
+  | zero => rfl
+  | succ k ih =>
+      show hasPar (ParProg.seq (dotBody acc l r as bs k) _) = false
+      rw [hasPar, ih]; rfl
+
+/-- **Tiled matrix multiply.** `C[i,j] := Σ_k A[i,k] · B[k,j]`, one thread per `t × t` block of
+`C`, with `A` at `a`, `B` at `b` and `C` at `c`, each `n × n` in row-major order. -/
+def tiledMatmulK (n t a b c : Nat) : ParProg :=
+  tiledK n n t fun i j =>
+    .seq (dotBody 0 1 2 (fun k => a + i * n + k) (fun k => b + k * n + j) n)
+         (.store (c + i * n + j) (.reg 0))
+
+/-- A cell of an `n × n` grid is inside it. -/
+theorem rowMajor_lt {i k n : Nat} (hi : i < n) (hk : k < n) : i * n + k < n * n := by
+  have h1 : (i + 1) * n ≤ n * n := Nat.mul_le_mul hi (Nat.le_refl n)
+  rw [Nat.succ_mul] at h1
+  omega
+
+/-- Row-major addressing is injective on an `n × n` grid. -/
+theorem rowMajor_inj {n i j i2 j2 : Nat} (hj : j < n) (hj2 : j2 < n)
+    (h : i * n + j = i2 * n + j2) : i = i2 ∧ j = j2 := by
+  have hn : 0 < n := Nat.lt_of_le_of_lt (Nat.zero_le j) hj
+  rw [Nat.mul_comm i n, Nat.mul_comm i2 n] at h
+  have hi : i = i2 := by
+    have hd := congrArg (· / n) h
+    simpa [Nat.mul_add_div hn, Nat.div_eq_of_lt hj, Nat.div_eq_of_lt hj2] using hd
+  subst hi
+  exact ⟨rfl, by omega⟩
+
+/-- **Well-formed at every `n` and every tile size**, given only that `C` lies above both inputs.
+Threads read overlapping rows of `A` and overlapping columns of `B`; what is disjoint is the
+writes, which is Bernstein's condition and not separation. -/
+theorem wfB_tiledMatmulK (n t a b c : Nat) (hab : a + n * n ≤ b) (hbc : b + n * n ≤ c) :
+    wfB (tiledMatmulK n t a b c) = true := by
+  refine wfB_tiledK n n t _ (fun i j => (List.range n).flatMap
+      (fun k => [a + i * n + k, b + k * n + j])) (fun i j => c + i * n + j) ?_ ?_ ?_ ?_
+  · intro i j
+    rw [footprintOf, dotBody_footprint]
+    simp [footprintOf, Footprint.union]
+  · intro i j
+    show hasPar (ParProg.seq (dotBody 0 1 2 _ _ n) _) = false
+    rw [hasPar, hasPar_dotBody]; rfl
+  · intro i j i2 j2 _ hj _ hj2 hne
+    show c + i * n + j ≠ c + i2 * n + j2
+    intro heq
+    obtain ⟨h1, h2⟩ := rowMajor_inj hj hj2 (show i * n + j = i2 * n + j2 by omega)
+    exact hne.elim (fun h => h h1) (fun h => h h2)
+  · intro i j i2 j2 _ _ hi2 hj2 l hl
+    show c + i * n + j ≠ l
+    have hl2 : l ∈ (List.range n).flatMap (fun k => [a + i2 * n + k, b + k * n + j2]) := hl
+    obtain ⟨k, hk, hmem⟩ := List.mem_flatMap.mp hl2
+    have hkn : k < n := List.mem_range.mp hk
+    have hA : i2 * n + k < n * n := rowMajor_lt hi2 hkn
+    have hB : k * n + j2 < n * n := rowMajor_lt hkn hj2
+    rcases List.mem_cons.mp hmem with hl1 | hl2
+    · subst hl1; omega
+    · rw [List.mem_singleton] at hl2; subst hl2; omega
+
+/-- The tile size changes the fork width, not the program's meaning. -/
+example : ParProg.wfB (tiledMatmulK 4 2 0 16 32) = true := by decide
+
+example : ParProg.wfB (tiledMatmulK 4 1 0 16 32) = true := by decide
+
+
 attribute [simp] wfB_mapK
 
 attribute [simp] wfB_of_parFree wfB_seq wfB_label

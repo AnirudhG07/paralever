@@ -46,6 +46,27 @@ theorem joinStates_eq_childs {α : Type} {αs : List Type} (p : ParM α) (ps : C
     rw [runChilds_frame ps (runSeq p σ).2 l hq1, runChilds_frame ps σ l hq]
     by_cases hc : (runSeq p σ).2 l = σ l <;> simp [hc]
 
+/-- One task per child, with the result types still static — `Results`' shape, one level up.
+
+Why the spawn and the join are two passes rather than one: spawning and waiting in a single pass
+over `Childs` puts the `Task.spawn` and its matching `Task.get` in one branch of a match on an
+indexed family, and the spawn is then not issued until its own `get` is about to block, so the fork
+runs on one thread. Measured on `Compile/ExecArr.lean`'s twin, where the two shapes could be timed
+against each other with nothing else changed: one pass gave 99% CPU and a wall time flat from 1 to
+32 children; two passes gave real scaling. Splitting the pass makes each spawn a value the
+recursion *returns*, which cannot be deferred past the join. -/
+def TaskChilds : List Type → Type
+  | []      => Unit
+  | α :: αs => Task (α × State) × TaskChilds αs
+
+/-- Phase two: every child waited on, nothing spawned. -/
+def collectChilds : {αs : List Type} → TaskChilds αs → Results αs × List State
+  | [],     _       => ((), [])
+  | _ :: _, (t, ts) =>
+      let r := t.get
+      let rest := collectChilds ts
+      ((r.1, rest.1), r.2 :: rest.2)
+
 mutual
 
 /-- Run `p`, forking at every `par` node. Every child is spawned before any is waited on, and all
@@ -55,20 +76,20 @@ def execTask {α : Type} : ParM α → State → Task (α × State)
   | .read l k,    σ => execTask (k (σ l)) σ
   | .write l v k, σ => execTask (k ()) (σ.update l v)
   | .par cs k,    σ =>
-      let r := execChilds cs σ
+      let r := collectChilds (spawnChilds cs σ)
       execTask (k r.1) (joinAllStates σ r.2)
 
-/-- Spawn every child from `σ`, collecting their results and their post-states. The spawn happens
-before the recursive call's `get`, so all N children are in flight together. -/
-def execChilds {αs : List Type} : Childs ParM αs → State → Results αs × List State
-  | .nil,       _ => ((), [])
-  | .cons p ps, σ =>
-      let t := Task.spawn fun _ => (execTask p σ).get
-      let rest := execChilds ps σ
-      let r := t.get
-      ((r.1, rest.1), r.2 :: rest.2)
+/-- Phase one: every child spawned from `σ`, nothing waited on. -/
+def spawnChilds : {αs : List Type} → Childs ParM αs → State → TaskChilds αs
+  | _, .nil,       _ => ()
+  | _, .cons p ps, σ => (Task.spawn fun _ => (execTask p σ).get, spawnChilds ps σ)
 
 end
+
+/-- Spawn every child from `σ`, collecting their results and their post-states: all N in flight,
+then all N joined. -/
+def execChilds {αs : List Type} (cs : Childs ParM αs) (σ : State) : Results αs × List State :=
+  collectChilds (spawnChilds cs σ)
 
 /-- `execTask` at a fork, with the spawns discharged. -/
 theorem execTask_par {β : Type} {αs : List Type} (cs : Childs ParM αs)

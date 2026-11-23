@@ -198,6 +198,64 @@ private def forkSizes (src : String) : Option (List Nat) :=
 example (us : List ParProg) : ParProg.joinPhases (ParProg.phases us) = us :=
   ParProg.joinPhases_phases us
 
+/-! ## Regions
+
+`{ … } :: "name"` is a `ParProg.label`, so nothing a theorem can see changes: the footprint, the
+verdict and the heap are those of the same statements written bare. `flatten` stops at a label, so
+to `autoPar` a region is one opaque unit; `autoParIn` is what looks inside one.
+-- ref: `docs/autopar.md` § Regions -/
+
+private def regionSrc : String :=
+  "buf A[4]\nbuf B[4]\n\nA[0] := 1\nA[1] := 2\n\n{\n  B[0] := 3\n  B[1] := 4\n} :: \"fill B\"\n"
+private def bareSrc : String :=
+  "buf A[4]\nbuf B[4]\n\nA[0] := 1\nA[1] := 2\n\nB[0] := 3\nB[1] := 4\n"
+
+private def compiledOf (src : String) : Option Compiled := (ofString src).toOption
+
+-- the marker is inert: same footprint, same verdict, same heap
+#guard (compiledOf regionSrc).map (fun c => (ParProg.footprintOf c.prog).reads)
+         == (compiledOf bareSrc).map (fun c => (ParProg.footprintOf c.prog).reads)
+#guard (compiledOf regionSrc).map (fun c => (ParProg.footprintOf c.prog).writes)
+         == (compiledOf bareSrc).map (fun c => (ParProg.footprintOf c.prog).writes)
+#guard (compiledOf regionSrc).map (fun c => ParProg.wfB c.prog) == some true
+#guard (compiledOf regionSrc).map (fun c => ParProg.regionNames c.prog) == some ["fill B"]
+#guard (compiledOf bareSrc).map (fun c => ParProg.regionNames c.prog) == some []
+-- …and it reads back as itself
+#guard (compiledOf regionSrc).all (fun c => roundTrips (toPrl c))
+
+-- the whole-program planner stops at the marker, and `autoParIn` is what goes through it
+-- four independent stores become one fork of four; with two of them inside a region the planner
+-- sees three units, because the region is one of them
+#guard forkSizes bareSrc == some [4]
+#guard forkSizes regionSrc == some [3]
+#guard (compiledOf regionSrc).map
+         (fun c => (ParProg.flatten (ParProg.autoParRegions c.prog)).map fun s =>
+           match s with | .par ts => ts.length | .label _ (.par ts) => ts.length | _ => 1)
+       == some [1, 1, 2]
+-- a region the predicate refuses is left exactly as it was
+#guard (compiledOf regionSrc).map (fun c => ParProg.autoParIn 8 0 (fun _ => false) c.prog)
+         == (compiledOf regionSrc).map (fun c => c.prog)
+-- an unnamed block is refused, because a block that names nothing says nothing
+#guard (ofString "buf A[2]\n\n{\n  A[0] := 1\n}\n").toOption.isNone
+
+/-! ## The planner's two copies of `atoms`
+
+`AutoPar.rewrite` uses `atoms`, which `AutoPar/Chain.lean` proves flattens back to the chain the
+pass was given. The greedy route uses `atomsFast`, which cuts in the same places in one pass
+instead of `n²` (`docs/autopar.md` § Regions). Nothing proves them equal, so every example in the
+corpus checks it, phase by phase, on the program and on its parallelization.
+-- ref: `docs/autopar.md` § Regions -/
+
+private def sameAtoms (p : ParProg) : Bool :=
+  (ParProg.phases (ParProg.flatten p)).all fun ph => ParProg.atomsFast ph == ParProg.atoms ph
+
+#guard corpus.all fun e => (ofString e.src).toOption.all fun c =>
+  sameAtoms c.prog && sameAtoms (ParProg.autoPar c.prog) && sameAtoms (ParProg.autoParRegions c.prog)
+#guard (compiledOf regionSrc).all (fun c => sameAtoms c.prog)
+-- and the one-pass version flattens back too, which is what the proved copy's lemma says
+#guard corpus.all fun e => (ofString e.src).toOption.all fun c =>
+  (ParProg.phases (ParProg.flatten c.prog)).all fun ph => (ParProg.atomsFast ph).flatten == ph
+
 /-! ### A print is the other barrier
 
 `A[0] := 1` and the two stores after it are pairwise independent, so without the print `autoPar`

@@ -89,7 +89,7 @@ rev = "v4.36.0"
 # facet (build cycle).
 [[lean_lib]]
 name = "Slides"
-srcDir = "docs/slides/main"
+srcDir = "slides/src/main"
 needs = [
   "@paralever/+Paralever.Core.ParM:highlighted",
   "@paralever/+Paralever.Core.Semantics:highlighted",
@@ -110,7 +110,7 @@ needs = [
 
 [[lean_lib]]
 name = "IspSlides"
-srcDir = "docs/slides/isp"
+srcDir = "slides/src/isp"
 needs = [
   "@paralever/+Paralever.Core.ParM:highlighted",
   "@paralever/+Paralever.Core.Access:highlighted",
@@ -130,6 +130,6 @@ needs = [
 
 [[lean_exe]]
 name = "slides"
-srcDir = "docs/slides"
+srcDir = "slides/src"
 root = "SlidesMain"
 supportInterpreter = true

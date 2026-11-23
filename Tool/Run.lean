@@ -27,6 +27,8 @@ structure Opts where
   colour  : Bool := false
   /-- `prove`, `to-mlir`: the subject is the autoparallelized program. -/
   autopar : Bool := false
+  /-- `autopar`: rewrite only inside the marked regions. -/
+  regions : Bool := false
   /-- `prove`: typecheck the generated file with `lake env lean`. -/
   check   : Bool := false
   /-- No command: write the proof module there as well as printing the verdict. -/
@@ -65,6 +67,7 @@ commands
                                buffer (`-n` for one)
   race      FILE               the interleaving that reaches `wrong`, replayed step by step
   autopar   FILE               parallelize it, and print the result as `.prl`
+                               (--regions: only inside a marked region)
   funcs     FILE               what an MLIR module holds, function by function
   prove     FILE               write the Lean file that proves parallel = sequential
   vc        FILE               the independence obligation as SMT-LIB, for a solver to discharge
@@ -107,6 +110,7 @@ where
     | "-o" :: [],      _ => .error "-o needs a path"
     | "--threads" :: as, o => go as { o with threads := true }
     | "--autopar" :: as, o => go as { o with autopar := true }
+    | "--regions" :: as, o => go as { o with regions := true }
     | "--check" :: as,   o => go as { o with check := true }
     | "--solve" :: as,   o => go as { o with solve := true }
     | "--assume" :: a :: as, o =>
@@ -268,28 +272,16 @@ def toMlir (o : Opts) (c : Compiled) : IO UInt32 := do
   | .error e => do IO.eprintln s!"{o.file}: {e}"; pure 1
   | .ok src  => do put o.out src; pure 0
 
-/-- **What a run says about the program.** The race caveat, what `print` wrote, and the heap — or,
-under `--quiet`, the output alone. `run` and the no-command form print exactly this, so the two
-commands say the same things and the bare form's only addition is the verdict.
+/-- **What a run says about the program.** What `print` wrote and the heap — or, under `--quiet`,
+the output alone. `run` and the no-command form print exactly this, so the two commands say the
+same things and the bare form's only addition is the verdict.
 
-`raceHint` is the one clause that differs: `run` points at `paralever race` for the interleaving,
-and the bare form does not because it prints the interleaving itself.
--- ref: `docs/cli.md` § A file on its own -/
-def runBody (o : Opts) (c : Compiled) (raceHint : Bool) : String :=
-  if !o.verbose then quietReport c
-  else
-    -- a racy program has no single heap to print: what a run leaves is one schedule's answer.
-    -- `wfB` accepting *is* the absence of a race, by `par_seq_eq`, so the scan — quadratic in the
-    -- thread count — is only run when it refuses. -- ref: docs/scale.md § Where the time went
-    let sites := if ParProg.wfB c.prog then []
-                 else raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state
-    let warn :=
-      if sites.isEmpty then ""
-      else "this program has a race, so what follows is what one schedule left, not what it\n"
-             ++ "computes"
-             ++ (if raceHint then ": paralever race prints an interleaving that disagrees" else "")
-             ++ "\n\n"
-    warn ++ runReport c o.threads o.allCells
+A run executes and says nothing about whether the program is well formed. A racy program runs like
+any other and leaves whatever the schedule left, which may be a wrong answer; deciding that is
+`check`'s job and exhibiting it is `race`'s. Nothing here consults `wfB` or `raceSites`, so `run`
+costs one execution and no analysis. -- ref: `docs/cli.md` § A file on its own -/
+def runBody (o : Opts) (c : Compiled) : String :=
+  if !o.verbose then quietReport c else runReport c o.threads o.allCells
 
 /-- Run one command on one file. -/
 def run (o : Opts) : IO UInt32 := do
@@ -335,29 +327,28 @@ def run (o : Opts) : IO UInt32 := do
       let tail := if o.verbose
                   then wrote ++ (if sites.isEmpty then "" else "\n" ++ raceReport c ++ "\n")
                   else ""
-      put o.out (head ++ runBody o c (raceHint := false) ++ tail)
+      -- `run` no longer says this, so the bare form says it: it has already decided the verdict,
+      -- and the heap printed below is one schedule's answer rather than the program's value
+      let caveat := if sites.isEmpty || !o.verbose then ""
+                    else "this program has a race, so what follows is what one schedule left,"
+                           ++ " not what it\ncomputes\n\n"
+      put o.out (head ++ caveat ++ runBody o c ++ tail)
       -- a `--check` that Lean refused is the tool's answer too, so its code is passed on
       let rc ← if o.proof.isSome then prove { o with out := o.proof } c k else pure 0
       pure (if sites.isEmpty && claimHolds c then rc else 1)
   | "run"     => do
       match o.only with
-      | none     => do put o.out (runBody o c (raceHint := true)); pure 0
+      | none     => do put o.out (runBody o c); pure 0
       | some sel =>
-          -- `-n` answers with one line, so the caveat goes to standard error rather than into it
           match runCell c o.threads sel with
           | .error e => do IO.eprintln s!"{o.file}: {e}"; pure 2
           | .ok line => do
-              if ParProg.wfB c.prog
-                 || (raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state).isEmpty then
-                pure ()
-              else IO.eprint ("this program has a race, so what follows is what one schedule left,"
-                ++ " not what it\ncomputes: paralever race prints an interleaving that"
-                ++ " disagrees\n\n")
               -- what `print` wrote is the program's output, so `-n` keeps it and narrows the heap
               put o.out (if o.verbose then outReport c ++ line else quietReport c)
               pure 0
   | "race"    => do put o.out (raceReport c); pure 0
-  | "autopar" => do put o.out (noteLines notes ++ parReport c); pure 0
+  | "autopar" => do
+      put o.out (noteLines notes ++ (if o.regions then parRegionReport c else parReport c)); pure 0
   -- the obligation `wfB` refuses, handed to a solver instead. `wfB` runs first: what it accepts is
   -- decided by the kernel and needs no external program. -- ref: docs/smt-vc.md
   | "vc"      => do

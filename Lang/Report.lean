@@ -280,4 +280,14 @@ def parReport (c : Compiled) : String :=
     ++ "\n-- committed " ++ toString (AutoPar.rewriteOk c.prog)
     ++ ", optimal " ++ toString (AutoPar.optimalB c.prog) ++ "\n"
 
+/-- `autopar --regions`: parallelize only inside the `{ … } :: "name"` regions the file marks.
+Every statement outside one is left exactly as written — see docs/autopar.md § Regions. -/
+def parRegionReport (c : Compiled) : String :=
+  let rs := ParProg.regionNames c.prog
+  let p := ParProg.autoParRegions c.prog
+  toPrl { c with prog := p }
+    ++ "\n-- regions " ++ toString rs.length
+    ++ (if rs.isEmpty then "" else ": " ++ String.intercalate ", " rs)
+    ++ "\n-- independent " ++ toString (ParProg.wfB p) ++ "\n"
+
 end Paralever.Lang

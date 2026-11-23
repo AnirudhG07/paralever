@@ -577,6 +577,14 @@ partial def stmt : P Stmt := do
     let b ← thread
     let nm ← label
     pure (.parfor i n b nm)
+  else if (← peek) == some '{' then do
+    -- a bare `{ … }` is a region, and it must be named: an unnamed one would be a block with no
+    -- effect on anything, which is more likely a typo than an intention
+    let b ← thread
+    match ← label with
+    | some nm => pure (.region b nm)
+    | none    => errAs Diag.p001 "a block at statement position is a region and needs a name"
+                   1 ["write `{ … } :: \"name\"`; see docs/autopar.md § Regions"]
   else if ← tryKw "for" then do
     let i ← ident
     kw "in"
