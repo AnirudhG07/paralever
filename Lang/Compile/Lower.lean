@@ -49,6 +49,12 @@ structure Env where
   /-- One past the highest register index any occurrence in the file uses, so a rolled nest's
   induction registers cannot collide with the program's own. -/
   nextReg : Reg := 0
+  /-- The registers assigned on *every* path reaching this point. `Regs` is total, so a read of one
+  not here would be a silent `0`; `P115` refuses it instead. -/
+  written : List Reg := []
+  /-- The registers assigned only where the assignment does not reach what follows, each with the
+  place it was assigned in and what to do instead. -/
+  shaded  : List (Reg × String × String) := []
 
 /-- **What an `assert` compiled to**: the other program, and the cells the two are compared on.
 The file's own `prog` is the left side, so everything that reads a `Compiled` reads the left
@@ -137,7 +143,7 @@ where
   pinsOf : List Stmt → List (String × Reg)
     | []      => []
     | s :: ss =>
-        (match s with
+        (match s.bare with
           | .decl ds => ds.filterMap (fun d => match d with | .reg x (some k) => some (x, k) | _ => none)
           | _        => []) ++ pinsOf ss
 
@@ -164,6 +170,91 @@ def Env.reg (E : Env) (r : String) : Except Diag.Diagnostic Reg :=
   else match E.regs.lookup r with
     | some i => .ok i
     | none   => .error (diag Diag.p101 s!"no register '%{r}'")
+
+/-- What the file calls a register: its `%name`, or `%index` for one written as a number. -/
+def Env.regName (E : Env) (r : Reg) : String :=
+  match E.regs.find? (fun p => p.2 == r) with
+  | some (n, _) => s!"%{n}"
+  | none        => s!"%{r}"
+
+/-- A read of a register nothing has assigned. -/
+private def Env.unwritten (E : Env) (r : Reg) : Diag.Diagnostic :=
+  let nm := E.regName r
+  match E.shaded.lookup r with
+  | some (where?, hint) =>
+      diag Diag.p115 s!"'{nm}' is read here, and no assignment to it reaches this point"
+        (notes := [s!"it is assigned inside {where?}"])
+        (hints := [hint])
+  | none =>
+      diag Diag.p115 s!"'{nm}' is read here and nothing assigns it, so it would read 0"
+        (hints := [s!"assign it first: '{nm} := …'"])
+
+/-- Every register an expression reads must already be assigned. -/
+def Env.reads (E : Env) (a : AExp) : Except Diag.Diagnostic Unit :=
+  match (ParProg.regsOf a).find? (fun r => !E.written.contains r) with
+  | none   => .ok ()
+  | some r => .error (E.unwritten r)
+
+/-- The same, over a list. -/
+def Env.readsAll (E : Env) (as : List AExp) : Except Diag.Diagnostic Unit := do
+  let _ ← as.forM E.reads
+
+/-- Record an assignment that reaches whatever comes next. -/
+def Env.wrote (E : Env) (r : Reg) : Env := { E with written := r :: E.written }
+
+/-- Record assignments made where they do not reach what follows, against the place they are in. -/
+def Env.shade (E : Env) (E' : Env) (where? hint : String) : Env :=
+  { E with shaded := (E'.written.filter (fun r => !E.written.contains r)).map (·, where?, hint)
+                       ++ E'.shaded ++ E.shaded }
+
+/-- A register is assigned after a branch only if both arms assigned it. -/
+def Env.join (E Et Ee : Env) : Env :=
+  let both := Et.written.filter (fun r => Ee.written.contains r)
+  { E with written := both,
+           shaded  := ((Et.written ++ Ee.written).filter
+                        (fun r => !E.written.contains r && !both.contains r)).map
+                          (·, "one arm of an 'if', which may not run",
+                              "assign it before the 'if', or in both arms")
+                        ++ Et.shaded ++ Ee.shaded ++ E.shaded }
+
+/-- A rolled nest's body, walked once. -/
+private def readsNestBody (E : Env) : List NestStmt → Except Diag.Diagnostic Env
+  | []            => .ok E
+  | .rd r _ :: ss => readsNestBody (E.wrote r) ss
+  | .wr _ e :: ss => do let _ ← E.reads e; readsNestBody E ss
+  | .st r e :: ss => do let _ ← E.reads e; readsNestBody (E.wrote r) ss
+
+/-- A nest carried as a `ParProg.loop` rather than written out keeps its registers to itself:
+both interpreters join a `loop` with the register file it started with. -/
+def rolled : String × String :=
+  ("a 'for' with too many iterations to write out, which runs as a loop and leaves the registers \
+it started with",
+   "carry the result in a buffer: a loop this size is not written out, so no register leaves it")
+
+/-- The registers a nest body assigns. They do not survive it. -/
+private def nestWrites : List NestStmt → List Reg
+  | []            => []
+  | .rd r _ :: ss => r :: nestWrites ss
+  | .st r _ :: ss => r :: nestWrites ss
+  | .wr _ _ :: ss => nestWrites ss
+
+/-- What follows a rolled nest: the registers it assigns are not just un-assigned but *forgotten*,
+because the value a later read gets is the one from before the loop. -/
+def Env.afterNest (E W : Env) (n : LoopNest) : Env :=
+  let rs := nestWrites n.body
+  { E with written := E.written.filter (fun r => !rs.contains r),
+           shaded  := rs.map (·, rolled.1, rolled.2) ++ W.shaded ++ E.shaded }
+
+/-- A rolled nest's reads, checked against its induction registers and the ones already assigned. -/
+def Env.readsNest (E : Env) (n : LoopNest) : Except Diag.Diagnostic Env :=
+  readsNestBody { E with written := n.ivs ++ E.written } n.body
+
+/-- The expressions a print line evaluates. -/
+private def printExps : List PrintItem → List AExp
+  | []                => []
+  | .exp e :: is      => e :: printExps is
+  | .at _ _ i :: is   => i :: printExps is
+  | _ :: is           => printExps is
 
 /-- The buffer a name denotes, if it is declared and still live. -/
 def Env.buf? (E : Env) (nm : String) : Except Diag.Diagnostic Placed :=
@@ -267,6 +358,11 @@ in the order they are written"]))
 inductive Place where
   | fixed : Loc → Place
   | dyn   : ArrRef → AExp → Place
+
+/-- A computed address reads the register that indexes it. -/
+def Env.readsPlace (E : Env) : Place → Except Diag.Diagnostic Unit
+  | .fixed _  => .ok ()
+  | .dyn _ ix => E.reads ix
 
 /-- `A[lo..hi]` as a range of `A`'s cells, checked against it. `ArrRef.slice` is the range, so the
 cells a slice denotes are the ones `slice_inRange` and `disjoint_of_range` reason about.
@@ -440,7 +536,16 @@ def Env.printItem (E : Env) : PrintArg → Except Diag.Diagnostic PrintItem
   | .addr (.cell nm []) =>
       match E.consts.lookup nm with
       | some v => pure (.exp (.lit v))
-      | none   => do let _ ← E.noSlice nm; let p ← E.buf? nm; pure (.buf nm p.shape p.base)
+      | none   => do
+          let _ ← E.noSlice nm
+          -- a register under the same spelling is the likely slip, since a bare name here is the
+          -- buffer and `%` is what marks a register everywhere else
+          match E.regs.lookup nm, E.layout.find? nm with
+          | some _, none =>
+              .error (diag Diag.p101
+                s!"'{nm}' is a register, and a bare name in a 'print' is a buffer"
+                (hints := [s!"write '%{nm}'"]))
+          | _, _ => do let p ← E.buf? nm; pure (.buf nm p.shape p.base)
   | .addr (.cell nm idx) => do
       let _ ← E.noSlice nm
       match ← E.place (.cell nm idx) with
@@ -491,7 +596,7 @@ private partial def peelLevels (E : Env) (base : Reg) (k : Nat) (s : Stmt) :
         let (ls, inner) ← peelLevels E base (k + 1) b
         pure (lvl :: ls, inner)
     | _   => pure ([lvl], body)
-  match s with
+  match s.bare with
   | .forIn i n body       => go i n body false
   | .parfor i n body none => go i n body true
   | _                     => some ([], [s])
@@ -526,6 +631,7 @@ private def accessOf (E : Env) (ivs : List (String × Nat)) (d : Nat)
 /-- One body statement as a `NestStmt`. Three forms and no more: a `print`, a `parallel`, an `if` or
 a `while` inside a nest falls back, because `NestStmt` has no branch for an access to hide behind. -/
 private def nestStmtOf (E : Env) (ivs : List (String × Nat)) (d : Nat) : Stmt → Option NestStmt
+  | .at _ s => nestStmtOf E ivs d s
   -- a bare name that names a `const` is a value, not a cell, exactly as in the unrolled route
   | .load r (.cell nm []) =>
       match E.consts.lookup nm with
@@ -554,6 +660,12 @@ into the enclosing chain rather than nesting a block in it, so the chain `AutoPa
 the chain that was written. -/
 partial def compileStmt (E : Env) (site : Site) :
     Stmt → Except Diag.Diagnostic (List ParProg × Env)
+  -- every diagnostic raised under here that has no range of its own gets this one; the innermost
+  -- wrapper runs first, so a statement written out from a `def` body reports where it was written
+  | .at sp s =>
+      match compileStmt E site s with
+      | .ok r    => .ok r
+      | .error d => .error (if d.span.isSome then d else { d with span := some sp })
   -- a `slice` is allowed anywhere: it places no cells and ends no lifetime, so being visible to one
   -- thread alone is exactly what it is for — a thread naming the range it owns
   | .decl ds =>
@@ -572,47 +684,61 @@ them"]))
           (notes := ["it separates phases of a sequential chain, and threads of one fork have no \
 barrier between them"]))
       else pure ([.synchronize], E)
-  -- erased from the program, so what it observes must not depend on a schedule: inside a thread
-  -- the surrounding fork fixes no order, and the value printed would be whichever one ran first
-  | .print as =>
-      if site == .thread then
-        .error (diag Diag.p106 "'print' cannot appear inside a 'parallel' thread"
-          (notes := ["a print is erased from the program, so its value is read off the sequential \
-run — and threads of one fork have no order between them"])
-          (hints := ["print after the block, where the heap it left is what the program means"]))
-      else do pure ([.print (← as.mapM E.printItem)], E)
+  -- legal anywhere, a thread included: a print is erased from both interpreters and carries an
+  -- empty footprint, and independent threads read no value another wrote, so what one prints is
+  -- the value every schedule gives. What a schedule may still vary is the order of lines across
+  -- threads, which the walk fixes to the canonical one. -- ref: `docs/print.md`
+  | .print as => do
+      let is ← as.mapM E.printItem
+      let _ ← E.readsAll (printExps is)
+      pure ([.print is], E)
   -- a bare name that names a `const` is a value, not a cell: both are spelled the same way, and
   -- only the environment knows which this is
   | .load r (.cell nm []) =>
       match E.consts.lookup nm with
-      | some v => do pure ([.set (← E.reg r) (.lit v)], E)
+      | some v => do let i ← E.reg r; pure ([.set i (.lit v)], E.wrote i)
       | none   => do
           let i ← E.reg r
-          match ← E.place (.cell nm []) with
-          | .fixed l   => pure ([.load i l], E)
-          | .dyn ar ix => pure ([.loadAt i ar ix], E)
+          let pl ← E.place (.cell nm [])
+          let _ ← E.readsPlace pl
+          match pl with
+          | .fixed l   => pure ([.load i l], E.wrote i)
+          | .dyn ar ix => pure ([.loadAt i ar ix], E.wrote i)
   | .load r a => do
       let i ← E.reg r
-      match ← E.place a with
-      | .fixed l   => pure ([.load i l], E)
-      | .dyn ar ix => pure ([.loadAt i ar ix], E)
+      let pl ← E.place a
+      let _ ← E.readsPlace pl
+      match pl with
+      | .fixed l   => pure ([.load i l], E.wrote i)
+      | .dyn ar ix => pure ([.loadAt i ar ix], E.wrote i)
   | .store a e => do
       let v ← E.aexp e
-      match ← E.place a with
+      let _ ← E.reads v
+      let pl ← E.place a
+      let _ ← E.readsPlace pl
+      match pl with
       | .fixed l   => pure ([.store l v], E)
       | .dyn ar ix => pure ([.storeAt ar ix v], E)
   -- `%r := input` is the one place an `input` is consumed in statement position
   | .set r .input => do
       let i ← E.reg r
       let (w, rest) ← Input.word E.inp
-      pure ([.set i (.lit (← intOfWord w))], { E with inp := rest })
-  | .set r e => do pure ([.set (← E.reg r) (← E.aexp e)], E)
+      pure ([.set i (.lit (← intOfWord w))], { E.wrote i with inp := rest })
+  | .set r e => do
+      let i ← E.reg r
+      let v ← E.aexp e
+      let _ ← E.reads v
+      pure ([.set i v], E.wrote i)
   | .par ts nm => do
-      let bodies ← ts.mapM fun t => do
-        let (ss, E') ← compileStmts E .thread t
-        noConsume E E' "a 'parallel' thread"
-        pure (ParProg.block ss)
-      pure ([nm.elim id ParProg.label (.par bodies)], E)
+      let (bodies, E') ← ts.foldlM
+        (fun (acc : List ParProg × Env) t => do
+          let (ss, Et) ← compileStmts E .thread t
+          noConsume E Et "a 'parallel' thread"
+          pure (acc.1 ++ [ParProg.block ss],
+                acc.2.shade Et "a 'parallel' thread, which leaves the registers the fork \
+started with" "assign it before the fork"))
+        ([], E)
+      pure ([nm.elim id ParProg.label (.par bodies)], E')
   -- a region is a label over a sequential block: the statements inside it run exactly as they would
   -- without it, and the cursor and environment carry through, as they do for a `for` body
   | .region body nm => do
@@ -622,7 +748,9 @@ run — and threads of one fork have no order between them"])
   -- round so the loop variable does not accumulate
   | .forIn i n body => do
       match rollNest E (.forIn i n body) with
-      | some nst => pure ([.loop nst], E)
+      | some nst => do
+          let W ← E.readsNest nst
+          pure ([.loop nst], E.afterNest W nst)
       | none => do
       let k ← E.foldNat n
       let (parts, E') ← (List.range k).foldlM
@@ -635,24 +763,35 @@ run — and threads of one fork have no order between them"])
   | .parfor i n body nm => do
       -- the outermost level's label survives, so a named `parfor` keeps the name a report prints
       match rollNest E (.parfor i n body none) with
-      | some nst => pure ([nm.elim id ParProg.label (.loop nst)], E)
+      | some nst => do
+          let W ← E.readsNest nst
+          pure ([nm.elim id ParProg.label (.loop nst)], E.afterNest W nst)
       | none => do
       let k ← E.foldNat n
-      let bodies ← (List.range k).mapM fun j => do
-        let (ss, E') ← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts } .thread body
-        noConsume E E' "a 'parfor' body"
-        pure (ParProg.block ss)
-      pure ([nm.elim id ParProg.label (.par bodies)], E)
+      let (bodies, E') ← (List.range k).foldlM
+        (fun (acc : List ParProg × Env) j => do
+          let (ss, Ej) ← compileStmts { E with consts := (i, Int.ofNat j) :: E.consts } .thread body
+          noConsume E Ej "a 'parfor' body"
+          pure (acc.1 ++ [ParProg.block ss],
+                acc.2.shade Ej "a 'parfor' body, which leaves the registers the fork started \
+with" "assign it before the fork"))
+        ([], E)
+      pure ([nm.elim id ParProg.label (.par bodies)], E')
   | .ifElse c t e => do
+      let cv ← E.aexp c
+      let _ ← E.reads cv
       let (ts, Et) ← compileStmts E site.inner t
       noConsume E Et "an 'if' branch"
       let (es, Ee) ← compileStmts E site.inner e
       noConsume E Ee "an 'else' branch"
-      pure ([.ifElse (← E.aexp c) (ParProg.block ts) (ParProg.block es)], E)
+      pure ([.ifElse cv (ParProg.block ts) (ParProg.block es)], E.join Et Ee)
   | .whileIn c n body => do
+      let cv ← E.aexp c
+      let _ ← E.reads cv
       let (ss, E') ← compileStmts E site.inner body
       noConsume E E' "a 'while' body"
-      pure ([ParProg.whileAtMost (← E.foldNat n) (← E.aexp c) (ParProg.block ss)], E)
+      pure ([ParProg.whileAtMost (← E.foldNat n) cv (ParProg.block ss)],
+            E.shade E' "a 'while' body, which may not run" "assign it before the loop")
   -- `Expand.expand` runs first and leaves none of these three behind
   | .defn f _ _ => .error (diag Diag.p106 s!"'def {f}' was not written out before lowering")
   | .call f _   => .error (diag Diag.p101 s!"'{f}' was not written out before lowering")
@@ -680,16 +819,19 @@ def compileOne (f : File) (stdin : String) : Except Diag.Diagnostic Compiled := 
   pure ⟨E.layout, ParProg.block ss, E.regs, E.dead, none⟩
 
 /-- Whether a statement is the file's claim. -/
-private def isAssert : Stmt → Bool
+private def isAssert (s : Stmt) : Bool :=
+  match s.bare with
   | .assert .. => true
   | _          => false
 
 /-- A statement list cut at its first `assert`: what precedes it, the claim, and what follows. -/
 private def cutAt :
     List Stmt → Option (List Stmt × Strength × Side × Side × List String × List Stmt)
-  | []                      => none
-  | .assert st l r ns :: ss => some ([], st, l, r, ns, ss)
-  | s :: ss                 => (cutAt ss).map fun (b, st, l, r, ns, a) => (s :: b, st, l, r, ns, a)
+  | []      => none
+  | s :: ss =>
+      match s.bare with
+      | .assert st l r ns => some ([], st, l, r, ns, ss)
+      | _ => (cutAt ss).map fun (b, st, l, r, ns, a) => (s :: b, st, l, r, ns, a)
 
 /-- **The claim, taken out.** The file becomes two files that differ in one statement: where the
 `assert` stood, one holds a call to the left side and the other a call to the right. Everything

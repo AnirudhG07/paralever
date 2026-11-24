@@ -212,10 +212,8 @@ info: ["0:T0", "write [1] ← 1", "state", "1", "↦", "1", "9", "↦", "0", "2"
 #guard_msgs in
 #eval htmlText (explainHtml raw σ0)
 
--- a clean program has no trace, so no step cards at all
-/--
-info: ["pv", "pv-note", "pv-final", "pv-key", "pv-act"]
--/
+-- a clean program has no trace, so the report is the one line and nothing else
+/-- info: ["pv", "pv-note"] -/
 #guard_msgs in
 #eval htmlClasses (explainHtml clean σ0)
 

@@ -521,7 +521,7 @@ private def rejected (src : String) : Bool := (ofString src).toOption.isNone
 
 -- …and the accepted forms those rejections are the boundary of
 -- a register needs no declaration: a name is registered where it is first used
-#guard !rejected "[0] := %acc"
+#guard !rejected "%acc := 1\n[0] := %acc"
 #guard progOf "%acc := 1\n[0] := %acc" == progOf "%0 := 1\n[0] := %0"
 -- …and a name never collides with a number already in use
 #guard progOf "%0 := 1\n%acc := 2\n[0] := %0 + %acc" == progOf "%0 := 1\n%1 := 2\n[0] := %0 + %1"
@@ -662,6 +662,46 @@ could not be computed with at all. The rule the reader enforces is about *loads*
 #guard rejected "buf A[1]\n%p := [0] + 1"
 -- and a scalar buffer with nothing after it is still a load
 #guard printOf "buf a = 7\n%p := a" == printOf "buf a = 7\n%p := a"
+
+/-! ## A register is read only where something assigned it
+
+`Regs` is total and starts at `fun _ => 0`, so every read succeeds and an unassigned one reads 0.
+That totality is why no theorem about a register carries a definedness side condition, and it is
+also why the check belongs in `Lower`, where the program text is still there to look at: a read
+is refused when no assignment reaches it on every path (`P115`).
+-- ref: `docs/prl.md` § Registers -/
+
+private def rejects (src : String) : Bool :=
+  match ofString src with
+  | .error d => d.code.map Diag.Code.id == some "P115"
+  | .ok _    => false
+
+private def accepts (src : String) : Bool := (ofString src).toOption.isSome
+
+#guard rejects "print %never"
+#guard rejects "buf A[2]\n%t := A[%i]"
+#guard rejects "buf A[2]\nA[0] := %t"
+#guard accepts "%t := 1\nprint %t"
+#guard accepts "%t := 1\n%t := %t + 1\nprint %t"
+
+-- a thread's registers are its own: the fork leaves the ones it started with
+#guard rejects "parallel {\n  %a := 1\n} | {\n  %b := 2\n}\nprint %a"
+#guard rejects "parfor i in 2 {\n  %a := i\n}\nprint %a"
+#guard accepts "%a := 0\nparallel {\n  %a := 1\n} | {\n  %b := 2\n}\nprint %a"
+-- …but inside one thread they thread as usual, and the pre-fork value is in scope
+#guard accepts "%a := 1\nparallel {\n  %b := %a\n  print %b\n} | {\n  print %a\n}"
+
+-- a branch assigns only what both arms assign
+#guard rejects "%c := 1\nif %c { %v := 1 } else { }\nprint %v"
+#guard accepts "%c := 1\nif %c { %v := 1 } else { %v := 2 }\nprint %v"
+-- a `while` body may not run
+#guard rejects "%i := 0\nwhile %i < 3 in 5 { %t := %i }\nprint %t"
+#guard accepts "%i := 0\n%t := 0\nwhile %i < 3 in 5 { %t := %i\n%i := %i + 1 }\nprint %t"
+
+-- a `for` written out carries its registers; one carried as a `ParProg.loop` does not, because
+-- both interpreters join a `loop` with the register file it started with
+#guard accepts "buf A[4] = ones\n%s := 0\nfor i in 4 { %x := A[i]\n%s := %s + %x }\nprint %s"
+#guard rejects "buf A[200] = ones\n%s := 0\nfor i in 200 { %x := A[i]\n%s := %s + %x }\nprint %s"
 
 /-! ## The editor grammar carries every keyword
 

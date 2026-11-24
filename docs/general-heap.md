@@ -65,9 +65,9 @@ It means: `wfB` refused, and a search of *n* heaps found no race. Both halves of
 line, because neither alone is a reason:
 
 ```console
-verdict   this heap   Proved: Yes — no two threads touch one cell here
-          any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
-          no race found in 11 heap(s) probed over {c[0]}
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
+            any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
+            no race found in 11 heap(s) probed over {c[0]}
 ```
 
 The first clause is the proof checker's reason, in the program's own names: which cells `wfB` refused
@@ -91,8 +91,8 @@ The solver was right. At `k[1] = -1` the odd address `2 * (-1) + 1` clamps throu
 one cell:
 
 ```console
-verdict   this heap   Proved: Yes — no two threads touch one cell here
-          any heap    RACE found — with k[1] = -1: A[0] written by both threads
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
+            any heap    RACE found — with k[1] = -1: A[0] written by both threads
 ```
 
 So the unrestricted `par_seq_eq` for stripe is not merely unproved — it is **false**, which is why no

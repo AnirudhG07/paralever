@@ -317,11 +317,11 @@ parallel {
             <span class="code-wrap-lang">paralever check doall.prl</span>
           </div>
           <pre><code class="language-console">  memory    A[8] @0, B[8] @8, C[8] @16  (24 cells)
-  reads     {A[0], B[0], A[1], B[1], A[2], B[2], A[3], B[3], A[4], B[4], &#8230; +6 more}
-  writes    {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
-  threads   8
-  rounds    3 parallel, 24 sequential
-  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
+  reads:    {A[0], B[0], A[1], B[1], A[2], B[2], A[3], B[3], A[4], B[4], &#8230; +6 more}
+  writes:   {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
+  threads:  8
+  rounds:   3 parallel, 24 sequential
+  verdict:  every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
           <code>to-mlir</code> goes the other way, and <code>to-lean</code>
@@ -416,12 +416,12 @@ parallel {
             <span class="code-wrap-lang">paralever check --func non_affine_load parallelize.mlir</span>
           </div>
           <pre><code class="language-console">parallelize.mlir
-  memory    v0[100] @0  (100 cells)
-  reads     {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], &hellip; +90 more}
-  writes    {}
-  threads   1
-  rounds    100 parallel, 100 sequential
-  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
+  memory:   v0[100] @0  (100 cells)
+  reads:    {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], &hellip; +90 more}
+  writes:   {}
+  threads:  1
+  rounds:   100 parallel, 100 sequential
+  verdict:  every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
           MLIR's pass declines that loop, and the file's own

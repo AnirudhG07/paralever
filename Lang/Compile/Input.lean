@@ -80,6 +80,7 @@ def Decl.usesInput : Decl → Bool
 mutual
 
 def Stmt.usesInput : Stmt → Bool
+  | .at _ s          => s.usesInput
   | .load _ a        => a.usesInput
   | .store a e       => a.usesInput || e.usesInput
   | .set _ e         => e.usesInput

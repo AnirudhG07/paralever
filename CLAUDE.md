@@ -238,14 +238,15 @@ Examples/    every demonstrable thing in one tree, with the .prl and .mlir sourc
   BlogSnippets.lean  the code the blog post quotes, by ANCHOR region
 Tool/        the `paralever` command line, as a lib (not `Cli`: Mathlib depends on a package of
              that name) — Run (the commands, the option grammar, reading either front end),
-             Proof (the Lean module `prove` writes, and which of the three theorems it carries)
-             — see docs/cli.md
+             Proof (the Lean module `prove` writes, and which of the three theorems it carries),
+             Time (`--time`: processor time, out of /proc/self/stat, the wall clock where there is
+             no /proc), Json (`check --json`, hand-rolled) — see docs/cli.md
 Bench/       the evaluation harness as a lib plus the `paralever-bench` exe — Manifest (the corpus
              as data: 19 .prl + the 9 MLIR pilots, each with two labels and a justification),
              Verdict (the taxonomy and the matrices, called *by* MLIR/Corpus.lean), Run (one kernel
-             → a Row, every number from code that already exists), Time (the only IO.monoMsNow in
-             the repo), Scale (the rolled-against-unrolled cost curve: two texts per size, written
-             and elaborated), Threads (execTask against the same run flattened), Chaos (the
+             → a Row, every number from code that already exists), Time (the wall clock the harness
+             measures with; `--time`'s processor clock is Tool/Time.lean), Scale (the
+             rolled-against-unrolled cost curve: two texts per size, written and elaborated), Threads (execTask against the same run flattened), Chaos (the
              crossover sweep) and `chaos.prl` beside it — a thousand sequential lines the harness
              retunes through its three `const` declarations, Report — see docs/bench.md
 Test/        Sanity, AccessSanity, RaceSearch, Lang, Tool, Tactic, Heaps (the general-heap

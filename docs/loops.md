@@ -513,10 +513,10 @@ form and says it did not run, rather than hanging.
 With both, a 1000×1000×1000 gemm written as four lines of `.prl` reports in **0.88 s**:
 
 ```text
-  memory    A[1000, 1000] @0, B[1000, 1000] @1000000, C[1000, 1000] @2000000  (3000000 cells)
-  threads   1000000
-  rounds    not run — 4001000000 steps, over the ceiling of 10000000
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   A[1000, 1000] @0, B[1000, 1000] @1000000, C[1000, 1000] @2000000  (3000000 cells)
+  threads:  1000000
+  rounds:   not run — 4001000000 steps, over the ceiling of 10000000
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 ```
 
 And `paralever prove` on the same file writes a Lean module whose

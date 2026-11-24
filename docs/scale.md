@@ -157,7 +157,7 @@ below cannot contribute:
 Four times the time for twice the threads. The cause is `ParM.seqAll`, which is
 `bind (seqPair p (seqAll ps)) (fun r => .pure (r.1 :: r.2))`: `ParM.bind` grafts a continuation by
 recursing over its first argument's whole structure, so the outer `bind` of child *i* walks children
-*i* through *n* again. `run` without `--threads` goes through `execSeq`, whose `par` case is
+*i* through *n* again. `run` without `--real-threads` goes through `execSeq`, whose `par` case is
 `seqAll`, so this is on the default path.
 
 **The number of times one thread updates a register.** `Regs = Reg → Int` and
@@ -214,7 +214,7 @@ at any width, because `findWrongGuided` is aimed by the conflict locations phase
 above is the price of *not* finding one, which is why the scan now runs only where `wfB` refused
 (see above) and never on the accepted path.
 
-**`--threads` was slower, and the reason was not the join.** `run --threads reduce64` took 23.93 s
+**`--real-threads` was slower, and the reason was not the join.** `run --real-threads reduce64` took 23.93 s
 against 16.98 s single-threaded, and this file used to attribute that to `joinAllStates` costing
 O(*n*) per read after an *n*-way join. Measurement says otherwise: the fork was getting **no cores
 at all**. `execChilds` spawned and waited in one pass over `Childs`, which put the `Task.spawn` and

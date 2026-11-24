@@ -362,7 +362,7 @@ leaves `7↦2`. Racy programs are excluded, not given a behaviour.
 A clean program has nothing to show:
 
 ```text
-No counterexample: no par node fails Bernstein.
+counterexample: none
 Sequential: 0↦0, 1↦1, 2↦2
 ```
 

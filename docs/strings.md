@@ -104,17 +104,17 @@ buffer. Measured on a five-byte string:
 parfor i in 4 { %c := s[i]  ;  s[i] := %c - 32 }            -- i is unrolled to a constant
 ```
 ```text
-reads     {s[0], s[1], s[2], s[3]}
-writes    {s[0], s[1], s[2], s[3]}
-verdict   independent — par = seq under every schedule (wfB = true)
+  reads:    {s[0], s[1], s[2], s[3]}
+  writes:   {s[0], s[1], s[2], s[3]}
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 ```
 ```prl
 parfor i in 4 { %p := 2 * 1 ;  %c := s[%p] ;  s[%p] := %c - 32 }   -- the index is in a register
 ```
 ```text
-reads     {s[0], s[1], s[2], s[3], s[4]}
-writes    {s[0], s[1], s[2], s[3], s[4]}
-verdict   RACY — 3 conflicting fork(s): {s[2], …}
+  reads:    {s[0], s[1], s[2], s[3], s[4]}
+  writes:   {s[0], s[1], s[2], s[3], s[4]}
+  verdict:  every heap  RACE found — s[2] written by both threads (and 3 more cell(s))
 ```
 
 So `input.prl` — one thread per byte, sixteen singleton footprints, `wfB` accepting — works *because*

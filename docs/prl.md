@@ -241,13 +241,14 @@ parfor t in 4 {
 } :: "quarters"
 ```
 ```text
-verdict   independent — par = seq under every schedule (wfB = true)
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 ```
 
 The same program with `s[%p]` and the index arithmetic written out reports
 
 ```text
-verdict   footprint over-approximated: wfB says no, the heap check says yes
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
+            any heap    Inconclusive — wfB refuses over {s[0], s[1], s[2], s[3], s[4], s[5], … +26 more}: a computed address contributes every cell of its buffer
 ```
 
 — the program is in fact independent, and the proof does not go through, because each thread's
@@ -492,7 +493,33 @@ index when that matters; `reg a, b` is accepted and does nothing a first use wou
 
 Registers are thread-private — a `parallel` block hands each thread the pre-fork register file and
 discards what the threads leave (`Lang/Core/Prog.lean`) — so two threads using `%acc` do not
-interfere, and that is why independence is about memory alone.
+interfere, and that is why independence is about memory alone. This is OpenMP's `firstprivate`:
+a thread starts from the value the fork started with and nothing it writes escapes. Buffers are
+`shared`, which is the other half of why the footprint measures memory and nothing else.
+
+### A register is read only where something assigned it
+
+`Regs` is `Reg → Int` and starts at `fun _ => 0`, exactly as `State` is total: every read succeeds,
+so no theorem about a register carries a definedness side condition. Totality is right for the
+semantics and wrong for a reader, who gets a silent `0` where they expected a value. So the check
+is in `Lang.Compile.Lower`, which still has the program text: a read is refused with `P115` when no
+assignment reaches it on every path.
+
+| where the assignment is | does it reach what follows |
+|---|---|
+| earlier in the same chain | yes |
+| both arms of an `if` | yes |
+| one arm of an `if` | no — the other arm may run |
+| a `while` body | no — it may run no times |
+| a `parallel` thread, a `parfor` body | no — the join leaves the registers the fork started with |
+| a `for` large enough to be rolled | no — a `ParProg.loop` joins the same way |
+
+The last row is the one that is not obvious. A `for` written out threads its registers like any
+other chain, so `for i in 4 { %s := %s + %x }` accumulates; the same loop over 200 points is carried
+as a `ParProg.loop` (`docs/loops.md`), and both interpreters join a `loop` with the register file it
+started with, so `%s` after it is the value from before it. Rolling is otherwise invisible, which is
+exactly why a reduction that silently returned `0` at one trip count and the right answer at another
+is refused rather than rolled.
 
 ## Addresses, values, and the two readings of `%`
 
@@ -663,7 +690,28 @@ statement survives printing to Lean but not printing to `.prl`.
 ## The Lean form
 
 `Lang.toLean` prints a file as a `Layout` and a `paralever { … }` block. Every `ParProg`
-constructor has a surface form, so the two surfaces say the same things:
+constructor has a surface form, so the two surfaces say the same things. One statement per line, two
+spaces per level, and a `;` at each line end because the notation parses `sepBy1(impStmt, "; ")` and
+Lean's tokenizer does not see a line break:
+
+```lean
+def L : Layout := Layout.of
+  [ buf "A" [6] (data [1, 2, 3, 4, 5, 6])
+  , buf "out" [3] ]
+
+def prog : ParProg := paralever {
+  parallel {
+    %0 := 0;
+    %1 := [0];
+    %0 := (%0 + %1);
+    %1 := [1];
+    %0 := (%0 + %1);
+    [6] := %0
+  } | {
+    …
+  } :: "chunked sum"
+}
+```
 
 | `.prl` | Lean | `ParProg` |
 |---|---|---|
@@ -674,6 +722,7 @@ constructor has a surface form, so the two surfaces say the same things:
 | `parallel {…} \| {…} :: "name"` | the same | `label (par …)` |
 | `parfor i in n {…} :: "name"` | the same | `label (parFor …)` |
 | `{ … } :: "name"` | the same | `label` around anything |
+| `print A, "done"` | `print [PrintItem.buf "A" [6] 0, PrintItem.text "done"]` | `print` |
 | `buf A[6] = 1, 2, 3` | `buf "A" [6] (data [1, 2, 3])` | — (a `Layout`) |
 | `buf S[4] at 100`, `free A` | an explicit `base`, or `Arena.of` | — |
 
@@ -686,6 +735,11 @@ Two of those rows are syntax rather than a translation, and neither reserves a t
 * `{ … } :: "name"` names a region that is not a fork. `parallel` and `parfor` carry their own
   `::`; this is the general form, because `ParProg.label` takes any statement. Both surfaces spell
   it the same way, so a region round-trips through `toPrl`.
+
+`print` is the row where the two surfaces genuinely differ. The Lean form takes a term, not a list
+of surface items, because `PrintItem` carries what a name resolves to — a buffer's shape and base, a
+cell's address — and the Lean form has no layout in scope to resolve it with. `.prl` is where a
+print item is spelled by name; reserving `print` is also why the `.prl` writer is `toPrl`.
 
 Initial contents print as `(data [...])` rather than as a bare list. `Init` is `List Nat → List Int`
 and `Coe (List Int) Init` is declared, but a list literal in that position elaborates as `List Nat`,

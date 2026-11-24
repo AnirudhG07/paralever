@@ -302,7 +302,7 @@ def reportOf {τ : Type} (nm : LocName) (fuel : Nat) (p pseq : ParM τ) (σ : St
   let seqItem := Item.line "Sequential" (stateLine nm σseq ls)
   -- phase 1 is complete for the obligation, so on a clean program phase 2 would walk the whole
   -- interleaving space to re-derive what the scan already settled
-  if sites.isEmpty then [.note "No counterexample: no par node fails Bernstein.", seqItem]
+  if sites.isEmpty then [.note "counterexample: none"]
   else
   match findWrongGuided (targetsOf sites) fuel (.run p σ) with
   | some sch =>
@@ -336,7 +336,7 @@ def reportOf {τ : Type} (nm : LocName) (fuel : Nat) (p pseq : ParM τ) (σ : St
             [.line "Parallel B" (fin (finalHeap p σ s₂)),
              .note ("Schedules disagree at " ++ nm l ++ "."), seqItem]
       | none =>
-          [ .note ("No counterexample within " ++ toString fuel ++ " steps."), seqItem ]
+          [ .note ("counterexample: none (within " ++ toString fuel ++ " steps)") ]
 
 /-! ### Rendering it as text -/
 
@@ -456,10 +456,7 @@ Sequential: 9↦2, T0 reads 0
 /-- Shared reads are not a race, so there is nothing to find. -/
 private def clean : Prog := .par (.seq (.rd 0) (.wr 1 1)) (.seq (.rd 0) (.wr 2 2))
 
-/--
-info: No counterexample: no par node fails Bernstein.
-Sequential: 0↦0, 1↦1, 2↦2
--/
+/-- info: counterexample: none -/
 #guard_msgs in
 #eval IO.println (explainProg clean σ0)
 

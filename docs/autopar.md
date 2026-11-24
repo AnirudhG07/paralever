@@ -282,6 +282,15 @@ design and `wfB` re-checks whatever comes out, so `AutoPar.rewrite` keeps `atoms
 `AutoPar/Chain.lean` proves flattens back to its chain — and `Test/Lang.lean` gates the two against
 each other on every example in the corpus.
 
+Both of those merges are written with a fuel argument, and that is not a style choice. A merge
+shrinks a different list in each branch, so Lean compiles it by well-founded recursion and marks the
+result `@[irreducible]` — and `List.mergeSort` is already such a definition. A term built over one
+does not reduce for the elaborator or for the kernel, so a `decide` on anything downstream of
+`autoPar` fails with *reduction got stuck*, which is what `Test/AutoPar.lean` pins. Recursing on a
+`Nat` instead is structural, `decide` evaluates it, and the fuel — one step per cell — is exact, so
+the exhausted branch is unreachable. `#guard`s beside the definitions check both against the
+library functions they replaced.
+
 | `autoParIn` on `chaos.prl`, `n = 8`, `d = 32` | before | after |
 |---|---|---|
 | `atoms` over the whole file | 441 ms | 443 ms |

@@ -36,54 +36,68 @@ def surfaceExp : AExp → String
   | .eq a b  => "AExp.eq (" ++ surfaceExp a ++ ") (" ++ surfaceExp b ++ ")"
   | .not a   => "AExp.not (" ++ surfaceExp a ++ ")"
 
-/-- One `print` item, in the surface spelling. -/
-def surfaceItem : PrintItem → String
-  | .text t        => "\"" ++ t ++ "\""
-  | .exp e         => surfaceExp e
-  | .buf nm _ _    => nm
-  | .at nm _ e     => nm ++ "[" ++ surfaceExp e ++ "]"
-  | .cell nm idx _ =>
-      if idx.isEmpty then nm
-      else nm ++ "[" ++ String.intercalate ", " (idx.map toString) ++ "]"
+/-- One `print` item, as the term the Lean form's `print` takes. `.prl` spells an item by name;
+the notation takes a `List PrintItem`, so each one is written out. -/
+def surfaceItem (rs : RefStr) : PrintItem → String
+  | .text t        => "PrintItem.text \"" ++ t ++ "\""
+  | .exp e         => "PrintItem.exp (" ++ surfaceExp e ++ ")"
+  | .buf nm sh l   =>
+      "PrintItem.buf \"" ++ nm ++ "\" " ++ toString sh ++ " " ++ toString l
+  | .at nm a e     =>
+      "PrintItem.at \"" ++ nm ++ "\" (" ++ rs a ++ ") (" ++ surfaceExp e ++ ")"
+  | .cell nm idx l =>
+      "PrintItem.cell \"" ++ nm ++ "\" " ++ toString idx ++ " " ++ toString l
+
+/-- Two spaces per level. -/
+private def ind (d : Nat) : String := String.ofList (List.replicate (2 * d) ' ')
+
+/-- A braced body: the statements one per line, `;`-separated because `paralever { … }` parses
+`sepBy1(impStmt, "; ")` and Lean's tokenizer does not see line breaks. -/
+private def braced (d : Nat) (head : String) (body : List String) (tail : String) : String :=
+  ind d ++ head ++ "\n" ++ ";\n".intercalate body ++ "\n" ++ ind d ++ tail
 
 mutual
 
-/-- The statements of one program, as surface statements. `partial` because the `label` case looks
-at what it labels, as `Lang.stmtLines` does — printing, so nothing is proved about it. -/
-partial def surfaceStmts (rs : RefStr) : ParProg → List String
-  | .load r l      => ["%" ++ toString r ++ " := [" ++ toString l ++ "]"]
-  | .store l e     => ["[" ++ toString l ++ "] := " ++ surfaceExp e]
-  | .set r e       => ["%" ++ toString r ++ " := " ++ surfaceExp e]
-  | .seq a b       => surfaceStmts rs a ++ surfaceStmts rs b
-  | .par ss        => ["parallel " ++ String.intercalate " | " (surfaceThreads rs ss)]
+/-- The statements of one program, each indented to `d` and each possibly several lines. `partial`
+because the `label` case looks at what it labels, as `Lang.stmtLines` does — printing, so nothing is
+proved about it. -/
+partial def surfaceStmts (rs : RefStr) (d : Nat) : ParProg → List String
+  | .load r l      => [ind d ++ "%" ++ toString r ++ " := [" ++ toString l ++ "]"]
+  | .store l e     => [ind d ++ "[" ++ toString l ++ "] := " ++ surfaceExp e]
+  | .set r e       => [ind d ++ "%" ++ toString r ++ " := " ++ surfaceExp e]
+  | .seq a b       => surfaceStmts rs d a ++ surfaceStmts rs d b
+  | .par ss        => [surfaceFork rs d ss ""]
   | .label nm s    =>
       match s with
-      | .par ss => ["parallel " ++ String.intercalate " | " (surfaceThreads rs ss)
-                      ++ " :: \"" ++ nm ++ "\""]
-      | _       => ["{ " ++ String.intercalate "; " (surfaceStmts rs s) ++ " } :: \"" ++ nm ++ "\""]
-  | .synchronize   => ["synchronize"]
-  | .print is      => ["print " ++ String.intercalate ", " (is.map surfaceItem)]
-  | .loadAt r a e  => ["%" ++ toString r ++ " := [" ++ rs a ++ ", " ++ surfaceExp e ++ "]"]
-  | .storeAt a e v => ["[" ++ rs a ++ ", " ++ surfaceExp e ++ "] := " ++ surfaceExp v]
-  | .ifElse c t e  => ["if (" ++ surfaceExp c ++ ") { "
-                        ++ String.intercalate "; " (surfaceStmts rs t)
-                        ++ " } else { " ++ String.intercalate "; " (surfaceStmts rs e) ++ " }"]
+      | .par ss => [surfaceFork rs d ss (" :: \"" ++ nm ++ "\"")]
+      | _       => [braced d "{" (surfaceStmts rs (d + 1) s) ("} :: \"" ++ nm ++ "\"")]
+  | .synchronize   => [ind d ++ "synchronize"]
+  | .print is      =>
+      [ind d ++ "print [" ++ String.intercalate ", " (is.map (surfaceItem rs)) ++ "]"]
+  | .loadAt r a e  => [ind d ++ "%" ++ toString r ++ " := [" ++ rs a ++ ", " ++ surfaceExp e ++ "]"]
+  | .storeAt a e v => [ind d ++ "[" ++ rs a ++ ", " ++ surfaceExp e ++ "] := " ++ surfaceExp v]
+  | .ifElse c t e  =>
+      [ braced d ("if (" ++ surfaceExp c ++ ") {") (surfaceStmts rs (d + 1) t) "} else {"
+          ++ "\n" ++ ";\n".intercalate (surfaceStmts rs (d + 1) e) ++ "\n" ++ ind d ++ "}" ]
   -- a rolled nest has no surface form yet; printed in the Lean form's vocabulary so the pass's
   -- output is still readable -- ref: `docs/loops.md`
-  | .loop n        => ["parfor " ++ String.intercalate ", " (showLevels n.ivs n.sizes n.lo n.step)
-                        ++ " fork " ++ toString n.parDepth ++ " { "
-                        ++ String.intercalate "; " (n.body.map showNestStmt) ++ " }"]
+  | .loop n        =>
+      [ braced d ("parfor " ++ String.intercalate ", " (showLevels n.ivs n.sizes n.lo n.step)
+                   ++ " fork " ++ toString n.parDepth ++ " {")
+          (n.body.map (fun st => ind (d + 1) ++ showNestStmt st)) "}" ]
 
-/-- Each thread of a fork, braced. -/
-partial def surfaceThreads (rs : RefStr) : List ParProg → List String
-  | []      => []
-  | s :: ss => ("{ " ++ String.intercalate "; " (surfaceStmts rs s) ++ " }") :: surfaceThreads rs ss
+/-- A fork: each thread braced, the opening brace of the next on the closing brace of the last. -/
+partial def surfaceFork (rs : RefStr) (d : Nat) (ss : List ParProg) (tail : String) : String :=
+  ind d ++ "parallel {\n"
+    ++ (("\n" ++ ind d ++ "} | {\n").intercalate
+          (ss.map (fun t => ";\n".intercalate (surfaceStmts rs (d + 1) t))))
+    ++ "\n" ++ ind d ++ "}" ++ tail
 
 end
 
 /-- **A program as surface text**, ready to paste back into `paralever { … }`. -/
 def surface (p : ParProg) (rs : RefStr := refPair) : String :=
-  "paralever {\n  " ++ String.intercalate ";\n  " (surfaceStmts rs p) ++ "\n}"
+  "paralever {\n" ++ ";\n".intercalate (surfaceStmts rs 1 p) ++ "\n}"
 
 /-- **The round trip.** `paralever { … }` in, `paralever { … }` out, with the plan's numbers. -/
 def report (p : ParProg) : String :=

@@ -631,12 +631,12 @@ parfor c in chunks {
             <span class="code-wrap-lang">paralever check</span>
           </div>
           <pre><code class="language-console">Examples/Language/sum.prl
-  memory    A[6] @0, out[3] @6  (9 cells)
-  reads     {A[0], A[1], A[2], A[3], A[4], A[5]}
-  writes    {out[0], out[1], out[2]}
-  threads   3
-  rounds    3 parallel, 9 sequential
-  verdict   every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
+  memory:   A[6] @0, out[3] @6  (9 cells)
+  reads:    {A[0], A[1], A[2], A[3], A[4], A[5]}
+  writes:   {out[0], out[1], out[2]}
+  threads:  3
+  rounds:   3 parallel, 9 sequential
+  verdict:  every heap  Proved: Yes &mdash; wfB accepts: the threads' footprints are pairwise independent</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
           Each thread reads its own slice of <code>A</code> and writes its own

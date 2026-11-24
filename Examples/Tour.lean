@@ -82,8 +82,18 @@ def straightLine : ParProg := paralever {
 
 /--
 info: paralever {
-  parallel { [0] := 3 } | { [1] := 4 };
-  parallel { %0 := [0]; [2] := (%0 * %0) } | { %1 := [1]; [3] := (%1 * %1) }
+  parallel {
+    [0] := 3
+  } | {
+    [1] := 4
+  };
+  parallel {
+    %0 := [0];
+    [2] := (%0 * %0)
+  } | {
+    %1 := [1];
+    [3] := (%1 * %1)
+  }
 }
 -- units      4
 -- stages     2

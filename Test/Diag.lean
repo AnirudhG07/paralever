@@ -12,7 +12,7 @@ open Paralever
 
 A code must be findable and unique, or `explain` cannot answer for it. -/
 
-#guard Diag.codes.length == 20
+#guard Diag.codes.length == 21
 #guard (Diag.codes.map Diag.Code.id) == (Diag.codes.map Diag.Code.id).eraseDups
 #guard Diag.codes.all fun c => (Diag.find? c.id).isSome
 #guard Diag.codes.all fun c => (Diag.find? c.id.toLower).isSome
@@ -57,7 +57,7 @@ info: error[P002]: 'buf' is a reserved word
 -- no span: the file, and the hints, with nothing to point at
 #guard Diag.render (Diag.Source.of "t.prl" "abc\n")
     { code := some Diag.p101, msg := "undeclared buffer 'B'", hints := ["declare it"] }
-  == "error[P101]: undeclared buffer 'B'\n --> t.prl\n = help: declare it"
+  == "error[P101]: undeclared buffer 'B'\n --> t.prl\nTip: declare it"
 
 -- a span running past the end of its line is clipped to the line
 #guard Diag.render (Diag.Source.of "t.prl" "ab\ncd\n")
@@ -107,6 +107,7 @@ private def codeOf (src : String) (stdin : String := "") : Option String :=
 #guard codeOf "buf A[4]\nassert A[0] == A[1] on A" == some "P001"
 #guard codeOf "def f(A) { A[0] := 1 }\nbuf A[4]\nassert f(A) == f(A) on T" == some "P101"
 
+#guard codeOf "print %t" == some "P115"
 -- unexpected tokens are one code, not twenty-one: the message says what was expected
 #guard codeOf "buf A[4]\nA[0] 1" == some "P001"
 #guard codeOf "reg t\n%t :=" == some "P001"

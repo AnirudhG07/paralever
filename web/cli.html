@@ -86,7 +86,7 @@
 
 paralever         Examples/Language/sum.prl    # the verdict, and the evidence for it
 paralever check   Examples/Language/sum.prl
-paralever prove   Examples/Language/sum.prl -o Proofs/Sum.lean --check
+paralever prove   Examples/Language/sum.prl -o Proofs/Sum.lean --typecheck
 paralever to-mlir Examples/Language/sum.prl -o sum.mlir
 paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
         </div>
@@ -170,9 +170,10 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
             <thead><tr><th>Command</th><th>What it prints</th></tr></thead>
             <tbody>
               <tr><td><code>init [DIR]</code></td><td>a Lake project with paralever as its dependency: a <code>lakefile.toml</code>, this project's <code>lean-toolchain</code>, a program, and a module whose last line is <code>par_seq_eq</code></td></tr>
-              <tr><td><code>FILE</code> (no command)</td><td>the verdict, then everything <code>run</code> prints, then the interleaving if there is one</td></tr>
+              <tr><td><code>FILE</code> (no command)</td><td><code>check</code>'s report, what the program's <code>print</code> statements wrote, and the interleaving if there is one</td></tr>
               <tr><td><code>check FILE</code></td><td>memory, reads, writes, thread count, rounds, verdict</td></tr>
-              <tr><td><code>run FILE [-n NAME]</code></td><td>the heap after a run, buffer by buffer, or one buffer of it</td></tr>
+              <tr><td><code>explain CODE</code></td><td>the rule behind one diagnostic code, on its own</td></tr>
+              <tr><td><code>run FILE [--buffer NAME]</code></td><td>the heap after a run, buffer by buffer, or one buffer of it</td></tr>
               <tr><td><code>race FILE</code></td><td>the interleaving that reaches <code>wrong</code>, step by step</td></tr>
               <tr><td><code>autopar FILE</code></td><td>the parallelized program as <code>.prl</code>, with the plan's numbers</td></tr>
               <tr><td><code>funcs FILE</code></td><td>what an MLIR module holds, function by function, and whether the reader takes each one</td></tr>
@@ -189,9 +190,9 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
             <thead><tr><th>Option</th><th>Effect</th></tr></thead>
             <tbody>
               <tr><td><code>-o PATH</code></td><td>write there instead of to standard output</td></tr>
-              <tr><td><code>--threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
+              <tr><td><code>--real-threads</code></td><td>run one <code>Task</code> per thread of every fork rather than the canonical order. The heap is the same one, which is what <code>runTask_eq</code> says for every program <code>wfB</code> accepts</td></tr>
               <tr><td><code>--autopar</code></td><td>make <code>prove</code>, <code>to-mlir</code> and <code>to-lean</code> take the parallelized program as their subject</td></tr>
-              <tr><td><code>--check</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
+              <tr><td><code>--typecheck</code></td><td>run <code>lake env lean</code> on what <code>prove</code> wrote, and report Lean's verdict rather than the tool's</td></tr>
               <tr><td><code>--solve</code></td><td><code>vc</code>: discharge what is left with the first solver found: z3, then
                 cvc5, or whatever <code>PARALEVER_SMT</code> names</td></tr>
               <tr><td><code>--solver NAME|PATH</code></td><td><code>vc</code>: use that solver rather than looking for one; implies <code>--solve</code></td></tr>
@@ -199,14 +200,16 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
               <tr><td><code>--assume nonneg</code></td><td><code>vc</code>: assume every value read from the heap is at or above zero, which the clamp in <code>ArrRef.addr</code> makes necessary more often than it looks</td></tr>
               <tr><td><code>--prove PATH</code></td><td>no command: write the Lean module that proves the verdict to <code>PATH</code> as well as printing the verdict itself</td></tr>
               <tr><td><code>--func NAME</code></td><td>the function to read, in an MLIR module that holds several. In custom form it reads that function alone, so a reduction in the next one does not refuse the file</td></tr>
-              <tr><td><code>-n NAME</code></td><td><code>run</code>: that buffer alone, or one cell of it when the name carries a subscript, as in
-                <code>-n 'C[1, 2]'</code></td></tr>
+              <tr><td><code>--buffer NAME</code></td><td><code>run</code>: that buffer alone, or one cell of it when the name carries a subscript, as in
+                <code>--buffer 'C[1, 2]'</code>; <code>-b</code> is the short form</td></tr>
               <tr><td><code>--quiet</code>, <code>-q</code></td><td><code>run</code> and the no-command form: only what the
                 program's <code>print</code> statements wrote, with no
                 headings, no heap and no verdict</td></tr>
               <tr><td><code>--verbose</code>, <code>-v</code></td><td>verbosity on, which is the default; it undoes an earlier <code>--quiet</code></td></tr>
-              <tr><td><code>--all-cells</code></td><td><code>run</code>: every cell of every buffer, instead of the first 32 of each</td></tr>
-              <tr><td><code>--colour</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
+              <tr><td><code>--full</code></td><td><code>run</code>: every cell of every buffer, instead of the first 32 of each</td></tr>
+              <tr><td><code>--json</code></td><td><code>check</code>: the same facts as one JSON object, so a build can read the verdict rather than grep for it</td></tr>
+              <tr><td><code>--time</code></td><td>any command: a <code>time:</code> line, the processor time the run used rather than the wall clock. <code>race</code> prints it without being asked</td></tr>
+              <tr><td><code>--color</code></td><td>paint <code>to-prl</code>'s output in the editor grammar's token classes</td></tr>
             </tbody>
           </table>
         </div>
@@ -231,11 +234,11 @@ paralever to-prl  Examples/Mlir/doall-no.mlir</code></pre>
           two when they differ.
         </p>
         <pre class="code-block mb-4"><code>$ paralever check Examples/Language/stripe.prl
-  verdict   this heap   Proved: Yes — no two threads touch one cell here
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
             any heap    RACE found — with k[1] = -1: A[0] written by both threads
 
 $ paralever check Examples/Language/branch.prl
-  verdict   this heap   Proved: Yes — no two threads touch one cell here
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
             any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
             no race found in 11 heap(s) probed over {c[0]}</code></pre>
         <p class="text-stone-600 leading-relaxed mb-4">
@@ -264,19 +267,16 @@ $ paralever check Examples/Language/branch.prl
             <button class="copy-btn">Copy</button>
           </div>
           <pre><code class="language-console">$ paralever run Examples/Language/arena.prl
-heap after the run — the cells the program left behind, which is most of what it says
-12 cells in 3 buffers, 1 of them freed, addressed 0 to 11
-NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
-
+heap:
 src [4] @0  [1, 2, 3, 4]
 tmp [4] @4  [3, 5, 7, 9]   (freed)
 out [4] @4  [3, 5, 7, 9]</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4 mb-4">
-          A bare <code>paralever FILE</code> prints the same body under its
-          verdict. Both commands call one function, so the verdict is the whole
-          of the difference. Memory, footprint, thread count and rounds belong
-          to <code>check</code>.
+          A bare <code>paralever FILE</code> prints the verdict and what the
+          program's <code>print</code> statements wrote, and leaves the heap to
+          <code>run</code>. Memory, footprint, thread count and rounds belong to
+          <code>check</code>.
         </p>
         <p class="text-stone-600 leading-relaxed mb-4">
           <code>-q</code> prints only what the program's <code>print</code>
@@ -320,8 +320,8 @@ C [12, 12] @288  [6072, 6138, 6204, 6270, 6336, 6402, 6468, 6534, 6600, 6666, 67
                  … +9 more rows</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4 mb-4">
-          Two options say otherwise. <code>--all-cells</code> lifts the limit
-          everywhere. <code>-n</code> asks for one buffer by name, printed in
+          Two options say otherwise. <code>--full</code> lifts the limit
+          everywhere. <code>--buffer</code> asks for one buffer by name, printed in
           full with nothing around it, and a subscript asks for one cell.
         </p>
         <div class="code-wrap">
@@ -329,11 +329,11 @@ C [12, 12] @288  [6072, 6138, 6204, 6270, 6336, 6402, 6468, 6534, 6600, 6666, 67
             <span class="code-wrap-lang">console</span>
             <button class="copy-btn">Copy</button>
           </div>
-          <pre><code class="language-console">$ paralever run Examples/Language/matmul.prl -n C
+          <pre><code class="language-console">$ paralever run Examples/Language/matmul.prl --buffer C
 C [2, 2] @8  [19, 22]
              [43, 50]
 
-$ paralever run Examples/Language/matmul.prl -n 'C[1, 1]'
+$ paralever run Examples/Language/matmul.prl --buffer 'C[1, 1]'
 C[1, 1] @11  50</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed mt-4">
@@ -458,13 +458,13 @@ lake env lean /tmp/Chain.lean
           </div>
           <pre><code class="language-console">$ paralever check Examples/Language/equiv.prl
 Examples/Language/equiv.prl
-  memory    A[8] @0  (8 cells)
-  reads     {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
-  writes    {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
-  threads   1
-  rounds    224 parallel, 224 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
-  claim     bubble == oddeven on A
+  memory:   A[8] @0  (8 cells)
+  reads:    {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  writes:   {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  threads:  1
+  rounds:   224 parallel, 224 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim:    bubble == oddeven on A
             Agree: Yes — the same 8 cell(s), under every schedule of either side</code></pre>
         </div>
 
@@ -518,7 +518,12 @@ Examples/Language/equiv.prl
         </p>
         <pre class="code-block mb-6"><code>$ paralever Examples/Language/stripe.prl
 Examples/Language/stripe.prl
-  verdict   this heap   Proved: Yes — no two threads touch one cell here
+  memory:   A[8] @0, k[2] @8  (10 cells)
+  reads:    {k[0], k[1]}
+  writes:   {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  threads:  2
+  rounds:   2 parallel, 4 sequential
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
             any heap    RACE found — with k[1] = -1: A[0] written by both threads
 ...
 
@@ -573,11 +578,12 @@ fork 0 — 2 threads
           <div class="code-wrap-header">
             <span class="code-wrap-lang">paralever run Examples/Language/sum.prl</span>
           </div>
-          <pre><code class="language-console">A [6] @0  [1, 2, 3, 4, 5, 6]
+          <pre><code class="language-console">heap:
+A [6] @0  [1, 2, 3, 4, 5, 6]
 out [3] @6  [3, 7, 11]</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">
-          With <code>--threads</code> the same program runs one real thread per
+          With <code>--real-threads</code> the same program runs one real thread per
           child of every fork, and prints the same table. That is not luck. A
           theorem says the threaded run leaves the heap the canonical order
           leaves, for every accepted program.

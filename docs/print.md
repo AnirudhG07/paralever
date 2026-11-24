@@ -35,24 +35,55 @@ barrier reaching the plan would end up inside a thread — which `Lower` then re
 whose `planPhase` emits a one-statement group as a bare statement and so leaves the print where it was.
 -- ref: `docs/autopar.md` § The proved route declines
 
-## Where a print may not go
+## In a thread
 
-Inside a `parallel` thread, refused with `P106`:
+A print is legal anywhere, a `parallel` thread included. It is erased from both interpreters and its
+footprint is empty, so no theorem can see where one sits, and refusing it bought nothing a theorem
+needed. A `for`, `if` or `while` body is a chain spliced into the one that encloses it rather than a
+thread, so a print there has never been in question; `for` is the common case, one line per
+iteration.
 
-```console
-error[P106]: 'print' cannot appear inside a 'parallel' thread
-note: a print is erased from the program, so its value is read off the sequential run — and
-      threads of one fork have no order between them
-help: print after the block, where the heap it left is what the program means
+What a print inside a thread shows comes off the canonical order — the threads in the order they
+were written — and the two kinds of print are not equally determined.
+
+A **register** print is schedule-independent. `execPar` hands every thread the register file that
+reached the fork and the join discards what the threads did with it, so a thread only ever reads its
+own copy. The program below prints 2, 2, 4, 2: the second thread's `%0 := 4` is visible to that
+thread and to nothing else, and the `print %0` after the block sees the 2 the fork started with.
+
+```prl
+%0 := 2
+parallel {
+  %a := %0
+  print %0, %a      -- 2 2
+} | {
+  %0 := 4
+  print %0          -- 4
+}
+print %0            -- 2
 ```
 
-A print is erased, so its value is read off the canonical sequential run. Threads of one fork have no
-order between them, so a print inside one would name a value no schedule agrees on. Refusing it is
-what keeps the output deterministic for a program the checker accepts — the same reason `input` is
-refused there (`docs/prl.md` § *Input*).
+A **memory** print is not. `print` adds no read to a footprint, so Bernstein never constrains what it
+names and `wfB` accepting says nothing about it:
 
-A `for`, `if` or `while` body is a chain spliced into the one that encloses it, not a thread, so a
-print is legal in all three and `for` is the useful case: one line per iteration.
+```prl
+buf A[1]
+parallel { print A } | { A[0] := 1 }
+```
+
+`wfB` accepts — the first thread's footprint is empty — and the line reads `A = [0]` because the
+canonical order runs that thread first. A schedule that ran the second thread first would read
+`A = [1]`. The output heading says *on the canonical run* for exactly this reason.
+
+This is a deliberate trade. The alternative, giving a print's reads a real footprint, would make
+`wfB` refuse programs whose memory effects are independent and would break the erasure theorems,
+which is a high price for a statement that is not part of what the program computes. `input` stays
+refused in a thread on different grounds (`docs/prl.md` § *Input*): it consumes a stream, so the
+order threads read it in changes the values the program gets, not merely what it reports.
+
+One practical consequence: a print in a `parfor` body blocks rolling. `nestStmtOf` recognises loads,
+stores and register sets and nothing else, so a body holding a print falls back to unrolling, as one
+holding an `if`, a `while` or a nested `parallel` already does.
 
 ## The surface form
 
@@ -93,10 +124,10 @@ A cell and a buffer print as `name = value`, so a line says what it is with no l
 
 ```console
 $ paralever run Examples/Language/branch.prl
-output — what this program's print statements wrote, on the canonical run
+output:
 A = [1, 2]
 
-heap after the run — the cells the program left behind, which is most of what it says
+heap:
 ...
 ```
 

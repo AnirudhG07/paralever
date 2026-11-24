@@ -28,22 +28,19 @@ instead of nine, and a verdict that is the metatheorem's hypothesis discharged b
 
 /--
 info: sum.prl
-  memory    A[6] @0, out[3] @6  (9 cells)
-  reads     {A[0], A[1], A[2], A[3], A[4], A[5]}
-  writes    {out[0], out[1], out[2]}
-  threads   3
-  rounds    3 parallel, 9 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   A[6] @0, out[3] @6  (9 cells)
+  reads:    {A[0], A[1], A[2], A[3], A[4], A[5]}
+  writes:   {out[0], out[1], out[2]}
+  threads:  3
+  rounds:   3 parallel, 9 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (checkReport "sum.prl" sum)
 
 -- running it fills the buffers the file declared
 /--
-info: heap after the run — the cells the program left behind, which is most of what it says
-9 cells in 2 buffers, addressed 0 to 8
-NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
-
+info: heap:
 A [6] @0  [1, 2, 3, 4, 5, 6]
 out [3] @6  [3, 7, 11]
 -/
@@ -53,12 +50,12 @@ out [3] @6  [3, 7, 11]
 -- the program the website opens with: disjoint writes, overlapping reads
 /--
 info: matmul.prl
-  memory    A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
-  reads     {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
-  writes    {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
-  threads   2
-  rounds    10 parallel, 20 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   A[2, 2] @0, B[2, 2] @4, C[2, 2] @8  (12 cells)
+  reads:    {A[0, 0], B[0, 0], A[0, 1], B[1, 0], B[0, 1], B[1, 1], A[1, 0], A[1, 1]}
+  writes:   {C[0, 0], C[0, 1], C[1, 0], C[1, 1]}
+  threads:  2
+  rounds:   10 parallel, 20 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (checkReport "matmul.prl" matmul)
@@ -105,12 +102,12 @@ parallel reading and the sequential reading end with different memory. -/
 
 /--
 info: race.prl
-  memory    x[1] @0, log[2] @1  (3 cells)
-  reads     {}
-  writes    {log[0], x[0], log[1]}
-  threads   2
-  rounds    2 parallel, 4 sequential
-  verdict   every heap  RACE found — x[0] written by both threads
+  memory:   x[1] @0, log[2] @1  (3 cells)
+  reads:    {}
+  writes:   {log[0], x[0], log[1]}
+  threads:  2
+  rounds:   2 parallel, 4 sequential
+  verdict:  every heap  RACE found — x[0] written by both threads
 -/
 #guard_msgs in
 #eval IO.println (checkReport "race.prl" race)
@@ -140,12 +137,12 @@ anything. -- ref: `docs/cli.md` § The three verdicts -/
 
 /--
 info: scatter.prl
-  memory    idx[3] @0, dst[3] @3  (6 cells)
-  reads     {idx[0], idx[1], idx[2]}
-  writes    {dst[0], dst[1], dst[2]}
-  threads   3
-  rounds    2 parallel, 6 sequential
-  verdict   this heap   Proved: Yes — no two threads touch one cell here
+  memory:   idx[3] @0, dst[3] @3  (6 cells)
+  reads:    {idx[0], idx[1], idx[2]}
+  writes:   {dst[0], dst[1], dst[2]}
+  threads:  3
+  rounds:   2 parallel, 6 sequential
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
             any heap    RACE found — with idx[0] = -1: dst[0] written by both threads
 -/
 #guard_msgs in
@@ -165,12 +162,12 @@ def branch : Compiled := prl_file "branch.prl"
 
 /--
 info: branch.prl
-  memory    A[2] @0, c[1] @2  (3 cells)
-  reads     {c[0]}
-  writes    {A[0], A[1]}
-  threads   2
-  rounds    2 parallel, 3 sequential
-  verdict   this heap   Proved: Yes — no two threads touch one cell here
+  memory:   A[2] @0, c[1] @2  (3 cells)
+  reads:    {c[0]}
+  writes:   {A[0], A[1]}
+  threads:  2
+  rounds:   2 parallel, 3 sequential
+  verdict:  this heap   Proved: Yes — no two threads touch one cell here
             any heap    Inconclusive — wfB refuses over {A[0], A[1]}: a branch contributes both arms although only one runs
             no race found in 11 heap(s) probed over {c[0]}
 -/

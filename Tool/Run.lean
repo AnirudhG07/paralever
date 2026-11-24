@@ -1,5 +1,7 @@
 import Tool.Proof
 import Tool.Init
+import Tool.Time
+import Tool.Json
 import Paralever.Version
 import Lang.Smt.Report
 
@@ -22,7 +24,7 @@ structure Opts where
   file    : String := ""
   out     : Option String := none
   /-- `run`: one `Task` per thread of every fork, rather than the canonical order. -/
-  threads : Bool := false
+  realThreads : Bool := false
   /-- `to-prl`: ANSI colour, in the editor grammar's token classes. -/
   colour  : Bool := false
   /-- `prove`, `to-mlir`: the subject is the autoparallelized program. -/
@@ -30,18 +32,22 @@ structure Opts where
   /-- `autopar`: rewrite only inside the marked regions. -/
   regions : Bool := false
   /-- `prove`: typecheck the generated file with `lake env lean`. -/
-  check   : Bool := false
+  typecheck : Bool := false
   /-- No command: write the proof module there as well as printing the verdict. -/
   proof   : Option String := none
   /-- The function to read, for an MLIR module that holds more than one. -/
   func    : Option String := none
   /-- `run`: print only this buffer, or only this cell of it — `C` or `C[1, 2]`. -/
-  only    : Option String := none
+  buffer  : Option String := none
   /-- `run`, no command: the headings and the heap, not only what `print` wrote. On by default;
   `--quiet` turns it off. -/
   verbose : Bool := true
   /-- `run`: every cell of every buffer, however many there are. -/
-  allCells : Bool := false
+  full    : Bool := false
+  /-- `check`: the same facts as data. -/
+  json    : Bool := false
+  /-- Any command: how much processor time it took. -/
+  time    : Bool := false
   /-- `vc`: run a solver on what is left, rather than only printing the obligation. -/
   solve   : Bool := false
   /-- `vc`: hypotheses to assume about the loaded values — today only `nonneg`. -/
@@ -51,52 +57,89 @@ structure Opts where
   /-- `vc`: milliseconds a solver may spend per query; `0` is no limit. -/
   timeout : Nat := 10000
 
+/-- Every command name, for the suggestion an unknown one gets. -/
+def commands : List String :=
+  [ "init", "check", "run", "race", "autopar", "funcs", "prove", "vc"
+  , "to-prl", "to-mlir", "to-lean", "explain" ]
+
+/-- Every option spelling, for the same reason. -/
+def options : List String :=
+  [ "-o", "--real-threads", "--autopar", "--regions", "--typecheck", "--solve", "--solver"
+  , "--timeout", "--assume", "--prove", "--func", "--buffer", "-b", "--quiet", "-q"
+  , "--verbose", "-v", "--full", "--json", "--time", "--color", "--help", "-h", "--version" ]
+
+/-- Edit distance, capped: used only to name the likely spelling in an error. -/
+private def editDist : List Char → List Char → Nat
+  | [],      ys => ys.length
+  | xs,      [] => xs.length
+  | x :: xs, y :: ys =>
+      if x == y then editDist xs ys
+      else 1 + min (editDist xs (y :: ys)) (min (editDist (x :: xs) ys) (editDist xs ys))
+
+/-- Spellings this tool used to have, and what replaced them. An old script should be told what
+to write rather than left to guess from an edit distance that will not find it. -/
+def renamed : List (String × String) :=
+  [ ("--threads", "--real-threads"), ("--all-cells", "--full"), ("-n", "--buffer")
+  , ("--colour", "--color"), ("--check", "--typecheck") ]
+
+/-- `; did you mean '--color'?`, or nothing when nothing is close. -/
+def didYouMean (word : String) (known : List String) : String :=
+  let scored := known.map (fun k => (editDist word.toList k.toList, k))
+  match (scored.filter (fun p => p.1 ≤ 3)).foldl
+          (fun best p => match best with
+            | some b => if p.1 < b.1 then some p else best
+            | none   => some p) none with
+  | some (_, k) => s!"; did you mean '{k}'?"
+  | none        => ""
+
 def usage : String :=
-  "paralever — parallel programs that agree with their sequential reading, and the proof of it
+  "paralever — prove a parallel program agrees with its sequential reading
 
-usage: paralever [command] FILE [options]
+usage: paralever [COMMAND] FILE [OPTIONS]
 
-FILE is a `.prl` file or a `.mlir` module in generic form; both compile to the same program.
-With no command, `paralever FILE` says everything `run` says and adds the verdict: the theorem that
-holds, or the interleaving that breaks it.
+FILE is a .prl file or a .mlir module in generic form. With no command, paralever FILE prints the
+verdict and what the program's print statements wrote.
 
 commands
-  init      [DIR]              a Lake project with paralever as its dependency, and a program
-  check     FILE               memory, footprint, thread count, rounds, and the verdict
-  run       FILE               run it: what `print` wrote, then the heap it leaves, buffer by
-                               buffer (`-n` for one)
-  race      FILE               the interleaving that reaches `wrong`, replayed step by step
-  autopar   FILE               parallelize it, and print the result as `.prl`
-                               (--regions: only inside a marked region)
-  funcs     FILE               what an MLIR module holds, function by function
-  prove     FILE               write the Lean file that proves parallel = sequential
-  vc        FILE               the independence obligation as SMT-LIB, for a solver to discharge
-  to-prl    FILE               print it as `.prl`
-  to-mlir   FILE               print it as MLIR generic form (memref globals, async.execute forks)
-  to-lean   FILE               print it as Lean: a `Layout` and a `paralever { … }` block
-  explain   CODE               what a diagnostic code means, and why the rule exists
+  check FILE          memory, footprint, threads, rounds, verdict
+  run FILE            what print wrote, then the heap
+  race FILE           the interleaving that reaches wrong, step by step
+  autopar FILE        parallelize it, printed as .prl
+  prove FILE          write the Lean file that proves parallel = sequential
+  vc FILE             the independence obligation as SMT-LIB
+  to-prl FILE         print it as .prl
+  to-mlir FILE        print it as MLIR generic form
+  to-lean FILE        print it as Lean: a Layout and a paralever { … } block
+  funcs FILE          what an MLIR module holds, function by function
+  explain CODE        what a diagnostic code means
+  init [DIR]          a Lake project with paralever as its dependency
 
 options
-  -o PATH                      write there instead of to standard output
-  --threads                    `run`: one Task per thread, on real cores
-  --autopar                    `prove`, `to-mlir`, `to-lean`: take the parallelized program
-  --check                      `prove`: typecheck the generated file with `lake env lean`
-  --solve                      `vc`: discharge what is left with the first solver found —
-                               z3, then cvc5, or whatever PARALEVER_SMT names
-  --solver NAME|PATH           `vc`: use that solver instead of looking for one (implies --solve)
-  --timeout MS                 `vc`: milliseconds per query, default 10000; 0 for no limit
-  --assume nonneg              `vc`: assume every value read from the heap is at or above zero
-  --prove PATH                 no command: write the proof module there too, beside the verdict
-  --func NAME                  the function to read, for an MLIR module that holds several
-  -n NAME                      `run`: print only that buffer, or `-n 'C[1, 2]'` only that cell
-  --quiet, -q                  `run`, no command: print only what the program's `print`
-                               statements wrote — no headings, no heap
-  --verbose, -v                verbosity on, which is the default (undoes an earlier `--quiet`)
-  --all-cells                  `run`: every cell of every buffer, not the first 32 of each
-  --colour                     `to-prl`: ANSI colour
-  --help, --version
+  -o PATH             write there instead of to standard output
+  --json              check: the same facts as JSON
+  --time              any command: processor time used
+  -q, --quiet         run, no command: only what print wrote
+  -v, --verbose       the default; undoes an earlier --quiet
+  -b, --buffer NAME   run: one buffer, or one cell — --buffer 'C[1, 2]'
+  --full              run: every cell, not the first 32 of each buffer
+  --real-threads      run: one Task per thread, on real cores
+  --autopar           prove, to-mlir, to-lean: take the parallelized program
+  --regions           autopar: rewrite only inside the marked regions
+  --typecheck         prove: run lake env lean on the generated file
+  --prove PATH        no command: write the proof module there too
+  --solve             vc: discharge what is left with the first solver found
+  --solver NAME|PATH  vc: use that solver (implies --solve)
+  --timeout MS        vc: milliseconds per query, default 10000; 0 for no limit
+  --assume nonneg     vc: assume every value read from the heap is at or above zero
+  --func NAME         the function to read, for an MLIR module holding several
+  --color             to-prl: ANSI colour
+  -h, --help          this
+  --version
 
-`check` and the no-command form exit 1 when the program has a race, so a build can gate on it.
+exit codes
+  0  the program is sound, or the command had nothing to decide
+  1  the program fails: a race, a claim that does not hold, a module Lean rejects
+  2  the invocation is wrong, or a file cannot be read
 "
 
 /-- The command line, as options. Flags may come in any order; the first two bare words are the
@@ -108,10 +151,12 @@ where
     | [],             o => .ok o
     | "-o" :: p :: as, o => go as { o with out := some p }
     | "-o" :: [],      _ => .error "-o needs a path"
-    | "--threads" :: as, o => go as { o with threads := true }
+    | "--real-threads" :: as, o => go as { o with realThreads := true }
     | "--autopar" :: as, o => go as { o with autopar := true }
     | "--regions" :: as, o => go as { o with regions := true }
-    | "--check" :: as,   o => go as { o with check := true }
+    | "--typecheck" :: as, o => go as { o with typecheck := true }
+    | "--json" :: as,    o => go as { o with json := true }
+    | "--time" :: as,    o => go as { o with time := true }
     | "--solve" :: as,   o => go as { o with solve := true }
     | "--assume" :: a :: as, o =>
         if a == "nonneg" then go as { o with assume := o.assume ++ [a] }
@@ -129,18 +174,21 @@ where
     | "--prove" :: [],      _ => .error "--prove needs a path"
     | "--func" :: f :: as,  o => go as { o with func := some f }
     | "--func" :: [],       _ => .error "--func needs a function name"
-    | "-n" :: n :: as,      o => go as { o with only := some n }
-    | "-n" :: [],           _ => .error "-n needs a buffer name, as `-n C` or `-n 'C[1, 2]'`"
+    | "--buffer" :: n :: as, o => go as { o with buffer := some n }
+    | "-b" :: n :: as,       o => go as { o with buffer := some n }
+    | "--buffer" :: [],     _ => .error "--buffer needs a name, as `--buffer C` or `--buffer 'C[1, 2]'`"
+    | "-b" :: [],           _ => .error "-b needs a name, as `-b C` or `-b 'C[1, 2]'`"
     | "--verbose" :: as,    o => go as { o with verbose := true }
     | "-v" :: as,           o => go as { o with verbose := true }
     | "--quiet" :: as,      o => go as { o with verbose := false }
     | "-q" :: as,           o => go as { o with verbose := false }
-    | "--all-cells" :: as,  o => go as { o with allCells := true }
-
-    | "--colour" :: as,  o => go as { o with colour := true }
+    | "--full" :: as,       o => go as { o with full := true }
     | "--color" :: as,   o => go as { o with colour := true }
     | a :: as,           o =>
-        if a.startsWith "-" then .error s!"unknown option '{a}'"
+        if a.startsWith "-" then
+          match renamed.lookup a with
+          | some to => .error s!"'{a}' is now '{to}'"
+          | none    => .error s!"unknown option '{a}'{didYouMean a options}"
         -- a bare word that names a file is the file, so `paralever FILE` needs no command
         else if o.file.isEmpty && (a.endsWith ".prl" || a.endsWith ".mlir") then
           go as { o with file := a }
@@ -251,10 +299,10 @@ def prove (o : Opts) (c : Compiled) (k : Kind) : IO UInt32 := do
     { kind := k, path := ← pathFrom o.out o.file, name := name, stem := identOf name, prog := c
     , autopar := o.autopar }
   put o.out (proofFile s)
-  if o.check then
+  if o.typecheck then
     match o.out with
     | none   => do
-        IO.eprintln "--check needs -o: Lean typechecks a file, not standard output"
+        IO.eprintln "--typecheck needs -o: Lean typechecks a file, not standard output"
         pure 1
     | some p => do
         IO.eprintln s!"lake env lean {p}"
@@ -273,18 +321,18 @@ def toMlir (o : Opts) (c : Compiled) : IO UInt32 := do
   | .ok src  => do put o.out src; pure 0
 
 /-- **What a run says about the program.** What `print` wrote and the heap — or, under `--quiet`,
-the output alone. `run` and the no-command form print exactly this, so the two commands say the
-same things and the bare form's only addition is the verdict.
+the output alone. The no-command form prints the output half of this above its verdict, so the two
+commands agree on what the program said and differ on whether the heap or the analysis follows.
 
 A run executes and says nothing about whether the program is well formed. A racy program runs like
 any other and leaves whatever the schedule left, which may be a wrong answer; deciding that is
 `check`'s job and exhibiting it is `race`'s. Nothing here consults `wfB` or `raceSites`, so `run`
 costs one execution and no analysis. -- ref: `docs/cli.md` § A file on its own -/
-def runBody (o : Opts) (c : Compiled) : String :=
-  if !o.verbose then quietReport c else runReport c o.threads o.allCells
+def runBody (o : Opts) (c : Compiled) (racy : Bool := false) : String :=
+  if !o.verbose then quietReport c else runReport c o.realThreads o.full racy
 
-/-- Run one command on one file. -/
-def run (o : Opts) : IO UInt32 := do
+/-- Run one command on one file. `t0` is the reading `--time` subtracts from. -/
+def run (o : Opts) (t0 : Nat × Option Nat) : IO UInt32 := do
   -- `explain` reads no file at all
   if o.cmd == "explain" then
     put o.out (Diag.explain o.file)
@@ -307,40 +355,42 @@ def run (o : Opts) : IO UInt32 := do
   let (c, k, notes) ← loadAny o.file o.func
   match o.cmd with
   | "check"   => do
-      put o.out (notePlain notes ++ checkReport o.file c)
+      if o.json then
+        let t ← (if o.time then (some ∘ toString) <$> elapsedMs t0 else pure none)
+        put o.out (checkJson o.file c t)
+      else put o.out (notePlain notes ++ checkReport o.file c)
       -- a claim that does not hold is a failure of the file, not a note on it
       pure (if (ParProg.wfB c.prog
                  || (raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state).isEmpty)
                && claimHolds c
             then 0 else 1)
-  -- no command: the question a file arrives with. Check it, then show the evidence either way —
-  -- the theorem that holds, or the interleaving that breaks it. -- ref: docs/cli.md
+  -- no command: the question a file arrives with. This is `check`, plus the evidence either way —
+  -- what the program wrote, and the interleaving when there is one. -- ref: docs/cli.md
   | ""        => do
       let sites := raceSites (ParProg.execPar c.prog (fun _ => 0)) c.layout.state
-      -- the verdict is the one thing `run` does not say, so it is the one thing added. What follows
-      -- it is `run`'s own body, and then only what neither already holds: where a proof module
-      -- went, and the interleaving. -- ref: docs/cli.md § A file on its own
+      -- the head is `check`'s own report, so a bare file and `check FILE` agree line for line on a
+      -- silent program. What follows is what neither says: the output, where a proof module went,
+      -- and the interleaving. -- ref: docs/cli.md § A file on its own
       let wrote := match o.proof with
         | some p => s!"\nLean module written to {p}\n"
         | none   => ""
-      let head := if o.verbose then notePlain notes ++ verdictReport o.file c ++ "\n" else ""
+      let head := if o.verbose then notePlain notes ++ checkReport o.file c else ""
       let tail := if o.verbose
                   then wrote ++ (if sites.isEmpty then "" else "\n" ++ raceReport c ++ "\n")
                   else ""
-      -- `run` no longer says this, so the bare form says it: it has already decided the verdict,
-      -- and the heap printed below is one schedule's answer rather than the program's value
-      let caveat := if sites.isEmpty || !o.verbose then ""
-                    else "this program has a race, so what follows is what one schedule left,"
-                           ++ " not what it\ncomputes\n\n"
-      put o.out (head ++ caveat ++ runBody o c ++ tail)
+      -- the heap is `run`'s answer: a bare invocation says what holds and what the program wrote
+      -- -- ref: `docs/cli.md` § A file on its own
+      let body := if o.verbose then outReport c else quietReport c
+      let gap := if head.isEmpty || body.isEmpty then "" else "\n"
+      put o.out (head ++ gap ++ body ++ tail)
       -- a `--check` that Lean refused is the tool's answer too, so its code is passed on
       let rc ← if o.proof.isSome then prove { o with out := o.proof } c k else pure 0
       pure (if sites.isEmpty && claimHolds c then rc else 1)
   | "run"     => do
-      match o.only with
+      match o.buffer with
       | none     => do put o.out (runBody o c); pure 0
       | some sel =>
-          match runCell c o.threads sel with
+          match runCell c o.realThreads sel with
           | .error e => do IO.eprintln s!"{o.file}: {e}"; pure 2
           | .ok line => do
               -- what `print` wrote is the program's output, so `-n` keeps it and narrows the heap
@@ -378,7 +428,10 @@ def run (o : Opts) : IO UInt32 := do
       let c' := if o.autopar then { c with prog := AutoPar.rewrite c.prog } else c
       put o.out (toLean c')
       pure 0
-  | cmd       => do IO.eprintln s!"unknown command '{cmd}'\n\n{usage}"; pure 2
+  | cmd       => do
+      IO.eprintln s!"unknown command '{cmd}'{didYouMean cmd commands}"
+      IO.eprintln "run `paralever --help` for the list"
+      pure 2
 
 /-- **The entry point.** -/
 def main (args : List String) : IO UInt32 := do
@@ -389,16 +442,31 @@ def main (args : List String) : IO UInt32 := do
     IO.println Paralever.versionLine
     return 0
   match parseArgs args with
-  | .error e => do IO.eprintln s!"{e}\n\n{usage}"; pure 2
+  | .error e => do
+      IO.eprintln e
+      IO.eprintln "run `paralever --help` for the list"
+      pure 2
   | .ok o    =>
       -- `init` writes files and reads none, so it is answered before the file is demanded
       if o.cmd == "init" then Init.write (if o.file.isEmpty then "." else o.file)
       else if o.file.isEmpty then do
         let who := if o.cmd.isEmpty then "paralever" else o.cmd
-        IO.eprintln s!"{who}: no file given\n\n{usage}"
+        IO.eprintln s!"{who}: no file given"
+        IO.eprintln s!"usage: paralever {if o.cmd.isEmpty then "" else o.cmd ++ " "}FILE"
         pure 2
-      else
-        try run o
-        catch e => do IO.eprintln (toString e); pure 1
+      else if o.json && o.cmd != "check" then do
+        IO.eprintln "--json is for `check`; the other commands print text"
+        pure 2
+      else do
+        let t0 ← timeStart
+        let rc ← try run o t0 catch e => do IO.eprintln (toString e); pure 1
+        -- `race` always says how long the search took; everything else only under `--time`.
+        -- `check --json` carries it as a field instead, so it is not printed twice.
+        if (o.time || o.cmd == "race") && !(o.json && o.cmd == "check") then
+          let line ← timeLine t0
+          match o.out with
+          | none   => IO.println line
+          | some _ => IO.eprintln line
+        pure rc
 
 end Paralever.Tool

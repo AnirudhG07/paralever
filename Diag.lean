@@ -142,12 +142,9 @@ def render (s : Source) (d : Diagnostic) : String :=
         , indent w ++ " |"
         , ln ++ " | " ++ text
         , indent w ++ " | " ++ caretLine text p.col stopCol ]
-  let gutter := match d.span with
-    | none    => ""
-    | some sp => indent (toString (s.posAt sp.start).line).length
   "\n".intercalate ([head] ++ body
-    ++ d.notes.map (fun n => gutter ++ " = note: " ++ n)
-    ++ d.hints.map (fun h => gutter ++ " = help: " ++ h))
+    ++ d.notes.map (fun n => "Note: " ++ n)
+    ++ d.hints.map (fun h => "Tip: " ++ h))
 
 /-! ## The registry
 
@@ -275,10 +272,21 @@ def p114 : Code := code "P114" "more than one `assert`"
 fourth. Split the file, or write one `def` that calls the others and compare that \
 (docs/equivalence.md)."
 
+def p115 : Code := code "P115" "a register read before anything writes it"
+  "`Regs` is a total function, so every register reads as `0` until something assigns it and no \
+read can fail at run time. That totality is deliberate — it is what keeps definedness out of every \
+theorem that mentions a register — so the check belongs here, where the program text is still \
+visible. The read is refused when no assignment reaches it on every path: nothing in the file \
+assigns the register, or the only assignment sits where it does not escape. A `parallel` thread \
+and a rolled `for` both run from the registers the fork started with and leave them unchanged at \
+the join, which is what makes a register write contribute nothing to a footprint; an `if` arm and \
+a `while` body may not run at all (docs/block-ir.md)."
+
 /-- Every code, in order. A code not in this list has no explanation and must not be issued. -/
 def codes : List Code :=
   [p001, p002, p003, p004, p005, p006,
-   p101, p102, p103, p104, p105, p106, p107, p108, p109, p110, p111, p112, p113, p114]
+   p101, p102, p103, p104, p105, p106, p107, p108, p109, p110, p111, p112, p113, p114,
+   p115]
 
 /-- The code with this identifier, for `paralever explain`. Case-insensitive, so `p108` works. -/
 def find? (id : String) : Option Code :=

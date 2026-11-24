@@ -11,9 +11,8 @@ Rationale, the parameter kinds, and what a body may not contain: `docs/prl.md` �
 
 namespace Paralever.Lang
 
-/-- A diagnostic under a named rule. The span is left out: the surface AST carries no positions, so
-one found after the read names the rule and the reason but not the column.
--- ref: `docs/diagnostics.md` § What is not here yet -/
+/-- A diagnostic under a named rule, with no span of its own. `Lower` fills one in from the
+`Stmt.at` wrapper the reader put around the statement being compiled. -/
 def diag (c : Diag.Code) (msg : String) (notes : List String := [])
     (hints : List String := []) : Diag.Diagnostic :=
   { code := some c, msg := msg, notes := notes, hints := hints }
@@ -45,6 +44,7 @@ def Arg.regTokens : Arg → List String
 mutual
 
 def Stmt.regTokens : Stmt → List String
+  | .at _ s        => s.regTokens
   | .load r a      => r :: a.regTokens
   | .store a e     => a.regTokens ++ e.regTokens
   | .set r e       => r :: e.regTokens
@@ -108,7 +108,7 @@ def collect : List Stmt → Except Diag.Diagnostic (Table × List Stmt)
   | []      => .ok ([], [])
   | s :: ss => do
       let (fs, rest) ← collect ss
-      match s with
+      match s.bare with
       | .defn f ps b =>
           if (fs.lookup f).isSome then
             .error (diag Diag.p102 s!"'{f}' is defined twice"
@@ -145,6 +145,7 @@ private def declInfo : Decl → BodyInfo
 mutual
 
 def Stmt.info : Stmt → BodyInfo
+  | .at _ s        => s.info
   | .load .. | .store .. | .set .. | .synchronize | .print _ => {}
   | .free nm       => { bad := [s!"free {nm}"] }
   | .decl ds       => ds.foldl (fun acc d => acc ++ declInfo d) {}
@@ -368,6 +369,9 @@ mutual
 
 /-- One statement, with the enclosing substitution applied and every call in it written out. -/
 partial def expandStmt (fs : Table) (σ : Subst) : Stmt → M (List Stmt)
+  -- a call writes out a body that carries its own ranges, so the inner one survives and the call
+  -- site's range covers whatever the body does not name
+  | .at sp s       => do pure ((← expandStmt fs σ s).map (Stmt.at sp))
   | .load r a      => do pure [.load (σ.reg r) (← ok (Addr.subst σ a))]
   | .store a e     => do pure [.store (← ok (Addr.subst σ a)) (← ok (Exp.subst σ e))]
   | .set r e       => do pure [.set (σ.reg r) (← ok (Exp.subst σ e))]

@@ -28,12 +28,12 @@ hypothesis beyond the program text. -/
 
 /--
 info: input.prl
-  memory    s[16] @0  (16 cells)
-  reads     {s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9], … +6 more}
-  writes    {s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9], … +6 more}
-  threads   16
-  rounds    2 parallel, 32 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   s[16] @0  (16 cells)
+  reads:    {s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9], … +6 more}
+  writes:   {s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9], … +6 more}
+  threads:  16
+  rounds:   2 parallel, 32 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (checkReport "input.prl" upcase)

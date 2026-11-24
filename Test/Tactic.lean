@@ -70,8 +70,7 @@ show, and the line above says why. -/
 info: the exact check finds no conflicting access at this heap, so the obligation holds here
 `ρ` is a variable, so the registers are all 0 below
 `σ` is a variable, so the heap below is the one whose cells are all 0: what it shows holds at that heap, not at every heap
-No counterexample: no par node fails Bernstein.
-Sequential: 0↦0, 1↦0, 2↦0, 3↦0, 4↦0, 5↦0, 6↦0, 7↦0, +1 more
+counterexample: none
 -/
 #guard_msgs in
 example (ρ : Regs) (σ : State) :

@@ -125,13 +125,13 @@ solver owns computed ones.
 `Sym.evalWith` substitutes it back into the symbolic addresses to recompute the collision *in Lean*
 (`Smt.witness`), so the two cells the report names are named on our own arithmetic. But an
 assignment is not a run: nothing says any reachable heap holds those values, so a `sat` is the
-obligation **failing**, reported as `inconclusive`, never as `RACY`. Only a real interleaving earns
-that word, and `paralever race` is what looks for one. Turning a model into an interleaving needs a
+obligation **failing**, reported as `Inconclusive`, never as `RACE found`. Only a real interleaving
+earns those words, and `paralever race` is what looks for one. Turning a model into an interleaving needs a
 heap witness and is not done; `Search/RaceSearch.lean`'s `findWrongGuided` is where it would go.
 
 **`unsat` is not a Lean proof.** An external solver's refutation is not checked by Lean's kernel, so
 a verdict obtained this way is reported as *discharged by* the solver it came from, naming the
-solver and its version, and never as `PROVED`. Three futures, in increasing cost: keep the label;
+solver and its version, and never as `Proved: Yes`. Three futures, in increasing cost: keep the label;
 reconstruct the refutation from a proof certificate (Alethe, lean-smt); or use `unsat` as a filter
 that says a Lean proof exists before one is attempted. The label is what is implemented.
 

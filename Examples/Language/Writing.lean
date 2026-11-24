@@ -178,8 +178,17 @@ example : (AutoPar.planOf chain).length = 2 := by decide
 
 /--
 info: paralever {
-  parallel { [1] := 10 } | { [2] := 20 } | { [3] := 30 };
-  parallel { %0 := [1]; [4] := (%0 + 1) }
+  parallel {
+    [1] := 10
+  } | {
+    [2] := 20
+  } | {
+    [3] := 30
+  };
+  parallel {
+    %0 := [1];
+    [4] := (%0 + 1)
+  }
 }
 -- units      4
 -- stages     2

@@ -56,7 +56,7 @@ stages, and nothing moves past anything.
 ```text
   units    u₁  u₂  u₃  u₄  u₅  u₆
            └──┬──┘  └┬┘  └──┬──┘
-  threads    t₁      t₂     t₃
+  threads:   t₁      t₂     t₃
              └───┬───┘      │
   stages      stage₁      stage₂
 

@@ -1,4 +1,5 @@
 import Lang.Core.Layout
+import Diag
 
 /-! # The syntax of a `.prl` file
 
@@ -171,7 +172,15 @@ inductive Stmt where
   `parallel` block, where what it observes does not depend on a schedule.
   -- ref: `docs/print.md` -/
   | print   : List PrintArg → Stmt
+  /-- A statement with the source it was read from. The reader wraps every statement, so a
+  diagnostic raised while lowering has a line to point at. Erased: `Lower` unwraps it. -/
+  | at      : Diag.Span → Stmt → Stmt
   deriving Repr, Inhabited
+
+/-- A statement without its source range, for the walkers that ask what form it is. -/
+def Stmt.bare : Stmt → Stmt
+  | .at _ s => s.bare
+  | s       => s
 
 /-- A whole file. -/
 structure File where

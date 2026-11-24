@@ -146,17 +146,14 @@ The one to look at is `non_affine_load`: a hundred iterations of `memref.load %0
 non-affine subscript.
 
 ```console
-$ paralever --func non_affine_load parallelize.mlir
+$ paralever check --func non_affine_load parallelize.mlir
 parallelize.mlir
-  memory    v0[100] @0  (100 cells)
-  reads     {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], … +90 more}
-  writes    {}
-  threads   1
-  rounds    100 parallel, 100 sequential
-  verdict   independent — par = seq under every schedule (wfB = true)
-
-PROVED. Bernstein holds at every fork, so par_seq_eq applies: every schedule of this
-program leaves the heap its sequential reading leaves.
+  memory:   v0[100] @0  (100 cells)
+  reads:    {v0[0], v0[1], v0[2], v0[3], v0[4], v0[5], v0[6], v0[7], v0[8], v0[9], … +90 more}
+  writes:   {}
+  threads:  1
+  rounds:   100 parallel, 100 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 ```
 
 `-affine-parallelize` **declines** that loop — the file's own `CHECK` line expects `affine.for` to

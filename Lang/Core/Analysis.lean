@@ -256,14 +256,24 @@ def dedupSorted : List Loc → List Loc
   | [l]          => [l]
   | l :: l' :: ls => if l == l' then dedupSorted (l' :: ls) else l :: dedupSorted (l' :: ls)
 
-/-- Two sorted lists with no element in common. One merge, where `disjointB` is one product. -/
-def disjointSorted : List Loc → List Loc → Bool
-  | [],      _       => true
-  | _,       []      => true
-  | a :: as, b :: bs =>
+/-- `disjointSorted` with its fuel exposed. A merge shrinks a different argument in each branch, so
+without the fuel Lean compiles this by well-founded recursion and marks it `@[irreducible]` — and
+then nothing built over the planner reduces, so every `decide` on `autoPar`'s output fails.
+-- ref: `docs/autopar.md` § Regions -/
+def disjointSortedGo : Nat → List Loc → List Loc → Bool
+  | 0,     _,       _       => false
+  | _ + 1, [],      _       => true
+  | _ + 1, _,       []      => true
+  | n + 1, a :: as, b :: bs =>
       if a == b then false
-      else if a < b then disjointSorted as (b :: bs)
-      else disjointSorted (a :: as) bs
+      else if a < b then disjointSortedGo n as (b :: bs)
+      else disjointSortedGo n (a :: as) bs
+
+/-- Two sorted lists with no element in common. One merge, where `disjointB` is one product. Each
+step drops one cell, so `as.length + bs.length + 1` steps are always enough and the `false` the
+fuel runs out on is unreachable — it is the refusing answer either way. -/
+def disjointSorted (as bs : List Loc) : Bool :=
+  disjointSortedGo (as.length + bs.length + 1) as bs
 
 /-- `Access.indepB` over sorted footprints: Bernstein, with shared reads still allowed. -/
 def indepSorted (f₁ f₂ : Footprint) : Bool :=
@@ -271,10 +281,47 @@ def indepSorted (f₁ f₂ : Footprint) : Bool :=
     && disjointSorted f₁.writes f₂.reads
     && disjointSorted f₂.writes f₁.reads
 
+/-- Two sorted lists merged. The `Nat` is fuel, so the recursion is structural on it.
+
+`List.mergeSort` is well-founded and `@[irreducible]`, so a term built over it does not reduce and
+every `decide` downstream of `autoPar` fails. -- ref: `docs/autopar.md` § Regions -/
+def mergeLocs : Nat → List Loc → List Loc → List Loc
+  | 0,     as,      bs      => as ++ bs
+  | _ + 1, [],      bs      => bs
+  | _ + 1, as,      []      => as
+  | n + 1, a :: as, b :: bs =>
+      if a ≤ b then a :: mergeLocs n as (b :: bs) else b :: mergeLocs n (a :: as) bs
+
+/-- One bottom-up pass: adjacent runs merged pairwise, halving their number. -/
+def mergePass : List (List Loc) → List (List Loc)
+  | a :: b :: rs => mergeLocs (a.length + b.length) a b :: mergePass rs
+  | rs           => rs
+
+/-- Runs merged down to one. Fuel: a pass halves the count, so a list's length is more than enough
+passes. -/
+def mergeRuns : Nat → List (List Loc) → List Loc
+  | _,     []  => []
+  | _,     [r] => r
+  | 0,     rs  => rs.flatten
+  | n + 1, rs  => mergeRuns n (mergePass rs)
+
+/-- A sorted list of the same cells. Bottom-up merge sort, so the cost is the one the linear
+independence test was bought with. -/
+def sortLocs (ls : List Loc) : List Loc := mergeRuns ls.length (ls.map ([·]))
+
 /-- A statement's footprint, sorted and deduplicated, ready to be tested many times. -/
 def sortedFootprint (p : ParProg) : Footprint :=
   let f := footprintOf p
-  ⟨dedupSorted (f.reads.mergeSort (· ≤ ·)), dedupSorted (f.writes.mergeSort (· ≤ ·))⟩
+  ⟨dedupSorted (sortLocs f.reads), dedupSorted (sortLocs f.writes)⟩
+
+-- the two hand-rolled functions against the library ones they stand in for
+#guard ((List.range 40).all fun k =>
+  let xs := (List.range k).map (fun i => (i * 37 + 11) % 23)
+  sortLocs xs == xs.mergeSort (· ≤ ·))
+#guard ((List.range 14).all fun i => (List.range 14).all fun j =>
+  let as := sortLocs ((List.range i).map (fun k => (k * 7 + i) % 13))
+  let bs := sortLocs ((List.range j).map (fun k => (k * 5 + j) % 13))
+  disjointSorted as bs == disjointB as bs)
 
 /-- `canParSeg` on segments whose footprints have already been taken. -/
 def canParSegFp (a b : ParProg × Footprint) : Bool :=
@@ -397,11 +444,12 @@ def barrierFreeAll : List ParProg → Bool
 
 end
 
-/-- Whether no barrier — no `synchronize`, no `print` — sits inside a `parallel` thread. Between
-phases a barrier is a constraint on the schedule; *inside* a thread it would be a barrier between
-siblings, and `ParM` has no synchronisation node to give that a meaning. `Lang.Compile.Lower`
-refuses such a program (`P106`); this is the gate that the parallelizer does not build one.
--- ref: `docs/print.md` § Where a print may not go -/
+/-- Whether no barrier — no `synchronize`, no `print` — sits inside a `parallel` thread. A
+`synchronize` there is refused by `Lang.Compile.Lower` (`P106`): between phases it constrains the
+schedule, but between siblings `ParM` has no synchronisation node to give it a meaning. A `print`
+there is *written* freely, so what this gates is the parallelizer rather than the reader — moving a
+print into a thread changes which heap it sees, so the rewrite would preserve the program's heap and
+still change what it says. -- ref: `docs/print.md` § In a thread -/
 def noBarrierInThread : ParProg → Bool
   | .par ss        => barrierFreeAll ss
   | .seq a b       => noBarrierInThread a && noBarrierInThread b

@@ -556,8 +556,15 @@ def param : P Param := do
 
 mutual
 
-/-- One statement. -/
+/-- One statement, wrapped in the source range it was read from. -/
 partial def stmt : P Stmt := do
+  ws
+  let a := (← get).i
+  let s ← stmtBare
+  pure (.at ⟨a, (← get).i⟩ s)
+
+/-- One statement, bare. -/
+partial def stmtBare : P Stmt := do
   ws
   if ← tryKw "synchronize" then pure .synchronize
   else if ← tryKw "print" then pure (.print (← printArgs))

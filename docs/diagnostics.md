@@ -40,10 +40,9 @@ error[P101]: 'B' is not declared
   |
 6 |   B[i] := %t * 2
   |   ^
-  |
-  = note: a buffer must be declared before it is used, because `State` is total and declaring is
-          the only way to obtain memory
-  = help: add `buf B[4]` above, or subscript an existing buffer
+Note: a buffer must be declared before it is used, because `State` is total and declaring is the
+only way to obtain memory
+Tip: add `buf B[4]` above, or subscript an existing buffer
 ```
 
 and `paralever explain P101` prints the rule on its own.
@@ -74,10 +73,19 @@ occurs at exactly one source location explains nothing a message could not.
 | `P109` | the input stream does not supply what the program asks for |
 | `P110` | a slice that is not inside its buffer |
 | `P111` | a `print` argument with no spelling of its own |
+| `P112` | a call that does not match its `def` |
+| `P113` | a `def` that calls itself |
+| `P114` | more than one `assert` |
+| `P115` | a register read before anything writes it |
 
 `P` is the `.prl` front end; `M` is MLIR and `T` the command line, and those are not yet converted.
 The registry is one list, so a code cannot be issued without an explanation existing for it, and
 `Test/Diag.lean` gates that every code in the table is reachable and distinct.
+
+A lowering diagnostic is raised with no span and `Lower.compileStmt`'s `Stmt.at` arm fills in the
+range of the statement it was raised under. That is one place rather than the thirty that raise
+one, and because the innermost wrapper is entered last, a statement written out from a `def` body
+reports where it stands in the body rather than where the call stands.
 
 ## Positions stay lazy
 
@@ -93,10 +101,11 @@ on the failure that escaped.
 
 ## What is not here yet
 
-- **Spans on lowering diagnostics.** The surface AST (`Lang/Compile/Ast.lean`) carries no
-  positions, so a `P1xx` diagnostic names the rule and the file and has nothing to point a caret at.
-  The reader's `P0xx` codes do have spans, because the reader knows the offset it failed at. Giving
-  `Stmt` a span is the fix and is the same change MLIR's `Op` needs.
+- **Sub-statement spans on lowering diagnostics.** `Stmt.at` wraps every statement the reader
+  produces with its source range, so a `P1xx` diagnostic points at the statement that caused it —
+  the whole statement, not the name or register inside it that is wrong. `Exp` and `Addr` carry no
+  positions, so narrowing the caret further needs the same change again, one level down. MLIR's
+  `Op` still has no positions at all.
 - **Multi-error recovery.** The first failure still aborts. Collecting diagnostics needs a
   resynchronization point in each reader (the statement separator, for `.prl`), and the `Except`
   plumbing has to become a writer. Recorded as the next step rather than half-done.

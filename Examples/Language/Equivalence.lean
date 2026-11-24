@@ -30,13 +30,13 @@ def file : Compiled := prl_file "equiv.prl"
 
 /--
 info: equiv.prl
-  memory    A[8] @0  (8 cells)
-  reads     {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
-  writes    {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
-  threads   1
-  rounds    224 parallel, 224 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
-  claim     bubble == oddeven on A
+  memory:   A[8] @0  (8 cells)
+  reads:    {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  writes:   {A[0], A[1], A[2], A[3], A[4], A[5], A[6], A[7]}
+  threads:  1
+  rounds:   224 parallel, 224 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim:    bubble == oddeven on A
             Agree: Yes — the same 8 cell(s), under every schedule of either side
 -/
 #guard_msgs in
@@ -109,13 +109,13 @@ def two : Compiled := prl_file "twofold.prl"
 
 /--
 info: twofold.prl
-  memory    X[8] @0, P[8] @8, S[1] @16  (17 cells)
-  reads     {X[0], X[1], X[2], X[3], X[4], X[5], X[6], X[7], P[0], P[1], … +2 more}
-  writes    {P[0], P[1], P[2], P[3], S[0]}
-  threads   4
-  rounds    8 parallel, 17 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
-  claim     chunked == tree on S
+  memory:   X[8] @0, P[8] @8, S[1] @16  (17 cells)
+  reads:    {X[0], X[1], X[2], X[3], X[4], X[5], X[6], X[7], P[0], P[1], … +2 more}
+  writes:   {P[0], P[1], P[2], P[3], S[0]}
+  threads:  4
+  rounds:   8 parallel, 17 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim:    chunked == tree on S
             Agree: Yes — the same 1 cell(s), under every schedule of either side
 -/
 #guard_msgs in
@@ -159,13 +159,13 @@ def strong : Compiled := prl_file "strength.prl"
 
 /--
 info: strength.prl
-  memory    X[4] @0, P[2] @4, S[1] @6, D[1] @7  (8 cells)
-  reads     {X[0], X[1], X[2], X[3], P[0], P[1]}
-  writes    {P[0], P[1], S[0], D[0]}
-  threads   2
-  rounds    7 parallel, 10 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
-  claim     logged == quiet on S, and {%x'3, %y'4}
+  memory:   X[4] @0, P[2] @4, S[1] @6, D[1] @7  (8 cells)
+  reads:    {X[0], X[1], X[2], X[3], P[0], P[1]}
+  writes:   {P[0], P[1], S[0], D[0]}
+  threads:  2
+  rounds:   7 parallel, 10 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim:    logged == quiet on S, and {%x'3, %y'4}
             Agree: Yes — the same 1 cell(s) and 2 register(s), under every schedule of either side
 -/
 #guard_msgs in
@@ -206,13 +206,13 @@ def tally : Compiled := prl_file "tally.prl"
 
 /--
 info: tally.prl
-  memory    X[4] @0, P[2] @4, S[1] @6  (7 cells)
-  reads     {X[0], X[1], X[2], X[3], P[0], P[1]}
-  writes    {P[0], P[1], S[0]}
-  threads   2
-  rounds    6 parallel, 9 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
-  claim     counted == miscounted on S, and {%acc'3, %cnt'4, %p'5}
+  memory:   X[4] @0, P[2] @4, S[1] @6  (7 cells)
+  reads:    {X[0], X[1], X[2], X[3], P[0], P[1]}
+  writes:   {P[0], P[1], S[0]}
+  threads:  2
+  rounds:   6 parallel, 9 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  claim:    counted == miscounted on S, and {%acc'3, %cnt'4, %p'5}
             DISAGREE — {%cnt'4} (1 of 3 register(s) compared; every compared cell agrees)
 -/
 #guard_msgs in

@@ -20,12 +20,12 @@ def file : Compiled := prl_file "funcs.prl"
 
 /--
 info: funcs.prl
-  memory    M[4, 4] @0, V[4] @16, Y[4] @20, Z[4] @24  (28 cells)
-  reads     {M[0, 0], V[0], M[0, 1], V[1], M[0, 2], V[2], M[0, 3], V[3], M[1, 0], M[1, 1], … +14 more}
-  writes    {Y[0], Y[1], Y[2], Y[3], Z[0], Z[1], Z[2], Z[3]}
-  threads   4
-  rounds    17 parallel, 44 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   M[4, 4] @0, V[4] @16, Y[4] @20, Z[4] @24  (28 cells)
+  reads:    {M[0, 0], V[0], M[0, 1], V[1], M[0, 2], V[2], M[0, 3], V[3], M[1, 0], M[1, 1], … +14 more}
+  writes:   {Y[0], Y[1], Y[2], Y[3], Z[0], Z[1], Z[2], Z[3]}
+  threads:  4
+  rounds:   17 parallel, 44 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (checkReport "funcs.prl" file)

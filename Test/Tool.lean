@@ -150,20 +150,28 @@ a generated project cannot pin a different one. -- ref: `docs/cli.md` § init -/
 
 private def opts (as : List String) : Option Opts := (parseArgs as).toOption
 
+/-- The refusal, when the arguments are refused. -/
+private def errOf (as : List String) : Option String :=
+  match parseArgs as with | .error e => some e | .ok _ => none
+
 #guard (opts ["check", "a.prl"]).any (fun o => o.cmd == "check" && o.file == "a.prl")
 -- `init` takes a directory, which is not a file name, and takes none at all
 #guard (opts ["init", "my-kernel"]).any (fun o => o.cmd == "init" && o.file == "my-kernel")
 #guard (opts ["init"]).any (fun o => o.cmd == "init" && o.file.isEmpty)
-#guard (opts ["prove", "a.prl", "-o", "A.lean", "--check"]).any
-  (fun o => o.out == some "A.lean" && o.check)
-#guard (opts ["run", "--threads", "a.prl"]).any (fun o => o.threads && o.file == "a.prl")
+#guard (opts ["prove", "a.prl", "-o", "A.lean", "--typecheck"]).any
+  (fun o => o.out == some "A.lean" && o.typecheck)
+#guard (opts ["run", "--real-threads", "a.prl"]).any (fun o => o.realThreads && o.file == "a.prl")
 #guard (opts ["to-mlir", "--autopar", "a.prl"]).any (fun o => o.autopar)
 -- no command, and the proof asked for alongside the verdict
 #guard (opts ["a.prl", "--prove", "A.lean"]).any
   (fun o => o.cmd.isEmpty && o.file == "a.prl" && o.proof == some "A.lean")
 #guard (opts ["--func", "main", "a.mlir"]).any (fun o => o.func == some "main")
-#guard (opts ["run", "a.prl", "-n", "C"]).any (fun o => o.only == some "C" && !o.allCells)
-#guard (opts ["run", "a.prl", "--all-cells"]).any (fun o => o.allCells)
+#guard (opts ["run", "a.prl", "-b", "C"]).any (fun o => o.buffer == some "C" && !o.full)
+#guard (opts ["run", "a.prl", "--buffer", "C"]).any (fun o => o.buffer == some "C")
+#guard (opts ["run", "a.prl", "--full"]).any (fun o => o.full)
+#guard (opts ["check", "a.prl", "--json", "--time"]).any (fun o => o.json && o.time)
+-- a spelling this tool used to have names its replacement rather than guessing
+#guard errOf ["run", "a.prl", "--all-cells"] == some "'--all-cells' is now '--full'"
 -- verbosity is on until something turns it off, and the last of the two wins
 #guard (opts ["run", "a.prl"]).any (fun o => o.verbose)
 #guard (opts ["run", "a.prl", "-q"]).any (fun o => !o.verbose)

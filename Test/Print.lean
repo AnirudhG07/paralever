@@ -60,17 +60,37 @@ private def items (c : Compiled) : List (List PrintItem) :=
 -- and the `.prl` text comes back out, so a file with prints is still a file
 #guard roundTrips "buf A[4]\nreg p\n\n%p := 2\nprint \"p =\", %p, A[%p]"
 
-/-! ## Where a print may not go
+/-! ## Where a print may go, which is anywhere
 
-A print is erased, so its value is read off the sequential run. Threads of one fork have no order
-between them, so a print inside one would name a value no schedule agrees on — refused, rather than
-reported as whichever thread happened to run first. -/
+A print is erased from both interpreters and carries an empty footprint, so no theorem can see one
+wherever it sits. In a `for`, an `if` or a `while` — chains spliced into the one that encloses them
+— it reads the heap that reaches it, and that is the whole story.
 
-#guard codeOf "buf A[1]\n\nparallel {\n  print A\n} | {\n  A[0] := 1\n}" == some "P106"
-#guard codeOf "buf A[2]\n\nparfor i in 2 {\n  print A\n}" == some "P106"
--- legal inside a `for`, an `if` and a `while`, which are chains and not forks
+In a `parallel` thread the lines come off the canonical order, the threads as written, and the two
+kinds of print differ. A register print is schedule-independent: each thread starts from the
+register file the fork copied in and none of its writes escape, so what it shows is what every
+schedule shows. A memory print is not. `print` adds no read to a footprint, so `wfB` accepting says
+nothing about what another thread wrote to the cell it names — the first guard below reads `[0]`
+only because thread one runs first. -- ref: `docs/print.md` § In a thread -/
+
 #guard (ok "buf A[2]\n\nfor i in 2 {\n  print A[i]\n}").isSome
 #guard (ok "buf A[1]\nreg p\n\n%p := 1\nif %p { print A } else { print A }").isSome
+
+-- a memory print inside a thread: accepted, and what it shows is one order's answer
+#guard (ok "buf A[1]\n\nparallel {\n  print A\n} | {\n  A[0] := 1\n}").map outputOf
+  == some ["A = [0]"]
+
+-- registers are copied in at the fork and discarded at the join, so each thread sees its own and
+-- the program keeps the file it had before: 2 in the first thread, 4 in the second, 2 after
+#guard (ok "%0 := 2\n\nparallel {\n  %a := %0\n  print %0, %a\n} | {\n  %0 := 4\n  print %0\n}\n\nprint %0").map
+  outputOf == some ["2 2", "4", "2"]
+
+-- and the text comes back out with the print still inside the thread
+#guard roundTrips "buf A[1]\n\nparallel {\n  print A\n} | {\n  A[0] := 1\n}"
+
+-- a print in a `parfor` body is legal too; it blocks rolling, as an `if` or a `while` there does
+#guard (ok "buf A[2]\n\nparfor i in 2 {\n  print A\n}").map outputOf
+  == some ["A = [0, 0]", "A = [0, 0]"]
 
 /-! ## Erased
 
@@ -141,6 +161,10 @@ private def agrees (src : String) : Bool :=
 #guard agrees "buf A[4] = arange\nreg s\n\n%s := 0\nfor i in 4 {\n  print A[i]\n  A[i] := i + 1\n}\nprint A"
 #guard agrees "buf A[2]\nreg p\n\n%p := 0\nwhile %p in 3 {\n  print \"round\", %p\n  %p := %p + 1\n}"
 #guard agrees "buf A[1] = 5\nreg p\n\n%p := A[0]\nif %p { print \"yes\" } else { print \"no\" }"
+-- the walk descends into a fork now, so it has to thread the heap through the threads exactly as
+-- `execSeq`'s `seqAll` does: same pre-fork registers into each, heap in turn, registers back out
+#guard agrees "buf A[2]\n\nparallel {\n  print A\n  A[0] := 1\n} | {\n  A[1] := 2\n  print A\n}\nprint A"
+#guard agrees "buf A[2]\n\nparfor i in 2 {\n  print A[i]\n  A[i] := i + 1\n}\nprint A"
 
 /-! ### And what it writes
 

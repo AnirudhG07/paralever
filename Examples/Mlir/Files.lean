@@ -61,21 +61,18 @@ parallel {
 
 /--
 info: doall-no.mlir
-  memory    A[8] @0, B[8] @8, C[8] @16  (24 cells)
-  reads     {A[0], B[0], A[1], B[1], A[2], B[2], A[3], B[3], A[4], B[4], … +6 more}
-  writes    {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
-  threads   8
-  rounds    3 parallel, 24 sequential
-  verdict   every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
+  memory:   A[8] @0, B[8] @8, C[8] @16  (24 cells)
+  reads:    {A[0], B[0], A[1], B[1], A[2], B[2], A[3], B[3], A[4], B[4], … +6 more}
+  writes:   {C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]}
+  threads:  8
+  rounds:   3 parallel, 24 sequential
+  verdict:  every heap  Proved: Yes — wfB accepts: the threads' footprints are pairwise independent
 -/
 #guard_msgs in
 #eval IO.println (Lang.checkReport "doall-no.mlir" doall)
 
 /--
-info: heap after the run — the cells the program left behind, which is most of what it says
-24 cells in 3 buffers, addressed 0 to 23
-NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there
-
+info: heap:
 A [8] @0  [1, 2, 3, 4, 5, 6, 7, 8]
 B [8] @8  [10, 20, 30, 40, 50, 60, 70, 80]
 C [8] @16  [11, 22, 33, 44, 55, 66, 77, 88]

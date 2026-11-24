@@ -50,17 +50,16 @@ def threadCount : ParProg → Nat
 
 end ParProg
 
+/-- A report line's label, padded so every value starts at the same column. -/
+def field (name : String) : String :=
+  let l := name ++ ":"
+  "  " ++ l ++ String.ofList (List.replicate (10 - min 10 l.length) ' ')
+
 /-- The `assert` block, under the verdict, or nothing when the file states no claim. -/
 def claimLines (c : Compiled) : String :=
   match c.claim with
   | none    => ""
-  | some cl => "\n  claim     " ++ claimBlock c cl "            "
-
-/-- The file's name and the verdict, and nothing else. This is what a bare `paralever FILE` adds to
-what `run` prints, so the two commands say the same things about the program and differ only in
-whether the equivalence was proved. -- ref: `docs/cli.md` § A file on its own -/
-def verdictReport (name : String) (c : Compiled) : String :=
-  name ++ "\n  verdict   " ++ verdictBlock c "            " ++ claimLines c ++ "\n"
+  | some cl => "\n" ++ field "claim" ++ claimBlock c cl "            "
 
 /-- Steps above which the `rounds` line states a bound instead of measuring one.
 
@@ -88,16 +87,17 @@ def checkReport (name : String) (c : Compiled) : String :=
   let stray := L.strayLocs f
   let ρ : Regs := fun _ => 0
   name
-    ++ "\n  memory    " ++ ", ".intercalate (L.bufs.map (fun p =>
+    ++ "\n" ++ field "memory" ++ ", ".intercalate (L.bufs.map (fun p =>
           p.name ++ toString p.shape ++ " @" ++ toString p.base
             ++ (if c.dead.contains p.name then " (freed)" else "")))
     ++ "  (" ++ toString L.size ++ " cells)"
-    ++ "\n  reads     " ++ clipNames nm 10 (nubLocs f.reads)
-    ++ "\n  writes    " ++ clipNames nm 10 (nubLocs f.writes)
-    ++ (if stray.isEmpty then "" else "\n  stray     " ++ clipLocs 10 stray ++ " — outside every buffer")
-    ++ "\n  threads   " ++ toString (ParProg.threadCount c.prog)
-    ++ "\n  rounds    " ++ roundsText c ρ
-    ++ "\n  verdict   " ++ verdictBlock c "            " ++ claimLines c ++ "\n"
+    ++ "\n" ++ field "reads"  ++ clipNames nm 10 (nubLocs f.reads)
+    ++ "\n" ++ field "writes" ++ clipNames nm 10 (nubLocs f.writes)
+    ++ (if stray.isEmpty then ""
+        else "\n" ++ field "stray" ++ clipLocs 10 stray ++ " — outside every buffer")
+    ++ "\n" ++ field "threads" ++ toString (ParProg.threadCount c.prog)
+    ++ "\n" ++ field "rounds"  ++ roundsText c ρ
+    ++ "\n" ++ field "verdict" ++ verdictBlock c "            " ++ claimLines c ++ "\n"
 
 /-- Cells of one buffer the default `run` view prints before it says how many it left out.
 `--all-cells` lifts the limit, and `-n` prints all of the buffer it names. -/
@@ -150,6 +150,8 @@ def showItems (is : List PrintItem) (ρ : Regs) (σ : State) : String :=
         nm ++ "[" ++ toString (e.eval ρ) ++ "] = " ++ showVal (σ (a.addr (e.eval ρ)))
     | .buf nm shape b => nm ++ " = " ++ bufValues shape b σ)
 
+mutual
+
 /-- The lines a program writes, and the register file and heap it leaves. -/
 def outOf : ParProg → Regs → State → List String × Regs × State
   | .print is,       ρ, σ => ([showItems is ρ σ], ρ, σ)
@@ -159,7 +161,19 @@ def outOf : ParProg → Regs → State → List String × Regs × State
       (o ++ o', ρ'', σ'')
   | .ifElse c t e,   ρ, σ => if c.eval ρ != 0 then outOf t ρ σ else outOf e ρ σ
   | .label _ s,      ρ, σ => outOf s ρ σ
+  | .par ss,         ρ, σ => let (o, σ') := outAll ss ρ σ; (o, ρ, σ')
   | s,               ρ, σ => let (ρ', σ') := runSeq (ParProg.execSeq s ρ) σ; ([], ρ', σ')
+
+/-- The threads in the order `execSeq` runs them: each from the pre-fork registers, the heap
+threaded through them in turn, and the fork leaving the registers it started with. -/
+def outAll : List ParProg → Regs → State → List String × State
+  | [],      _, σ => ([], σ)
+  | s :: ss, ρ, σ =>
+      let (o, _, σ')  := outOf s ρ σ
+      let (o', σ'')   := outAll ss ρ σ'
+      (o ++ o', σ'')
+
+end
 
 /-- The program's output. -/
 def outputOf (c : Compiled) : List String := (outOf c.prog (fun _ => 0) c.layout.state).1
@@ -171,8 +185,7 @@ def heapAfterOut (c : Compiled) : State := (outOf c.prog (fun _ => 0) c.layout.s
 def outReport (c : Compiled) : String :=
   match outputOf c with
   | []  => ""
-  | out => "output — what this program's print statements wrote, on the canonical run\n"
-             ++ "\n".intercalate out ++ "\n\n"
+  | out => "output:\n" ++ "\n".intercalate out ++ "\n\n"
 
 /-- The program's output and nothing around it: what `--quiet` prints. A program with no `print` is
 then silent, which is the honest answer — `print` is the only thing a program says on its own.
@@ -211,21 +224,16 @@ def bufferLine (c : Compiled) (σ : State) (budget : Option Nat) (p : Placed) : 
     | []            => r
   else r
 
-/-- The heap after a run, as the buffers that were declared, with a legend: the columns are not
-self-explaining and the heap is the only thing a run produces. -/
-def runReport (c : Compiled) (threads : Bool) (allCells : Bool := false) : String :=
+/-- The heap after a run, as the buffers that were declared. `racy` marks the heading when the
+program has a race, since then it is one schedule's heap rather than the program's value. -/
+def runReport (c : Compiled) (threads : Bool) (allCells : Bool := false) (racy : Bool := false) :
+    String :=
   let L := c.layout
   let σ := heapAfter c threads
-  let n := L.bufs.length
   outReport c
-    ++ "heap after the run — the cells the program left behind, which is most of what it says\n"
-    ++ toString L.size ++ " cells in " ++ toString n
-    ++ (if n == 1 then " buffer" else " buffers")
-    ++ (if c.dead.isEmpty then "" else ", " ++ toString c.dead.length ++ " of them freed")
-    ++ ", addressed 0 to " ++ toString (L.size - 1) ++ "\n"
-    ++ "NAME [dims] @base — the buffer's first cell in that flat heap; cells row-major from there\n"
-    ++ (if threads then "on real threads: one Task per thread of every parallel block\n" else "")
-    ++ "\n"
+    ++ "heap"
+    ++ (if threads then " (real threads)" else "")
+    ++ (if racy then " (one schedule)" else "") ++ ":\n"
     ++ "\n".intercalate (L.bufs.map (bufferLine c σ (if allCells then none else some runCells)))
     ++ "\n"
 

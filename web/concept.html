@@ -527,12 +527,12 @@ parfor t in 3 {
             <span class="code-wrap-lang">paralever check Examples/Language/scatter.prl</span>
           </div>
           <pre><code class="language-console">Examples/Language/scatter.prl
-  memory    idx[3] @0, dst[3] @3  (6 cells)
-  reads     {idx[0], idx[1], idx[2]}
-  writes    {dst[0], dst[1], dst[2]}
-  threads   3
-  rounds    2 parallel, 6 sequential
-  verdict   this heap   Proved: Yes &mdash; no two threads touch one cell here
+  memory:   idx[3] @0, dst[3] @3  (6 cells)
+  reads:    {idx[0], idx[1], idx[2]}
+  writes:   {dst[0], dst[1], dst[2]}
+  threads:  3
+  rounds:   2 parallel, 6 sequential
+  verdict:  this heap   Proved: Yes &mdash; no two threads touch one cell here
             any heap    RACE found &mdash; with idx[0] = -1: dst[0] written by both threads</code></pre>
         </div>
         <p class="text-stone-600 leading-relaxed">

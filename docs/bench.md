@@ -16,7 +16,7 @@ Worth stating plainly, because it is the baseline every number here has to beat.
 | a second labelled corpus | `Test/Lang.lean:13` — 15 `.prl` files, one Boolean each, no matrix |
 | end to end on real MLIR | 20 functions of LLVM's own `parallelize.mlir` → 11 read → **2 reach a verdict** (`docs/mlir-pretty.md:132`) |
 | wall-clock harness | **none.** No `IO.monoMsNow` anywhere; every number in `docs/scale.md` is prose from `/usr/bin/time`, with no committed script |
-| speedup | **1.66×** forked against unforked on an array heap, after the fork was found to be running on one thread (`docs/scale.md` § `--threads`); the earlier 13.15× was chain-shortening, not cores |
+| speedup | **1.66×** forked against unforked on an array heap, after the fork was found to be running on one thread (`docs/scale.md` § `--real-threads`); the earlier 13.15× was chain-shortening, not cores |
 | SMT contribution | unquantified; `docs/smt-vc.md:138` is a two-row table on one program |
 
 `gap == []` is the sharpest statement of the problem. The precision gap between "independent at
@@ -307,7 +307,7 @@ number reported as a clean one is worse than no number.
 
 ## Stated in advance: the speedup curve is expected to be flat or negative
 
-`--threads` is slower today: `reduce64` takes 23.93 s against 16.98 s single-threaded
+`--real-threads` is slower today: `reduce64` takes 23.93 s against 16.98 s single-threaded
 (`docs/scale.md:194`). The cause is known and is in the interpreter, not the theorem — `ParM.seqAll`
 grafts binds and `Regs = Reg → Int` builds closure chains, both quadratic, and `par_seq_eq`
 quantifies over every `ρ` and every `σ` without inspecting either, so neither cost can weaken a
