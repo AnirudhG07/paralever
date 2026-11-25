@@ -4,6 +4,7 @@ import Lang.Compile.Print
 import Lang.Load
 import Lang.Core.Exec
 import Paralever.Search.Explain
+import Paralever.Search.Interleave
 
 /-! # Views of a compiled file, for `#eval`
 
@@ -297,5 +298,112 @@ def parRegionReport (c : Compiled) : String :=
     ++ "\n-- regions " ++ toString rs.length
     ++ (if rs.isEmpty then "" else ": " ++ String.intercalate ", " rs)
     ++ "\n-- independent " ++ toString (ParProg.wfB p) ++ "\n"
+
+/-! ## Many runs, randomly interleaved
+
+`runReport` shows the canonical order. These show what the children do when the order is not fixed:
+each run walks `step` picking a successor at random (`Search/Interleave.lean`), and the runs are
+grouped by the outcome they left. A well-formed program has one group however many runs are asked
+for — that is `par_seq_eq` being watched rather than read. A racy one has several, or reaches
+`wrong`. -- ref: `docs/interleave.md` -/
+
+/-- Every cell of every declared buffer: what two outcomes are compared on, together with the
+registers the file names. -/
+def arenaCells (L : Layout) : List Loc :=
+  (List.range (L.top - L.bot)).map (· + L.bot)
+
+/-- One run under one seed. `probe` and `regs` are what distinguish two outcomes; `heap` is kept so
+the group can be printed in the buffers' own vocabulary. -/
+structure Interleaved where
+  seed  : Nat
+  heap  : State
+  probe : List Val
+  regs  : List Int
+  /-- The run reached `wrong`: some schedule detected a race. -/
+  wrong : Bool
+  /-- The fuel ran out, so this is not an outcome at all. -/
+  stalled : Bool
+
+/-- Run the program once under the schedule `seed` names. -/
+def interleavedRun (c : Compiled) (fuel : Nat) (probes : List Loc) (seed : Nat) : Interleaved :=
+  let ρ₀ : Regs := fun _ => 0
+  let (_, conf, halt) :=
+    runInterleaved fuel seed (ParProg.execPar c.prog ρ₀) c.layout.state
+  let stalled := halt == .outOfFuel
+  match conf with
+  | .wrong      =>
+      { seed, heap := c.layout.state, probe := [], regs := [], wrong := true, stalled := false }
+  | .run p σ    =>
+      let ρ := match p with | .pure ρ => ρ | _ => ρ₀
+      { seed, heap := σ, probe := probes.map σ, regs := c.regs.map (fun r => ρ r.2)
+      , wrong := false, stalled }
+
+/-- Two runs left the same thing behind. -/
+def Interleaved.sameAs (a b : Interleaved) : Bool :=
+  a.wrong == b.wrong && a.stalled == b.stalled && a.probe == b.probe && a.regs == b.regs
+
+/-- Group runs by outcome, keeping the order in which the outcomes first appeared, so the canonical
+one (seed 0 runs first) is listed first when it occurs. -/
+private def groupGo : Nat → List Interleaved → List (Interleaved × List Nat)
+  | _,        []      => []
+  | 0,        r :: _  => [(r, [r.seed])]
+  | fuel + 1, r :: rs =>
+      let same := rs.filter (Interleaved.sameAs r)
+      let rest := rs.filter (fun x => !Interleaved.sameAs r x)
+      (r, r.seed :: same.map (·.seed)) :: groupGo fuel rest
+
+def groupOutcomes (rs : List Interleaved) : List (Interleaved × List Nat) := groupGo rs.length rs
+
+/-- Fuel for one interleaved run. A run under an arbitrary schedule takes `stepBound` steps when the
+program's control flow does not depend on a raced cell, and may take more when it does, so the bound
+is doubled and padded rather than used as written. -/
+def interleaveFuel (c : Compiled) : Nat := 2 * ParProg.stepBound c.prog + 1024
+
+/-- `n` runs of the program, under the schedules that seeds `0` to `n-1` name. -/
+def interleavedRuns (c : Compiled) (n : Nat) : List Interleaved :=
+  (List.range n).map (interleavedRun c (interleaveFuel c) (arenaCells c.layout))
+
+/-- How many outcomes `n` random schedules found. One is the theorem holding; more than one means
+the program has a race. -/
+def distinctOutcomes (c : Compiled) (n : Nat) : Nat := (groupOutcomes (interleavedRuns c n)).length
+
+/-- `--run-again N`: N runs under random schedules, grouped by outcome.
+
+The heading is the whole answer: *N runs, 1 outcome* is the theorem holding in front of the reader,
+and more than one outcome means the program has a race and the schedule decides what it computes.
+-- ref: `docs/interleave.md` § What the report says -/
+def interleaveReport (c : Compiled) (n : Nat) (allCells : Bool := false)
+    (only : Option String := none) : String :=
+  let runs := interleavedRuns c (max n 1)
+  let groups := groupOutcomes runs
+  let budget := if allCells then none else some runCells
+  -- outcomes are told apart on the whole arena; `--buffer` narrows only what is printed
+  let shown := match only with
+    | none    => c.layout.bufs
+    | some nm => c.layout.bufs.filter (fun p => p.name == nm)
+  let plural := fun (k : Nat) (one many : String) => if k == 1 then one else many
+  let head :=
+    toString runs.length ++ " " ++ plural runs.length "run" "runs"
+      ++ plural runs.length " under a random schedule, " " under random schedules, "
+      ++ toString groups.length ++ " distinct "
+      ++ plural groups.length "outcome" "outcomes"
+      ++ (if groups.length > 1 then " — the schedule decides what this program computes.\n"
+          else if runs.length == 1 then ".\n"
+          else " — every schedule agreed.\n")
+  let seedList := fun (ss : List Nat) =>
+    if ss.length ≤ 8 then " ".intercalate (ss.map toString)
+    else " ".intercalate ((ss.take 8).map toString) ++ " … +" ++ toString (ss.length - 8)
+  let body := groups.zipIdx.map fun (g, i) =>
+    let (r, seeds) := g
+    let label :=
+      (if groups.length == 1 then "outcome"
+       else "outcome " ++ toString (i + 1))
+        ++ " — " ++ toString seeds.length ++ " " ++ plural seeds.length "run" "runs"
+        ++ " (seed" ++ (if seeds.length == 1 then " " else "s ") ++ seedList seeds ++ ")"
+    if r.wrong then label ++ ": wrong — this schedule caught a race"
+    else if r.stalled then label ++ ": still running when the step budget ran out"
+    else label ++ "\n"
+      ++ "\n".intercalate (shown.map (bufferLine c r.heap budget))
+  head ++ "\n" ++ "\n\n".intercalate body ++ "\n"
 
 end Paralever.Lang

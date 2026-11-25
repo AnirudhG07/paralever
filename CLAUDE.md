@@ -167,6 +167,8 @@ Paralever/
              docs/race-search.md § In tactic position
   Search/    RaceSearch (race-site scan, schedules, follow_sound, attribution, Prog grammar,
              findWrongGuided — phase 2 aimed by phase 1's conflict locations),
+             Interleave (a seeded random walk over `step` — what `run --run-again N` executes;
+             `walk_reaches` makes each outcome a `Reaches` fact, see docs/interleave.md),
              Explain (the interleaving printed), ExplainHtml (the same as an infoview widget)
   Compile/   TaskFacts, Exec (execTask — runs a program on real threads)
 Lang/         the paralever language and the `.prl` file in front of it — see docs/prl.md
@@ -261,6 +263,7 @@ docs/        design rationale (program-model.md, semantics.md, access.md, theory
              general-heap.md, print.md,
              opaque-ops.md, reductions.md, pure-bridge.md, block-ir.md, strings.md, smt-vc.md,
              diagnostics.md, race-search.md, layout.md, autopar.md, equivalence.md,
+             interleave.md,
              mlir.md, scale.md, website.md, ...)
 index.html   the published site's cover; `web/` its pages, `slides/main` and `slides/isp` the
              two decks, with the files they share in `slides/` beside them — all generated.

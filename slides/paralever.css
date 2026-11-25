@@ -8,7 +8,7 @@
 
 /* header name shown at the top-left of every content slide
    (bump --name-w if you make the name longer) */
-:root { --project: "paralever"; --name-w: 5.4em; }
+:root { --project: "Paralever"; --name-w: 5.4em; --sep: #cbd5e1; }
 
 /* ---- title slide: anchor the block higher and tighten it ----
    lean.css centres the title vertically; with a subtitle + byline +
@@ -21,38 +21,91 @@
 .reveal section[data-state="title"] h2 { margin-bottom: 0.3em; }
 .reveal .subheader { font-size: 1.3em; margin-bottom: 1.5em; }
 .reveal .byline { font-size: 1.05em; line-height: 1.4; margin-bottom: 0.16em; }
+/* lean.css draws a hairline above the first `.event` after a byline or
+   subheader — a separator you get by accident of ordering and cannot put
+   anywhere else. Dropped here in favour of `.ruled` below. */
 .reveal .byline + .event,
-.reveal .subheader + .event { margin-top: 1.2em; padding-top: 0.8em; }
+.reveal .subheader + .event { margin-top: 1.2em; padding-top: 0.8em; border-top: none; }
+
+/* ---- .prl : syntax colour for paralever source ----
+   Painted by `prl.js`, whose scan and token classes mirror
+   `Lang/Compile/Print.lean`'s `highlight` — the same six classes the ANSI
+   printer uses, so a slide and `paralever to-prl --color` agree. Put `prl` on
+   any element holding .prl text; an `<em>` caption inside it is left alone. */
+.reveal .t-com { color: var(--muted); font-style: italic; }
+.reveal .t-kw  { color: #7c3aed; font-weight: 600; }
+.reveal .t-reg { color: #0e7490; }
+.reveal .t-num { color: #b45309; }
+.reveal .t-str { color: #15803d; }
+.reveal .t-asg { color: var(--ink); font-weight: 700; }
+
+/* ---- .lead : an optional emphasis on one byline ----
+   lean.css gives a byline its blue only where the source wrote `*…*`, and
+   nothing makes a line prominent for being first. `:::class "byline lead"`
+   opts one line in, wherever it sits in the block, and leaves the rest alone. */
+.reveal .byline.lead {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--lean-blue);
+  letter-spacing: -0.005em;
+  margin-bottom: 0.42em;
+}
+.reveal .byline.lead strong { color: inherit; font-weight: inherit; }
+
+/* ---- .ruled : a separator above any block, anywhere ----
+   `:::class "ruled"` draws the line over whatever it wraps; added to an
+   existing class (`:::class "event ruled"`) it rules that block in place.
+   `--line` is slate-200, invisible on a projector, so this uses its own. */
+/* the class is doubled to carry weight, not by accident: lean.css's
+   `.reveal .subheader + .event` is three classes deep, so a plain `.reveal
+   .ruled` loses to it and the line keeps lean.css's near-invisible `--line`.
+   `.ruled.ruled` matches the same element at equal specificity and, coming
+   later, wins. */
+.reveal .ruled.ruled {
+  border-top: 1px solid var(--sep);
+  margin-top: 1.3em;
+  padding-top: 0.85em;
+}
+.reveal .ruled.thick { border-top-width: 2px; border-top-color: var(--lean-blue); }
+.reveal .ruled.short { border-top-style: solid; max-width: 14em; }
 .reveal .event { font-size: 0.9em; }
 .reveal .links { margin-top: 0.9em; font-size: 0.8em; }
 
-/* ---- section page: the name of what is coming, and the slides under it ----
-   Centred and quiet, so it reads as a turn in the talk rather than a slide
-   carrying content. `.ahead` is the list of what the section holds. */
-.reveal section[data-state="section"] {
-  justify-content: center;
-  padding: 61.2px 128px;
-}
-.reveal section[data-state="section"] h1,
+/* ---- section page: the section name in a rounded blue card ----
+   The slide keeps its running header and its normal top-anchored layout; only
+   the title changes, so the next slide goes back to normal with no further
+   rules.
+
+   The header hangs off `h2::before` (the project name) and `h2::after` (the
+   blue rule), which lean.css parks in the h2's own 1.8em of top padding. A
+   background on the h2 would paint over both, and an offset background cannot
+   take a border-radius. So the slot becomes *margin* instead of padding —
+   margin is outside the painting area — and the two pseudo-elements are lifted
+   into it by the same 1.8em. The card then starts at the content box and rounds
+   properly, while the header lands exactly where it does on every other slide.
+
+   The compensation on `::before`: `top` resolves `em` against the element's own
+   font-size, and that one is 1.05em, so 1.8 / 1.05 = 1.714 travels the same
+   distance. `::after` has no font-size of its own and keeps the h2's. */
 .reveal section[data-state="section"] h2 {
-  font-size: 1.9em;
-  margin-bottom: 0.65em;
+  color: #fff;
+  background: var(--lean-blue);
+  border-radius: 14px;
+  padding: 0.5em 0.9em 0.55em;
+  margin: 1.8em 0 1em;
+  box-shadow: 0 3px 14px rgba(0, 115, 163, 0.26);
 }
-.reveal .ahead { list-style: none; margin: 0; padding: 0; font-size: 1em; }
-.reveal .ahead li {
-  color: var(--muted);
-  padding: 0.18em 0 0.18em 0.9em;
-  border-left: 3px solid var(--lean-blue);
-  margin-bottom: 0.34em;
-}
+.reveal section[data-state="section"] h2::before { top: -1.714em; }
+.reveal section[data-state="section"] h2::after  { top: -1.45em; }
 
 /* ---- body: bump bullet-point text a touch ---- */
 .reveal ul, .reveal ol { font-size: 0.92em; }
 
-/* ---- staggered bullets (stagger.js turns each > li into a fragment) ----
+/* ---- staggered bullets ----
+   `:::class "steps"` marks a list for stagger.js, which turns each item into a
+   fragment. It carries no styling: a steps list is an ordinary bulleted list
+   with lean.css's markers, which is what the other decks do.
    NOTE: the class is "steps" (plural). ":::class \"step\"" does nothing. */
-.reveal .steps { font-size: 0.95em; }
-.reveal .steps li { margin-bottom: 0.35em; }
 
 /* ---- punch line: the one sentence a slide is actually about ---- */
 .reveal .punch { font-size: 1.2em; font-weight: 700; color: var(--lean-blue); margin: 0.35em 0; }
@@ -204,6 +257,16 @@
 .reveal .nd.bad   { border-color: #dc2626; background: rgba(220,38,38,0.09); }
 .reveal .nd.plain { border: none; background: none; padding: 0.1em 0.3em; }
 .reveal .nd em    { color: var(--muted); font-style: normal; font-size: 0.86em; display: block; }
+/* a source listing is boxed, whatever `.plain` says: a rule around the program marks where it
+   starts and stops. Border only, so the token colours are what carries meaning inside it. */
+.reveal .nd.prl, .reveal .nd.mlir,
+.reveal .nd.plain.prl, .reveal .nd.plain.mlir,
+.reveal .nd.prl.blue, .reveal .nd.mlir.blue {
+  border: 1.5px solid #334155; border-radius: 8px; background: none;
+  padding: 0.55em 0.85em;
+}
+.reveal .nd.prl em, .reveal .nd.mlir em { margin-top: 0.35em; }
+
 .reveal .nd code  { font-size: 0.95em; }
 
 .reveal .arr { color: var(--lean-teal); font-weight: 700; font-size: 0.75em; line-height: 1; }
@@ -264,6 +327,137 @@
 }
 .reveal table.tight th,
 .reveal table.tight td { font-size: 0.5em !important; }
+
+/* ---- the proof slides: the same five boxes, with room around them ----
+   Every slide in this section is one flow of `.nd` boxes. At the deck's defaults they sit 0.45em
+   apart at 0.6em text, which reads as a wall. Here the gap is trebled, the text in a box is set
+   at the size of the prose around it, and the box itself is given real padding, so each step is
+   read as a step. */
+.reveal section[data-state="proof"] .dgm { gap: 0.75em; margin: 0.7em auto; }
+.reveal section[data-state="proof"] .dgm.col { gap: 0.6em; }
+.reveal section[data-state="proof"] .nd { font-size: 0.68em; padding: 0.5em 0.9em; }
+.reveal section[data-state="proof"] .nd.mono { font-size: 0.56em; padding: 0.55em 1em; }
+.reveal section[data-state="proof"] .nd em { margin-top: 0.3em; }
+.reveal section[data-state="proof"] .arr { font-size: 1em; }
+.reveal section[data-state="proof"] .steps { font-size: 0.9em; margin-top: 0.7em; }
+.reveal section[data-state="proof"] .figwrap { margin: 0.6em auto; }
+.reveal section[data-state="proof"] .r-hstack { gap: 12.8px; align-items: center; }
+.reveal section[data-state="proof"] .r-hstack > * { flex: 1 1 0; min-width: 0; }
+.reveal section[data-state="proof"] .figwrap svg { width: 100%; height: auto; }
+
+/* ---- the definitions slide: one slide of Lean, so it is set larger than code
+   that shares a slide with prose. ---- */
+.reveal section[data-state="defs"] .r-hstack { gap: 12.8px; align-items: flex-start; }
+.reveal section[data-state="defs"] .r-hstack > * { flex: 1 1 0; min-width: 0; }
+.reveal section[data-state="defs"] .r-vstack { gap: 0.5em; }
+.reveal section[data-state="defs"] code.hl.lean.block { font-size: 1.22em; }
+.reveal section[data-state="defs"] .nd.mono { font-size: 0.56em; }
+.reveal section[data-state="defs"] .steps { font-size: 0.86em; margin-top: 0.5em; }
+
+/* ---- the language slide: the program left, the output and the bullets right ----
+   `:::hstack` wraps its children in `.r-hstack`; the left cell is given the larger
+   share and each panel hugs the centre line. */
+.reveal section[data-state="lang"] .r-hstack { align-items: stretch; gap: 12.8px; }
+.reveal section[data-state="lang"] .r-hstack > :first-child { flex: 1.05 1 0; min-width: 0; }
+.reveal section[data-state="lang"] .r-hstack > .r-vstack { flex: 1 1 0; min-width: 0; gap: 0.6em; }
+.reveal section[data-state="lang"] .nd.mono { font-size: 0.62em; width: fit-content; }
+.reveal section[data-state="lang"] .r-hstack > :first-child .nd { margin-left: auto; }
+.reveal section[data-state="lang"] .r-vstack > * { margin-right: auto; }
+.reveal section[data-state="lang"] .steps { font-size: 0.8em; }
+.reveal section[data-state="lang"] .steps li { margin-bottom: 0.2em; }
+
+/* ---- the schedule-search slide: pseudocode left, search tree right ----
+   `.map pre` is 0.42em, sized for a block that has a slide to itself. In half the
+   width it still fits at half again that size, which is the point of the split. */
+.reveal section[data-state="sched"] .r-hstack { gap: 12.8px; align-items: center; }
+.reveal section[data-state="sched"] .r-hstack > * { flex: 1 1 0; min-width: 0; }
+.reveal section[data-state="sched"] .map pre { font-size: 0.6em; margin: 0 0 0 auto; }
+.reveal section[data-state="sched"] .figwrap svg { width: 100%; height: auto; }
+.reveal section[data-state="sched"] .steps { font-size: 0.86em; }
+
+/* ---- the race slide: the refused schedule as a trace table, then the two readings ----
+   The tool prints one line per step; the columns are what a reader compares across, so they
+   are columns here. The two rows that abort are ruled red rather than filled. */
+.reveal section[data-state="race"] .trace {
+  display: flex; align-items: center; justify-content: center; gap: 1.4em; margin-top: 0.5em;
+}
+.reveal section[data-state="race"] table.dgmt.ruled-table { margin: 0; }
+.reveal section[data-state="race"] table.dgmt.ruled-table th,
+.reveal section[data-state="race"] table.dgmt.ruled-table td {
+  font-size: 0.52em !important; padding: 0.22em 0.7em;
+}
+.reveal tr.racing td { color: #dc2626; border-color: #dc2626 !important; }
+.reveal .verdict { text-align: left; font-size: 0.56em; line-height: 1.5; }
+.reveal .verdict .refusal { color: #dc2626; }
+.reveal .verdict .readings { display: flex; gap: 0.6em; margin: 0.45em 0 0.3em; }
+.reveal .verdict .reading {
+  border: 1px solid var(--tint-line); border-radius: 6px; padding: 0.18em 0.6em;
+  font-family: var(--mono); color: var(--muted);
+}
+.reveal .verdict .reading b { color: var(--ink); }
+.reveal .verdict em { color: var(--muted); font-style: normal; font-size: 0.86em; }
+
+/* .ruled-table : a table that is the slide's exhibit rather than a label inside a figure.
+   Bigger than `.dgmt`'s 0.52em, and every cell ruled, because the numbers are read across
+   as well as down. */
+.reveal table.dgmt.ruled-table { margin: 0.7em auto; border-collapse: collapse; }
+.reveal table.dgmt.ruled-table th,
+.reveal table.dgmt.ruled-table td {
+  font-size: 0.78em !important; padding: 0.3em 0.95em;
+  border: 1px solid var(--tint-line); text-align: right;
+}
+.reveal table.dgmt.ruled-table th:first-child,
+.reveal table.dgmt.ruled-table td:first-child { text-align: left; }
+.reveal table.dgmt.ruled-table thead th {
+  border-bottom: 2px solid var(--lean-blue); background: var(--tint);
+}
+.reveal table.dgmt.ruled-table tbody tr + tr td { border-top: 1px solid var(--tint-line); }
+
+/* ---- the closing slide: the title and its one line centred, references in the corner ---- */
+/* Only the title grows. The running header is laid out in h2 ems — the slot, the name, the rule
+   and its inset — so every one of them is multiplied by 1.3/2.8, the ratio of the usual h2 size
+   to this one, and comes out at the size and place it has on every other slide. */
+.reveal section[data-state="thanks"] h2 {
+  text-align: center; font-size: 2.8em; padding-top: 0.8357em; margin-top: 0;
+}
+.reveal section[data-state="thanks"] h2::before { font-size: 0.4875em; }
+.reveal section[data-state="thanks"] h2::after { font-size: 0.4643em; top: 0.1625em; }
+.reveal section[data-state="thanks"] > p { text-align: center; font-size: 1.25em; color: var(--muted); }
+.reveal section[data-state="thanks"] .refs { margin-top: 5.5em; text-align: left; font-size: 0.6em; }
+
+/* ---- the matmul slide: the program and the theorem it discharges, side by side ----
+   Each column is `width: fit-content` and pushed toward the gutter, so the two blocks sit
+   against each other rather than against the slide edges. */
+.reveal section[data-state="matmul"] .two-col {
+  grid-template-columns: auto auto; justify-content: center;
+  gap: 1.6em; align-items: center; margin-top: 0.4em;
+}
+.reveal section[data-state="matmul"] .two-col > * { justify-self: stretch; min-width: 0; }
+.reveal section[data-state="matmul"] .nd.mono { width: fit-content; font-size: 0.52em; }
+.reveal section[data-state="matmul"] pre.hl.lean { margin: 0; }
+.reveal section[data-state="matmul"] code.hl.lean.block { font-size: 0.88em; }
+
+/* ---- the MLIR slide: the same two-col gutter problem as the spine ---- */
+.reveal section[data-state="mlir"] .two-col { gap: 0.7em; align-items: center; }
+.reveal section[data-state="mlir"] .nd.mono { width: fit-content; font-size: 0.56em; }
+.reveal section[data-state="mlir"] .two-col > :first-child .nd { margin-left: auto; }
+.reveal section[data-state="mlir"] .two-col > :nth-child(2) .nd { margin-right: auto; }
+
+/* ---- the sequential-spine slide: close the middle ----
+   `.two-col` is a 1fr 1fr grid with a 1.5em gutter, and neither cell's content
+   fills its column, so the program and the tree drift to opposite edges. Halve
+   the gutter and let each panel hug the centre line. */
+.reveal section[data-state="spine"] .two-col { gap: 0.7em; align-items: center; }
+.reveal section[data-state="spine"] .nd.mono { width: fit-content; margin-left: auto; }
+.reveal section[data-state="spine"] .figwrap { margin-right: auto; }
+
+/* ---- the WellFormed slide: definition and bullets left, the tree right ----
+   `:::hstack` wraps its children in `.r-hstack`; these two rules split that row
+   into equal halves and let the SVG take the width it is given. Scoped to this
+   slide's state so other hstacks keep lean.css's content-width behaviour. */
+.reveal section[data-state="wf"] .r-hstack > * { flex: 1 1 0; min-width: 0; }
+.reveal section[data-state="wf"] .figwrap svg { width: 100%; height: auto; }
+.reveal section[data-state="wf"] .steps { font-size: 0.86em; }
 
 /* ---- two-column tuning (lean.css provides the .two-col grid) ---- */
 .reveal .two-col { gap: 25.6px; align-items: start; }

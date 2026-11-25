@@ -90,17 +90,6 @@ window.onload = async () => {
         highlightedTokens = [];
       });
     }
-    /* Render docstrings */
-    if ('undefined' !== typeof marked) {
-        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement("div");
-            rendered.classList.add("docstring");
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-        }
-    }
     // Add hovers
     const versoDocData = await (fetch("-verso-docs.json").then((resp) => resp.json()));
 
@@ -130,20 +119,12 @@ window.onload = async () => {
       info.style.display = 'block';
       const data = versoDocData[hoverId];
       if (data) {
-        info.innerHTML = data;
-        /* Render docstrings - TODO server-side */
-        if ('undefined' !== typeof marked) {
-          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
-            const str = d.innerText;
-            const html = marked.parse(str);
-            const rendered = document.createElement('div');
-            rendered.classList.add('docstring');
-            rendered.innerHTML = html;
-            d.parentNode.replaceChild(rendered, d);
-          }
-        }
+        /* Verso generated the HTML from the Markdown at site build time. */
+        const parsed = new DOMParser().parseFromString(data, 'text/html');
+        info.append(...parsed.body.childNodes);
+        if (typeof versoRenderMath === 'function') versoRenderMath(info);
       } else {
-        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+        info.textContent = 'Failed to load doc ID: ' + hoverId;
       }
       return info;
     }
@@ -222,7 +203,11 @@ window.onload = async () => {
               links.className = 'extra-doc-links';
               extras.forEach((l) => {
                 const li = document.createElement('li');
-                li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                const a = document.createElement('a');
+                a.href = l['href'];
+                a.title = l.long;
+                a.textContent = l.short;
+                li.appendChild(a);
                 links.appendChild(li);
               });
               content.appendChild(links);

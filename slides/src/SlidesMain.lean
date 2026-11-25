@@ -37,10 +37,14 @@ def loadTheme : IO CustomTheme := do
   -- slide whose content still overruns it. `extraJs` carries URLs rather than contents,
   -- so the file ships here and `main` names that URL.
   -- ref: docs/website.md § The deck's sizes
+  -- highlight.js paints `.prl` and `.mlir` blocks with the token classes
+  -- `Lang/Compile/Print.lean` uses for ANSI. One painter, a language table.
   let autofit ← IO.FS.readBinFile (base / "autofit.js")
+  let hl ← IO.FS.readBinFile (base / "highlight.js")
   return {
     stylesheet     := { filename := "lean.css", contents := ⟨css⟩ },
-    assets         := assets.push { filename := "assets/autofit.js", contents := autofit },
+    assets         := (assets.push { filename := "assets/autofit.js", contents := autofit }).push
+                        { filename := "assets/highlight.js", contents := hl },
     -- light theme → light highlight.js theme (not the dark default)
     highlightTheme := HighlightTheme.forRevealTheme "white"
   }
@@ -97,7 +101,7 @@ def main : IO UInt32 := do
   let deckCss ← IO.FS.readFile (base / "paralever.css")
   let deck (out : System.FilePath) : Config := { cfg theme out with
     extraCss := #[{ filename := "paralever.css", contents := ⟨deckCss⟩ }],
-    extraJs  := #["assets/autofit.js"] }
+    extraJs  := #["assets/autofit.js", "assets/highlight.js"] }
   discard <| slidesMain (deck "slides/main") (doc := %doc Slides)
   shareWithParent "slides/main"
   discard <| slidesMain (deck "slides/isp") (doc := %doc IspSlides)

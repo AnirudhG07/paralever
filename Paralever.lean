@@ -11,6 +11,7 @@ import Paralever.Theory.Nest
 import Paralever.Compile.TaskFacts
 import Paralever.Compile.Exec
 import Paralever.Search.RaceSearch
+import Paralever.Search.Interleave
 import Paralever.Search.Explain
 import Paralever.Search.ExplainHtml
 import Paralever.Tactic

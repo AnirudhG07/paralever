@@ -4,7 +4,7 @@
 #
 #   bash slides/src/dev.sh
 #
-# Watches slides/src/*.lean and *.css; on every save it re-runs `lake exe slides`,
+# Watches slides/src/*.lean and *.css; on every save it re-runs `lake -q exe slides`,
 # and a browser-sync server auto-reloads the page in your browser.
 #
 # Notes
@@ -29,11 +29,32 @@ OUT="slides"
 SRC="slides/src"
 PORT="${PORT:-3000}"
 
+DECK="${1:-}"
+case "$DECK" in
+  ""|main|isp) ;;
+  *) echo "usage: bash dev.sh [main|isp]"; exit 2 ;;
+esac
+
+# Lake 4.36 prints "`Task.get` called from a `(sync := true)` task" plus a 20-line C
+# backtrace for every job it runs — 360,000 lines on a full build of this repo. It comes
+# from Lake's own `Lake.Module.computeExportInfo`, not from anything here, and it is
+# harmless. `-q` hides it on a successful build; on a failed one Lake replays the job
+# logs, so the filter drops what is left. `set -o pipefail` is on above, so the pipe
+# still reports the build's exit status and errors and warnings pass through untouched.
+build_slides() {
+  lake -q exe slides 2>&1 | grep -v \
+    -e '^`Task.get` called from' \
+    -e '^backtrace:$' \
+    -e '^info: stdout/stderr:$' \
+    -e '^/home/.*/lib/lean/lib.*\.so' \
+    -e '^/lib/[a-z0-9_]*-linux-gnu/lib'
+}
+
 command -v inotifywait >/dev/null || { echo "need inotifywait (apt install inotify-tools)"; exit 1; }
 command -v npx         >/dev/null || { echo "need node/npx for the live-reload server"; exit 1; }
 
 echo "▶ initial build…"
-lake exe slides || echo "  ✗ initial build failed — fix and save to retry"
+build_slides || echo "  ✗ initial build failed — fix and save to retry"
 
 # live-reload static server: serves $OUT.  It watches nothing — the rebuild
 # loop below tells it when to reload, so the only inotify watch this script
@@ -66,7 +87,7 @@ while true; do
     *) continue ;;
   esac
   echo "  ↻ $changed → rebuilding…"
-  if lake exe slides; then
+  if build_slides; then
     echo "  ✓ rebuilt"
     # a .css change is injected without losing the current slide; anything else
     # changed the generated HTML, so the page is reloaded.

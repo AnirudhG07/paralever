@@ -1,6 +1,8 @@
 import Paralever.Search.Explain
 import ProofWidgets.Component.HtmlDisplay
 
+set_option linter.deprecated.syntax false
+
 /-! # The counterexample as an infoview widget
 
 The same `Report` as `Search/Explain.lean`, rendered through ProofWidgets. `reportOf` is shared, so

@@ -255,29 +255,80 @@ def paint : String → String → String
   | "assign",   s => col "1"  s
   | _,          s => s
 
-/-- **`.prl` text with ANSI colour.** -/
-partial def highlight (src : String) : String := go src.toList
+/-- The token scan: every token paired with its class, the empty string for text that carries none.
+Concatenating the second components returns the input exactly, which `#guard` below checks.
+
+A scan over the text rather than the AST, so a file that does not compile still prints and a
+fragment colours as well as a whole file. Both renderers below are folds over this one list, so
+ANSI and HTML can never disagree about where a token begins. -- ref: `docs/prl.md` § Colour -/
+partial def prlTokens (src : String) : List (String × String) := go src.toList
 where
-  go : List Char → String
-    | [] => ""
+  go : List Char → List (String × String)
+    | [] => []
     | '-' :: '-' :: rest =>
         let (line, tail) := (rest.takeWhile (· != '\n'), rest.dropWhile (· != '\n'))
-        paint "comment" ("--" ++ String.ofList line) ++ go tail
-    | ':' :: '=' :: rest => paint "assign" ":=" ++ go rest
+        ("comment", "--" ++ String.ofList line) :: go tail
+    | ':' :: '=' :: rest => ("assign", ":=") :: go rest
     | '"' :: rest =>
         let (body, tail) := (rest.takeWhile (· != '"'), rest.dropWhile (· != '"'))
-        paint "string" ("\"" ++ String.ofList body ++ "\"") ++ go (tail.drop 1)
+        ("string", "\"" ++ String.ofList body ++ "\"") :: go (tail.drop 1)
     | '%' :: rest =>
         let (nm, tail) := (rest.takeWhile P.isIdentCont, rest.dropWhile P.isIdentCont)
-        paint "register" ("%" ++ String.ofList nm) ++ go tail
+        ("register", "%" ++ String.ofList nm) :: go tail
     | c :: rest =>
         if c.isDigit then
           let (ds, tail) := (rest.takeWhile Char.isDigit, rest.dropWhile Char.isDigit)
-          paint "number" (c.toString ++ String.ofList ds) ++ go tail
+          ("number", c.toString ++ String.ofList ds) :: go tail
         else if P.isIdentStart c then
           let (w, tail) := (rest.takeWhile P.isIdentCont, rest.dropWhile P.isIdentCont)
           let word := c.toString ++ String.ofList w
-          (if keywords.contains word then paint "keyword" word else word) ++ go tail
-        else c.toString ++ go rest
+          ((if keywords.contains word then "keyword" else ""), word) :: go tail
+        else ("", c.toString) :: go rest
+
+/-- **`.prl` text with ANSI colour.** -/
+def highlight (src : String) : String :=
+  (prlTokens src).foldl (fun acc t => acc ++ paint t.1 t.2) ""
+
+/-- The CSS class one token class is written with; `none` where it carries none. The names are the
+ones the decks and the website style — see `slides/src/paralever.css`. -/
+def cssClass : String → Option String
+  | "comment"  => some "t-com"
+  | "keyword"  => some "t-kw"
+  | "register" => some "t-reg"
+  | "number"   => some "t-num"
+  | "string"   => some "t-str"
+  | "assign"   => some "t-asg"
+  | _          => none
+
+/-- The four characters that cannot stand for themselves inside an HTML element. -/
+def escapeHtml (s : String) : String :=
+  s.foldl (fun acc c => acc ++
+    match c with
+    | '&' => "&amp;"
+    | '<' => "&lt;"
+    | '>' => "&gt;"
+    | '"' => "&quot;"
+    | _   => c.toString) ""
+
+/-- **`.prl` text as HTML**, each classed token in a span of its CSS class and everything escaped.
+The caller supplies the stylesheet; `cssClass` fixes the names. -/
+def highlightHtml (src : String) : String :=
+  (prlTokens src).foldl (fun acc t => acc ++
+    match cssClass t.1 with
+    | some c => "<span class=\"" ++ c ++ "\">" ++ escapeHtml t.2 ++ "</span>"
+    | none   => escapeHtml t.2) ""
+
+/-- The scan loses nothing: the tokens' text is the input. -/
+private def rejoin (src : String) : String := (prlTokens src).foldl (fun acc t => acc ++ t.2) ""
+
+#guard rejoin "buf A[2] = 1, 2\n%k := 10  -- a note\nprint A" == "buf A[2] = 1, 2\n%k := 10  -- a note\nprint A"
+#guard rejoin "parfor i in 2 { x[i] := %v * 3 } :: \"go\"" == "parfor i in 2 { x[i] := %v * 3 } :: \"go\""
+
+-- every class the scan emits has a CSS name, and plain text has none
+#guard (prlTokens "%k := 10 -- c").map (fun t => (cssClass t.1).getD "-")
+         == ["t-reg", "-", "t-asg", "-", "t-num", "-", "t-com"]
+#guard highlightHtml "x[0] := 7" ==
+  "x[<span class=\"t-num\">0</span>] <span class=\"t-asg\">:=</span> <span class=\"t-num\">7</span>"
+#guard escapeHtml "a < b & c > \"d\"" == "a &lt; b &amp; c &gt; &quot;d&quot;"
 
 end Paralever.Lang

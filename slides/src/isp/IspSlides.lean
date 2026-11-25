@@ -19,157 +19,154 @@ open Paralever
 #doc (Slides) "Paralever — ISP" =>
 # paralever
 
-
-
-
 %%%
 state := "title"
 %%%
 
 :::class "subheader"
-Verifying that a parallel program computes what its sequential counterpart computes — in Lean 4
+Verifying Equivalence of Parallel Program and its Sequential Counterpart — in Lean 4
+:::
+
+:::class "byline lead"
+Anirudh Gupta
 :::
 
 :::class "byline"
-*Anirudh Gupta*
+4th-year B.Tech Mathematics and Computing
 :::
 
-:::class "event"
-IISc Bengaluru · ISP · 4th-year BTech
+:::class "byline"
+Indian Institute of Science, Bengaluru
 :::
+
+
+:::class "event ruled"
+ISP - I Presentation
+:::
+
+:::class "byline"
+Advised by Prof. Siddhartha Gadgil
+:::
+
 
 :::class "links"
 [github.com/AnirudhG07/paralever](https://github.com/AnirudhG07/paralever)
 :::
 
+
+
 # Overview
 
-```html
-<div class="figwrap">
-<svg viewBox="0 0 1160 230" role="img" aria-label="the seven sections of the talk in order, with the slide each one spends">
-  <g font-family="var(--sans)" font-size="13.5" text-anchor="middle">
-    <rect x="18"  y="30" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="118" y="54" fill="#0f172a">1 &#183; The question</text>
-    <text x="118" y="73" font-size="12" fill="#64748b">par = seq, for every schedule</text>
-    <rect x="248" y="30" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="348" y="54" fill="#0f172a">2 &#183; Independence</text>
-    <text x="348" y="73" font-size="12" fill="#64748b">Bernstein, not &#8727;</text>
-    <rect x="478" y="30" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="578" y="54" fill="#0f172a">3 &#183; The language</text>
-    <text x="578" y="73" font-size="12" fill="#64748b">one Boolean on the text</text>
-    <rect x="708" y="30" width="200" height="56" rx="9" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.2"/>
-    <text x="808" y="54" fill="#312e81">4 &#183; Why it holds</text>
-    <text x="808" y="73" font-size="12" fill="#4f46e5">one reachable outcome</text>
-    <rect x="938" y="30" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="1038" y="54" fill="#0f172a">5 &#183; Examples</text>
-    <text x="1038" y="73" font-size="12" fill="#64748b">four algorithms, four proofs</text>
-    <rect x="248" y="140" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="348" y="164" fill="#0f172a">6 &#183; Autoparallelization</text>
-    <text x="348" y="183" font-size="12" fill="#64748b">a spine becomes forks</text>
-    <rect x="478" y="140" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="578" y="164" fill="#0f172a">7 &#183; Races and MLIR</text>
-    <text x="578" y="183" font-size="12" fill="#64748b">a counterexample, a front end</text>
-    <rect x="708" y="140" width="200" height="56" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="808" y="164" fill="#0f172a">8 &#183; Cost and limits</text>
-    <text x="808" y="183" font-size="12" fill="#64748b">what it buys, what it misses</text>
-  </g>
-  <g stroke="#94a3b8" stroke-width="1.5" fill="none">
-    <path d="M 220 58 L 246 58"/><path d="M 450 58 L 476 58"/>
-    <path d="M 680 58 L 706 58"/><path d="M 910 58 L 936 58"/>
-    <path d="M 1038 88 L 1038 112 L 348 112 L 348 138"/>
-    <path d="M 450 168 L 476 168"/><path d="M 680 168 L 706 168"/>
-  </g>
-</svg>
-</div>
-```
+:::class "steps"
+* *Motivation*
+* *Independence and WellFormedness*
+* *Language Framework*
+* *Proof of Equivalence*
+* *Parallel Programs are Faster*
+* *Examples*
+* *Autoparallelization*
+* *Races and MLIR*
+* *Performance of Paralever*
+* *Limitations*
+:::
 
-Sections 1 to 4 state and prove one theorem; 5 to 8 are what it is worth. Every program after
-section 4 discharges the same decidable obligation, and none of them reasons about a schedule.
-
-# 1 · The question
+# Motivation
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
-* A parallel program has many runs, and the claim is about all of them.
-* One shared cell turns the agreement into a refutation, in Lean.
+:::class "steps"
+* Consider the two jobs run sequentially separately or parallely(in arbitrary order).  Does the memory come out the same?
 :::
 
-# The runs of a parallel program
-
 ```html
-<div class="dgm tight">
-  <div class="nd mono">[0] := 3; [1] := 4;
-%0 := [0]; [2] := %0 * %0;
-%1 := [1]; [3] := %1 * %1;
-%2 := [2]; %3 := [3];
-[4] := %2 + %3<em>sequential: one run, one heap</em></div>
-  <div class="arr lbl2">&#8594;<small>parallelize</small></div>
-  <div class="nd mono blue">[0] := 3; [1] := 4;
-parallel { %0 := [0]; [2] := %0 * %0 }
-         | { %1 := [1]; [3] := %1 * %1 };
-%2 := [2]; %3 := [3];
-[4] := %2 + %3<em>parallel: many schedules, one heap each</em></div>
-</div>
-```
-
-```html
-<div class="qask">
-  <div class="qm">?</div>
-  <div class="qbody">
-    <div class="qhead">Does <code>par</code> <span class="eq">=</span> <code>seq</code> hold for <b>every</b></div>
-    <ul class="qwhen">
-      <li>interleaving</li>
-      <li>starting heap</li>
-      <li>register state</li>
-    </ul>
+<div class="dgm col">
+  <div class="dgm tight">
+    <div class="nd mono good">[5] := 1</div>
+    <div class="arr">∥</div>
+    <div class="nd mono good">[8] := [<b>7</b>]</div>
+    <div class="arr lbl2">→<small>touch different cells</small></div>
+    <div class="nd key">one heap</div>
+  </div>
+  <div class="dgm tight">
+    <div class="nd mono bad">[5] := 1</div>
+    <div class="arr">∥</div>
+    <div class="nd mono bad">[8] := [<b>5</b>]</div>
+    <div class="arr lbl2">→<small>share cell 5</small></div>
+    <div class="nd key">two heaps</div>
   </div>
 </div>
 ```
 
-:::class "notation"
-*`seq`* — the statements run one after another. *`par`* — the arms of a `parallel` block run at the
-same time, and the block ends when every arm has.
-:::
-
-# One shared cell
-
 ```html
-<div class="dgm tight">
-  <div class="nd mono good">parallel { [5] := 1 }
-         | { [6] := 2 }<em>writes {5} against {6} &#8212; disjoint</em></div>
-  <div class="nd mono bad">parallel { [5] := 1 }
-         | { [5] := 2 }<em>one character: both write cell 5</em></div>
+<div class="dgm col">
+  <div class="dgm tight">
+    <div class="nd plain">left first</div>
+    <div class="nd mono">[5] := 1<em>[5] = 1  [8] = 0</em></div>
+    <div class="arr">→</div>
+    <div class="nd mono">[8] := [5]<em>[5] = 1  [8] = <b>1</b></em></div>
+  </div>
+  <div class="dgm tight">
+    <div class="nd plain">right first</div>
+    <div class="nd mono">[8] := [5]<em>[5] = 0  [8] = 0</em></div>
+    <div class="arr">→</div>
+    <div class="nd mono">[5] := 1<em>[5] = 1  [8] = <b>0</b></em></div>
+  </div>
 </div>
 ```
 
-```leanLibCode Examples.Races.Caught (package := paralever) (startLine := 39) (endLine := 41) -stretch
-/-- **The conclusion of `par_seq_eq` is false here.** One side terminates, the other cannot. -/
-theorem not_parSeqEq (σ : State) : ¬ ParSeqEq (ParM.parPair wA wB) (ParM.seqPair wA wB) σ :=
-  fun h => par_no_outcome σ _ _ ((h _ _).mpr (seq_reaches σ))
-```
-
-:::class "steps"
-* The hypothesis of the main theorem is load-bearing: dropped, the conclusion is refutable in Lean.
-* Enumerating schedules is not a method. Two arms of `n` statements each already admit
-  `(2n)! / (n!)²` interleavings; at `n = 10` that is 184 756.
+:::class "steps fragment"
+* Clearly the two parallel executions do not yield the same heap.
+* Under what conditions can we guarantee that the parallel execution is equivalent to the sequential execution?
 :::
 
-# 2 · Independence
+# Problem Statement
+
+::::fragment
+
+:::class "steps"
+Some definitions to know:
+
+* *State* — `σ : Loc → Val`, a total heap. A *configuration* is a program paired with a heap,
+  `(p, σ)`, or `wrong`, which is terminal and absorbing.
+* *Step* — `(p, σ) → c'` lists the successors of a configuration. A fork offers *every* ready
+  child, so that list is the nondeterminism itself.
+* *Interleaving* — a finite chain `c → c₁ → … → c'`. `Reaches c c'` holds when one joins them.
+* *`seq p q`* — `p` to completion, then `q`: one chain, no choice. *`par p q`* — the fork,
+  joined once every child is `pure`.
+* *`WellFormed p σ`* — at *every* fork in `p`, against the heap that fork actually sees, the
+  children's footprints are pairwise independent, and each child is itself well-formed. `Indep` is
+  the clause at one fork; `WellFormed` is the recursive condition the theorem takes.
+:::
+
+::::
+
+```html
+<div class="fragment" style="padding-top: 2em">
+  <div class="rulewrap"><div class="rule">
+    <div class="prem">p : ParM α    q : ParM β    σ : State      WellFormed (par p q) σ</div>
+    <div class="bar"></div>
+    <div class="conc">∀ r σ'.   Reaches (par p q, σ) (pure r, σ')  ⇔  Reaches (seq p q, σ) (pure r, σ')</div>
+    <span class="side">par_seq_eq — the conclusion is ParSeqEq (par p q) (seq p q) σ, unfolded</span>
+  </div></div>
+</div>
+```
+
+
+# Independence and WellFormedness
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
-* Bernstein's three clauses, computed from the program text.
-* Why a separating conjunction is the wrong relation for this.
-* The iris-lean spike, and why no separation-logic library is used.
+:::class "steps"
+* Bernstein's condition of Independence
+* Notion of WellFormedness
 :::
 
-# Bernstein's three clauses, computed from the program text
+
+# Bernstein's condition of Independence
 
 ```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 65) (endLine := 66) -stretch
 def Indep (f₁ f₂ : Footprint) : Prop :=
@@ -180,10 +177,10 @@ def Indep (f₁ f₂ : Footprint) : Prop :=
 <div class="figwrap">
 <svg viewBox="0 0 860 180" role="img" aria-label="the three Bernstein clauses as crossings between two footprints">
   <g font-family="ui-monospace, monospace" font-size="14" text-anchor="middle" fill="#0f172a">
-    <rect x="40"  y="22" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="105" y="44">W&#8321;</text>
-    <rect x="40"  y="112" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="105" y="134">R&#8321;</text>
-    <rect x="690" y="22" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="755" y="44">W&#8322;</text>
-    <rect x="690" y="112" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="755" y="134">R&#8322;</text>
+    <rect x="40"  y="22" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="105" y="44">W₁</text>
+    <rect x="40"  y="112" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="105" y="134">R₁</text>
+    <rect x="690" y="22" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="755" y="44">W₂</text>
+    <rect x="690" y="112" width="130" height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="755" y="134">R₂</text>
   </g>
   <g stroke-width="2" fill="none">
     <path d="M 172 39 L 688 39"  stroke="#dc2626"/>
@@ -192,82 +189,85 @@ def Indep (f₁ f₂ : Footprint) : Prop :=
     <path d="M 172 131 L 688 131" stroke="#16a34a" stroke-dasharray="6 5"/>
   </g>
   <g font-size="13.5" font-family="var(--sans)" text-anchor="middle">
-    <text x="430" y="30"  fill="#dc2626">C1 &#183; W&#8321; &#8745; W&#8322; = &#8709;</text>
-    <text x="430" y="72"  fill="#dc2626">C2 &#183; W&#8321; &#8745; R&#8322; = &#8709;</text>
-    <text x="430" y="100" fill="#dc2626">C3 &#183; W&#8322; &#8745; R&#8321; = &#8709;</text>
-    <text x="430" y="152" fill="#16a34a">no clause on R&#8321; &#8745; R&#8322; &#8212; shared reads are permitted</text>
+    <text x="430" y="30"  fill="#dc2626">C1 · W₁ ∩ W₂ = ∅</text>
+    <text x="430" y="72"  fill="#dc2626">C2 · W₁ ∩ R₂ = ∅</text>
+    <text x="430" y="100" fill="#dc2626">C3 · W₂ ∩ R₁ = ∅</text>
+    <text x="430" y="152" fill="#16a34a">no clause on R₁ ∩ R₂ — shared reads are permitted</text>
   </g>
 </svg>
 </div>
 ```
 
-A footprint is two lists of cells, `reads` and `writes`, read off the syntax. Independence is a
-decidable `Bool` over them: three list intersections, no reasoning about interleavings.
+:::class "steps"
+* A footprint is two Lists of cells, `reads`(R(.)) and `writes`(W(.)). It is computed from the program.
+* Independence is a decidable {lean}`Bool` over them.
+:::
 
-# Separating conjunction, and Bernstein
+# Wellformedness: Independence is checked at every fork
+
+%%%
+state := "wf"
+%%%
+
+:::::hstack
+::::vstack
+```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 236) (endLine := 242)
+def WellFormed {τ : Type} : ParM τ → State → Prop
+  | .pure _,      _ => True
+  | .read l k,    σ => WellFormed (k (σ l)) σ
+  | .write l v k, σ => WellFormed (k ()) (σ.update l v)
+  | .par cs k,    σ =>
+      let r := runChilds cs σ
+      IndepAll (childFootprints cs σ) ∧ WellFormedChilds cs σ ∧ WellFormed (k r.1) r.2
+```
+
+:::class "steps"
+* *`p` is well formed from heap `σ` if, at every fork reached while running `p` from `σ`, its
+  children are pairwise independent, each child is well formed, and execution remains well formed
+  after the fork joins.*
+* Each child is checked against the heap the child before it left, not against `σ`. The threads are
+  independent, so that is also the heap the parallel run reaches.
+:::
+::::
 
 ```html
 <div class="figwrap">
-<svg viewBox="0 0 880 250" role="img" aria-label="matmul threads write disjoint output cells and read overlapping input rows and columns">
-  <g font-family="ui-monospace, monospace" font-size="13" fill="#0f172a">
-    <text x="30" y="26" font-family="var(--sans)" font-size="14" fill="#475569">thread 0 &#183; C[0,j] = &#931;&#8342; A[0,k]&#183;B[k,j]</text>
-    <text x="30" y="150" font-family="var(--sans)" font-size="14" fill="#475569">thread 1 &#183; C[1,j] = &#931;&#8342; A[1,k]&#183;B[k,j]</text>
-
-    <rect x="30"  y="38" width="120" height="30" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="54" y="58">A[0,&#183;]</text>
-    <rect x="180" y="38" width="160" height="30" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="204" y="58">B[&#183;,&#183;] (all)</text>
-    <rect x="380" y="38" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/><text x="404" y="58">C[0,&#183;]</text>
-
-    <rect x="30"  y="162" width="120" height="30" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="54" y="182">A[1,&#183;]</text>
-    <rect x="180" y="162" width="160" height="30" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="204" y="182">B[&#183;,&#183;] (all)</text>
-    <rect x="380" y="162" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/><text x="404" y="182">C[1,&#183;]</text>
+<svg viewBox="0 0 430 330" role="img" aria-label="a program tree with an independence check at each of its two forks">
+  <g font-family="var(--mono)" font-size="13" text-anchor="middle" fill="#0f172a">
+    <rect x="150" y="10" width="110" height="30" rx="6" fill="#eff6ff" stroke="#0073a3" stroke-width="2"/><text x="205" y="30">par</text>
+    <rect x="20"  y="105" width="130" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="85" y="125">write C[0]</text>
+    <rect x="245" y="105" width="110" height="30" rx="6" fill="#eff6ff" stroke="#0073a3" stroke-width="2"/><text x="300" y="125">par</text>
+    <rect x="185" y="205" width="110" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="240" y="225">write C[1]</text>
+    <rect x="305" y="205" width="110" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="360" y="225">write C[2]</text>
   </g>
-  <g stroke="#16a34a" stroke-width="2" stroke-dasharray="6 5" fill="none">
-    <path d="M 260 68 L 260 162"/>
+  <g stroke="#94a3b8" stroke-width="1.6" fill="none">
+    <path d="M 180 40 L 85 105"/><path d="M 230 40 L 300 105"/>
+    <path d="M 280 135 L 240 205"/><path d="M 320 135 L 360 205"/>
   </g>
-  <g stroke="#4f46e5" stroke-width="2" fill="none">
-    <path d="M 440 68 L 440 162"/>
+  <g font-size="12.5" font-family="var(--sans)" fill="#0073a3" text-anchor="middle">
+    <text x="205" y="65">IndepAll checked here</text>
+    <text x="300" y="165">and here</text>
   </g>
-  <g font-size="13" font-family="var(--sans)">
-    <text x="275" y="118" fill="#16a34a">B is read by both &#8212; permitted by C1&#8211;C3, forbidden by &#8727;</text>
-    <text x="455" y="118" fill="#4f46e5">C rows are disjoint &#8212; C1 holds</text>
-    <text x="560" y="230" fill="#475569" text-anchor="middle">&#8727;-disjointness rejects matrix multiply; Bernstein proves it</text>
-  </g>
+  <text x="215" y="285" font-size="12.5" font-family="var(--sans)" fill="#dc2626" text-anchor="middle">the outermost check alone</text>
+  <text x="215" y="305" font-size="12.5" font-family="var(--sans)" fill="#dc2626" text-anchor="middle">is unsound</text>
 </svg>
 </div>
 ```
+:::::
 
-`P ∗ Q` asserts the two sides own *disjoint* heap fragments, so it cannot describe two threads
-reading one cell. No separation-logic library is used; framing is plain `∧` over footprints.
-
-# Why no separation-logic library
-
-```html
-<div class="dgm col tight">
-  <div class="nd">iris-lean, added as a dependency to answer one question<em>can <code>Indep</code> be an instance of a bunched-implications <code>&#8727;</code>?</em></div>
-  <div class="nd good">the BI instance costs <b>nothing</b><em>non-step-indexed, <code>&#9655; := id</code>, a discrete COFE &#183; the step-indexing risk never arrived</em></div>
-  <div class="nd bad">its <code>&#8727;</code> is <b>exclusive</b> separation<em>the state splits into disjoint-domain pieces, so a shared read is not expressible</em></div>
-  <div class="nd bad">its carrier is a <b>partial</b> map<em><code>Core.State</code> is total &#183; a restriction or an embedding before a triple can be stated</em></div>
-</div>
-```
-
-The dependency was removed once it had answered. `Logic/Rules.lean` frames with `∧` over footprints
-instead, and the parallel rule it proves is therefore fully general — shared reads included. What
-would supply read-sharing inside a `∗` is a fractional-permission `∗` over `Core.State`, and nothing
-available builds one off the shelf.
-
-# 3 · The language and the theorem
+# Language Framework
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
+:::class "steps"
 * `ParM`, and why `par` has to be our own constructor.
 * The surface language, and the verdict the checker prints.
 * `wfB s = true → ParSeqEq (execPar s) (execSeq s)`.
 :::
 
-# `par` as our own constructor
+# {lean}`ParM` Monad and `par` constructor
 
 ```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 82) (endLine := 89) -stretch
 inductive ParM : Type → Type 1 where
@@ -280,40 +280,119 @@ inductive ParM : Type → Type 1 where
   | par   {β : Type} {αs : List Type} : Childs ParM αs → (Results αs → ParM β) → ParM β
 ```
 
-```html
-<div class="dgm tight">
-  <div class="nd bad">Lean's <code>Task</code><em><code>(Task.spawn f).get = f ()</code> holds by <code>rfl</code> &#8212; parallel and sequential are the <i>same term</i>, so there is nothing to prove</em></div>
-  <div class="nd good"><code>ParM.par</code><em>a program is data; its meaning is fixed by <code>step</code>, which interleaves. <code>Task</code> is a compilation target only</em></div>
-</div>
+:::class "steps"
+* The program is a tree of {lean}`ParM` constructors. The tree is data we can inspect.
+* {lean}`ParM` is inductive, so every program terminates: `while true` is unrepresentable, and that boundary is fixed by Lean having no coinductive types.
+:::
+
+:::class "steps"
+* *Why not Lean's `Task`?* `(Task.spawn f).get = f ()` holds by `rfl`, so parallel and sequential
+  would be the same term and the theorem vacuous. `Task` is a compilation target only.
+:::
+
+# Definitions
+
+%%%
+state := "defs"
+%%%
+
+:::::hstack
+```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 138) (endLine := 149) -stretch
+def step {α : Type} : ParM α → State → List (Conf α)
+  | .pure _,      _ => []
+  | .read l k,    σ => [.run (k (σ l)) σ]
+  | .write l v k, σ => [.run (k ()) (σ.update l v)]
+  | .par cs k,    σ =>
+      if racingAll (nextAccsChilds cs) then [.wrong]
+      else match allPure cs with
+        | some vs => [.run (k vs) σ]
+        | none    => (stepChilds cs σ).map fun r =>
+            match r with
+            | some x => .run (.par x.1 k) x.2
+            | none   => .wrong
 ```
 
-`ParM` is inductive, so every program terminates: `while true` is unrepresentable, and that boundary
-is fixed by Lean having no coinductive types.
-
-# The surface language, and the verdict the checker prints
+::::vstack
+```leanLibCode Paralever.Core.ParM (package := paralever) (startLine := 71) (endLine := 73)
+inductive Childs (Node : Type → Type 1) : List Type → Type 1 where
+  | nil  : Childs Node []
+  | cons {α : Type} {αs : List Type} : Node α → Childs Node αs → Childs Node (α :: αs)
+```
 
 ```html
-<div class="dgm tight">
-  <div class="nd mono">buf A[9] = 0,0,0,0,0,0,0,3,0
+<div class="nd mono plain wide">parPair p q  =  .par Π[ p q ] (fun r => .pure (r.1, r.2.1))
+seqPair p q  =  bind p (fun a => bind q (fun b => .pure (a, b)))
 
-parallel { A[5] := 1 }
-         | { %v := A[7]; A[8] := %v }<em>fig1.prl</em></div>
-  <div class="arr lbl2">&#8594;<small>paralever check</small></div>
-  <div class="nd mono blue">memory   A[9] @0  (9 cells)
-reads    {A[7]}
-writes   {A[5], A[8]}
+parAll ps    =  .par (childsOf ps) (fun x => .pure (resultsToList ps x))
+seqAll []       =  .pure []
+seqAll (p :: ps) =  bind (seqPair p (seqAll ps)) (fun r => .pure (r.1 :: r.2))<em>parPair is parAll at two children, not the other way round</em></div>
+```
+::::
+:::::
+
+:::class "steps"
+* `step` returns a *list*: empty is terminal, a singleton is deterministic, and a fork returns one
+  entry per ready child. That list is where every schedule comes from.
+* `racingAll` is checked before the children move, so a fork with two conflicting next actions goes
+  to `wrong` and stays there.
+:::
+
+# Language Framework, and the verdict the checker prints
+
+%%%
+state := "lang"
+%%%
+
+:::::hstack
+```html
+<div class="nd mono prl">buf A[2, 3] = 1, 2, 3, 4, 5, 6
+buf out[3]
+
+%k := 10
+
+parallel {
+  %s := 0
+  for j in 3 {
+    %v := A[0, j]
+    if %v &gt; 2 { %s := %s + %v * %k }
+    else       { %s := %s + %v }
+  }
+  %k := 99
+  out[0] := %s
+} | {
+  parallel {
+    %a := A[1, 0]
+    out[1] := %a
+  } | {
+    %b := A[1, 2]
+    out[2] := %b * %k
+  }
+}
+
+print out, %k</div>
+```
+
+::::vstack
+```html
+<div class="nd mono blue">reads    {A[0,0] … A[1,2]}
+writes   {out[0], out[1], out[2]}
 threads  2
-rounds   2 parallel, 3 sequential
-verdict  every heap  Proved: Yes<em><code>wfB</code> accepts: footprints pairwise independent</em></div>
-</div>
+rounds   4 parallel, 8 sequential
+verdict  every heap  Proved: Yes
+
+out = [33, 4, 60]   10<em>← <b>10</b>, not 99</em></div>
 ```
 
 :::class "steps"
-* `[l]` is a cell, `[A, e]` a computed cell, `%n` a register. `if`, `while … in`, `synchronize` and
-  `print` are the control constructs; every one has a Lean form.
-* Two interpreters, `execPar` and `execSeq`, read the same `ParProg` tree. The verdict is two-part:
-  *this heap* by exact search, *any heap* by the syntactic check.
+* Buffers are shared and registers are not: `out[i] := %s` is what `Indep` measures, `%s` and `%k`
+  are invisible to it.
+* Registers are firstprivate, at every depth. All four threads read `%k = 10` — which is why
+  `out[2]` is 60. Thread 0 sets `%k := 99` and the join discards it.
+* `if … else` branches per cell; `print` is erased from both interpreters, and is a barrier the
+  parallelizer may not cross.
 :::
+::::
+:::::
 
 # The theorem
 
@@ -330,106 +409,207 @@ theorem par_seq_eq {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
 ```html
 <div class="dgm tight">
   <div class="nd key"><code>wfB s = true</code><em>decided by <code>decide</code>: list intersections on footprints</em></div>
-  <div class="arr">&#8594;</div>
+  <div class="arr">→</div>
   <div class="nd key blue">every schedule of <code>s</code> ends where <code>execSeq s</code> ends<em>stated as an <i>iff</i> on reachable outcomes</em></div>
 </div>
 ```
 
-Every program below discharges its obligation by `decide` or by a size-free kernel lemma. No program
+Every program below discharges its obligation by {lean}`decide` or by a size-free kernel lemma. No program
 carries a proof about interleavings of its own.
 
-# 4 · Why it holds
+# Proof of Equivalence
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
-* A well-formed program has exactly one reachable outcome.
-* A race has no outcome at all, which is what excludes it.
+:::class "steps"
+* The two sides are never compared to each other.
+* Each collapses to a point; the points are equal by computation.
+* {lean}`ParSeqEq` reduces to {lean}`WellFormed`, once and for all programs.
 :::
 
-# Canonical outcomes
+# The successor list
+
+%%%
+state := "proof"
+%%%
+
+```leanLibCode Paralever.Core.Semantics (package := paralever) (startLine := 138) (endLine := 149) -stretch
+def step {α : Type} : ParM α → State → List (Conf α)
+  | .pure _,      _ => []
+  | .read l k,    σ => [.run (k (σ l)) σ]
+  | .write l v k, σ => [.run (k ()) (σ.update l v)]
+  | .par cs k,    σ =>
+      if racingAll (nextAccsChilds cs) then [.wrong]
+      else match allPure cs with
+        | some vs => [.run (k vs) σ]
+        | none    => (stepChilds cs σ).map fun r =>
+            match r with
+            | some x => .run (.par x.1 k) x.2
+            | none   => .wrong
+```
+
+```html
+<div class="dgm col">
+  <div class="nd key">the list <b>is</b> the nondeterminism<em>empty = terminal · one entry = no choice · a fork = <b>one entry per ready child</b></em></div>
+  <div class="nd mono">stepChilds (p :: ps) σ  =  (step p σ).map …   ++   (stepChilds ps σ).map …<em>the head child moves, <b>appended to</b> every move the tail can make — that <b>++</b> is the fan-out</em></div>
+</div>
+```
+
+:::class "steps"
+* There is no scheduler in the development. A *schedule* is a path through these lists, and
+  `Reaches` is the transitive closure of membership in them.
+* So quantifying over schedules is quantifying over `∈`.
+:::
+
+# Naive comparison of schedules
+
+%%%
+state := "proof"
+%%%
+
+```html
+<div class="dgm">
+  <div class="nd bad wide">compare schedules<em>two arms of <code>n</code> statements · (2n)!/(n!)² interleavings · <b>184 756</b> at n = 10 · and the two sides do not even take the same number of steps</em></div>
+  <div class="arr">≠</div>
+  <div class="nd good wide">compare each side to a <b>third object</b><em><code>runSeq p σ</code> — a <b>function</b>, not a relation: no schedule, no choice, no <code>wrong</code></em></div>
+</div>
+```
+
+```html
+<div class="dgm col">
+  <div class="nd mono">runSeq (par cs k) σ  =  runSeq (k r₁) r₂   where (r₁, r₂) = runChilds cs σ
+runChilds (p :: ps) σ  =  run p, then run ps from the heap p left<em>a fork’s canonical value <b>is</b> its children run left to right</em></div>
+  <div class="nd key">runSeq (par p q) σ = runSeq (seq p q) σ — by <code>rfl</code>, and <b>free</b><em>the measuring stick reads the same on both. It says nothing yet about either one under a scheduler.</em></div>
+</div>
+```
+
+# The invariant: any child, not the left one
+
+%%%
+state := "proof"
+%%%
+
+```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 902) (endLine := 906) -stretch
+theorem step_combined {τ : Type} (P : ParM τ) :
+    ∀ σ, WellFormed P σ → ∀ P3 σ3, Conf.run P3 σ3 ∈ stepC (Conf.run P σ) →
+      runSeq P3 σ3 = runSeq P σ ∧
+      (∀ F, FDisjoint F (accesses P σ) → FDisjoint F (accesses P3 σ3)) :=
+  step_combined_all.1 P
+```
+
+:::::hstack
+```html
+<div class="nd key"><code>P3</code> is <b>any</b> member of the successor list, under <code>∀</code> — one statement per scheduler choice<em>the proof <b>rcases</b> on <code>List.mem_append</code>: <b>head moved</b>, 10 lines · <b>tail moved</b>, 45 lines and the hard case</em></div>
+```
 
 ```html
 <div class="figwrap">
-<svg viewBox="0 0 900 230" role="img" aria-label="the lemma chain from frame and locality up to the canonical outcome theorem">
-  <defs>
-    <marker id="pc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
-    </marker>
-  </defs>
-  <g font-family="ui-monospace, monospace" font-size="12.5" text-anchor="middle" fill="#0f172a">
-    <rect x="20"  y="18"  width="200" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="120" y="39">runSeq_frame</text>
-    <rect x="20"  y="78"  width="200" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="120" y="99">accesses_locality</text>
-    <rect x="20"  y="138" width="200" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="120" y="159">accesses_isolated</text>
-    <rect x="290" y="48"  width="210" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="395" y="69">no_race_of_indep</text>
-    <rect x="290" y="112" width="210" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="395" y="133">WellFormed_preserved</text>
-    <rect x="570" y="80"  width="200" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="670" y="101">par_dichotomy</text>
-    <rect x="330" y="186" width="430" height="34" rx="7" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/><text x="545" y="208" fill="#312e81">wellFormed_canonical</text>
+<svg viewBox="0 0 470 250" role="img" aria-label="two schedules out of one fork meeting at the same outcome">
+  <g font-family="ui-monospace, monospace" font-size="12" text-anchor="middle" fill="#0f172a">
+    <rect x="115" y="8" width="240" height="30" rx="6" fill="#eff6ff" stroke="#0073a3" stroke-width="2"/><text x="235" y="28">par [a:=x, y:=7] · x5 y0 a0</text>
+    <rect x="8" y="98" width="205" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="110" y="118">[done, y:=7] · x5 y0 a5</text>
+    <rect x="257" y="98" width="205" height="30" rx="6" fill="#fff7ed" stroke="#b45309" stroke-width="2"/><text x="359" y="118">[a:=x, done] · x5 y7 a0</text>
+    <rect x="120" y="188" width="230" height="30" rx="6" fill="rgba(22,163,74,0.09)" stroke="#16a34a" stroke-width="2"/><text x="235" y="208">x5 y7 a5</text>
   </g>
-  <g stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#pc)">
-    <path d="M 222 34 L 255 34 L 255 64 L 287 64"/>
-    <path d="M 222 94 L 255 94 L 255 64"/>
-    <path d="M 222 154 L 255 154 L 255 128 L 287 128"/>
-    <path d="M 502 64  L 535 64 L 535 96 L 567 96"/>
-    <path d="M 502 128 L 535 128 L 535 96"/>
-    <path d="M 670 112 L 670 160 L 545 160 L 545 184"/>
+  <g stroke="#64748b" stroke-width="1.5" fill="none">
+    <path d="M 200 38 L 110 96"/><path d="M 270 38 L 359 96"/>
+    <path d="M 110 128 L 200 186"/><path d="M 359 128 L 270 186"/>
+  </g>
+  <g font-family="var(--sans)" font-size="11.5" fill="#475569">
+    <text x="55" y="68">head moved</text>
+    <text x="345" y="68" fill="#b45309">tail moved first</text>
+    <text x="235" y="240" text-anchor="middle" fill="#16a34a">the same runSeq at all four</text>
   </g>
 </svg>
 </div>
 ```
+:::::
 
-```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1462) (endLine := 1464) -stretch
+:::class "steps"
+* *Why the tail case commutes.* Its step changed one cell in `W₂`. By C3 that cell is outside `R₁`,
+  so the head reads the same values — `accesses_runSeq_locality`. By C1 it is outside `W₁`, so the
+  head does not overwrite it — `runSeq_frame`.
+* *Why it can be done again.* The second conjunct: a step only shrinks a footprint, so the sibling
+  is still independent of the residue, and the invariant chains.
+:::
+
+# The bridge
+
+%%%
+state := "proof"
+%%%
+
+```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1464) (endLine := 1466) -stretch
 theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
     ∀ σ r σ', WellFormed p σ → (Reaches (.run p σ) (.run (.pure r) σ') ↔ (r, σ') = runSeq p σ) :=
   wellFormed_canonical_all.1 p
 ```
 
-Read as an *iff*: `→` says no schedule terminates anywhere else, `←` says that outcome is reached.
-`par_seq_eq` is this theorem applied to both sides and the results compared.
-
-# Races, and `wrong`
-
 ```html
-<div class="figwrap">
-<svg viewBox="0 0 880 200" role="img" aria-label="a well-formed fork reaches one outcome, a racy fork is absorbed into wrong">
-  <defs>
-    <marker id="dic" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
-    </marker>
-  </defs>
-  <g font-family="ui-monospace, monospace" font-size="13.5" text-anchor="middle" fill="#0f172a">
-    <rect x="30"  y="36" width="180" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="120" y="57">Indep holds</text>
-    <rect x="30"  y="126" width="180" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="120" y="147">Indep fails</text>
-    <rect x="420" y="36" width="300" height="32" rx="6" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.2"/><text x="570" y="57" fill="#312e81">one outcome: runSeq p &#963;</text>
-    <rect x="420" y="126" width="300" height="32" rx="6" fill="#fef2f2" stroke="#dc2626" stroke-width="2.2"/><text x="570" y="147" fill="#7f1d1d">wrong &#8212; terminal, absorbing</text>
-  </g>
-  <g stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#dic)">
-    <path d="M 212 52 L 417 52"/>
-    <path d="M 212 142 L 417 142"/>
-  </g>
-  <g font-size="13" font-style="italic" font-family="var(--sans)" fill="#475569" text-anchor="middle">
-    <text x="440" y="188">Reynolds' grainless semantics: a racy program is <i>excluded</i>, not given a behaviour</text>
-  </g>
-</svg>
+<div class="dgm">
+  <div class="nd wide">{ outcomes of <code>p</code> from σ }<em>every terminating schedule, however the scheduler moved</em></div>
+  <div class="arr lbl2">=<small>under WellFormed</small></div>
+  <div class="nd key">{ runSeq p σ }<em>one element</em></div>
 </div>
 ```
 
 :::class "steps"
-* `run` returns an `Option`, and `wrong` absorbs: once a step finds two conflicting accesses ready
-  at one instant, nothing recovers.
-* This is why the atomic grain is irrelevant to the theorem. No result depends on how coarsely a
-  write is implemented.
+* The invariant chained along a `Reaches` derivation, with `WellFormed_preserved` re-establishing the
+  hypothesis at each link. `runSeq` is constant along the chain, and at the end it is `(r, σ′)`.
+* *Uniqueness* is `→`; *existence* is `←`, from `no_race_of_indep`. Without existence a racy program
+  reaches nothing and would satisfy the theorem vacuously on both sides.
 :::
 
-# 5 · Examples
+# Four steps to ParSeqEq
+
+%%%
+state := "proof"
+%%%
+
+```html
+<div class="dgm col">
+  <div class="nd mono">1.  WellFormed (par p q) σ   →   WellFormed (seq p q) σ<em>wellFormed_of_seqPair · seq has no fork, so the Indep conjunct is dropped</em></div>
+  <div class="nd mono key">2.  ⟨par p q, σ⟩ →* ⟨pure r, σ′⟩   ⇔   (r, σ′) = runSeq (par p q) σ<em><b>the bridge, on the left — every left-hand schedule is eliminated here</b></em></div>
+  <div class="nd mono key">3.  ⟨seq p q, σ⟩ →* ⟨pure r, σ′⟩   ⇔   (r, σ′) = runSeq (seq p q) σ<em><b>the bridge, on the right</b> — available only because of 1</em></div>
+  <div class="nd mono">4.  runSeq (par p q) σ  =  runSeq (seq p q) σ<em>rfl — free, and carrying none of the content</em></div>
+  <div class="nd good">chain 2, 4, 3 — that is ParSeqEq</div>
+</div>
+```
+
+:::class "steps"
+* The theorem is *not* two left-to-right runs compared. That is step 4, and it is `rfl`. The work is
+  in *2 and 3*: each is `wellFormed_canonical`, a whole set of schedules collapsing to a point.
+* Nothing after step 1 mentioned `p` or `q`. *So `ParSeqEq` reduces to `WellFormed`* — proved once,
+  for every program there will ever be.
+:::
+
+# Parallel Programs are Faster
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
+```leanLibCode Lang.Core.Cost (package := paralever) (startLine := 103) (endLine := 104) -stretch
+theorem time_le {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
+    time (execPar s ρ) σ ≤ time (execSeq s ρ) σ := time_execPar_le_all.1 s ρ σ h
+```
+
+:::class "steps"
+* `time` counts rounds: one round is every running thread taking one step. The same `Bool` that
+  proves the two readings agree also orders their spans.
+* Parallelism reorders memory operations and removes none, so `work` is unchanged and only `time`
+  falls. The inequality is not conditional on a machine, a scheduler or a core count.
+:::
+
+# Examples
+
+%%%
+state := "section"
+%%%
+
+:::class "steps"
 * Matrix multiply — disjoint writes over overlapping reads.
 * Merge sort — the fork is the recursion.
 * A neural net — layers in sequence, threads inside each.
@@ -438,12 +618,16 @@ state := "section"
 
 # Matrix multiply
 
+%%%
+state := "matmul"
+%%%
+
 ```html
 <div class="two-col wide-left">
 ```
 
 ```html
-<div class="nd mono plain wide">const n = 2
+<div class="nd mono plain wide prl">const n = 2
 
 buf A[2, 2] = 1, 2, 3, 4
 buf B[2, 2] = 5, 6, 7, 8
@@ -503,7 +687,7 @@ The file above carries the same theorem as `matmul_parseqeq`, read through `prl_
     <path d="M 590 122 L 590 144 L 657 144 L 657 164"/>
   </g>
   <g font-size="13" font-style="italic" font-family="var(--sans)" fill="#475569" text-anchor="middle">
-    <text x="410" y="214">at each level: <tspan font-family="ui-monospace, monospace">lo &#8804; mid &#8804; hi</tspan>, so <tspan font-family="ui-monospace, monospace">[lo, mid)</tspan> and <tspan font-family="ui-monospace, monospace">[mid, hi)</tspan> do not meet</text>
+    <text x="410" y="214">at each level: <tspan font-family="ui-monospace, monospace">lo ≤ mid ≤ hi</tspan>, so <tspan font-family="ui-monospace, monospace">[lo, mid)</tspan> and <tspan font-family="ui-monospace, monospace">[mid, hi)</tspan> do not meet</text>
   </g>
 </svg>
 </div>
@@ -529,9 +713,9 @@ one interval fact, and the recursion carries it down.
   </defs>
   <g font-family="ui-monospace, monospace" font-size="13" text-anchor="middle" fill="#0f172a">
     <rect x="20"  y="66" width="90"  height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="65"  y="88">x[8]</text>
-    <rect x="170" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="240" y="46">conv1d &#215; 6</text>
-    <rect x="370" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="440" y="46">relu &#215; 6</text>
-    <rect x="570" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="640" y="46">dense &#215; 2</text>
+    <rect x="170" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="240" y="46">conv1d × 6</text>
+    <rect x="370" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="440" y="46">relu × 6</text>
+    <rect x="570" y="26" width="140" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="640" y="46">dense × 2</text>
     <rect x="770" y="66" width="90"  height="34" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="815" y="88">y[2]</text>
     <rect x="170" y="106" width="140" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="240" y="126">c[6]</text>
     <rect x="370" y="106" width="140" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="440" y="126">r[6]</text>
@@ -550,7 +734,9 @@ one interval fact, and the recursion carries it down.
 </div>
 ```
 
-```leanLibCode Examples.Language.NeuralNet (package := paralever) (startLine := 67) (endLine := 70) -stretch
+```leanLibCode Examples.Language.NeuralNet (package := paralever) (decl := Paralever.Examples.NeuralNet.forward_par_seq_eq) -stretch
+/-- **The theorem.** Under every schedule, the net with all its layers' threads running at once
+reaches exactly the outcomes it reaches run thread-by-thread. -/
 theorem forward_par_seq_eq (ρ : Regs) (σ : State) :
     ParSeqEq (ParProg.execPar forward ρ) (ParProg.execSeq forward ρ) σ :=
   ParProg.par_seq_eq (by decide) ρ σ
@@ -570,17 +756,17 @@ composition is sequential, and `wfB` recurses into each arm.
     <rect x="440" y="20" width="180" height="32" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="530" y="41">A[9, 13)</text>
     <rect x="640" y="20" width="180" height="32" rx="5" fill="#eff6ff" stroke="#2563eb"/><text x="730" y="41">A[13, 16)</text>
 
-    <rect x="70"  y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="130" y="110">s&#8320;</text>
-    <rect x="270" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="330" y="110">s&#8321;</text>
-    <rect x="470" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="530" y="110">s&#8322;</text>
-    <rect x="670" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="730" y="110">s&#8323;</text>
+    <rect x="70"  y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="130" y="110">s₀</text>
+    <rect x="270" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="330" y="110">s₁</text>
+    <rect x="470" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="530" y="110">s₂</text>
+    <rect x="670" y="90" width="120" height="30" rx="5" fill="#eef2ff" stroke="#4f46e5"/><text x="730" y="110">s₃</text>
   </g>
   <g stroke="#64748b" stroke-width="1.4" fill="none">
     <path d="M 130 52 L 130 88"/><path d="M 330 52 L 330 88"/>
     <path d="M 530 52 L 530 88"/><path d="M 730 52 L 730 88"/>
   </g>
   <g font-size="13" font-style="italic" font-family="var(--sans)" fill="#475569" text-anchor="middle">
-    <text x="430" y="152">no thread writes the array, so C1&#8211;C3 hold vacuously &#8212; for <i>any</i> split</text>
+    <text x="430" y="152">no thread writes the array, so C1–C3 hold vacuously — for <i>any</i> split</text>
   </g>
 </svg>
 </div>
@@ -595,13 +781,13 @@ theorem seq_eq_par (chunks : ChunkPlan) (σ : State) :
 Universally quantified over the chunk plan and the heap. This is the shape `∗`-disjointness cannot
 state at all: four threads reading one array.
 
-# 6 · Autoparallelization
+# Autoparallelization
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
+:::class "steps"
 * A sequential program is a right-leaning spine of `seq` nodes.
 * Where the parallelism is: five units, four dependences.
 * The spine rebuilt as three forks, proved with no hypothesis.
@@ -609,12 +795,16 @@ state := "section"
 
 # The sequential spine
 
+%%%
+state := "spine"
+%%%
+
 ```html
 <div class="two-col">
 ```
 
 ```html
-<div class="nd mono plain wide">buf a[5]
+<div class="nd mono plain wide prl">buf a[5]
 
 a[0] := 3
 a[1] := 4
@@ -624,7 +814,7 @@ a[2] := %0 * %0
 a[3] := %1 * %1
 %2 := a[2]
 %3 := a[3]
-a[4] := %2 + %3<em>chain.prl &#8212; ten lines, nine of them statements</em></div>
+a[4] := %2 + %3<em>chain.prl — ten lines, nine of them statements</em></div>
 ```
 
 ```html
@@ -850,42 +1040,144 @@ example (ρ : Regs) (σ : State) :
 `rewrite` checks its own gate and hands back the program unchanged when it fails, which is why
 `rewrite_sound` carries no hypothesis. Nothing is ever reordered, so no commutation lemma is needed.
 
-# 7 · Finding races, and MLIR
+# Races and MLIR
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
+:::class "steps"
 * What the checker returns when it refuses: the schedule that disagrees.
 * A whole MLIR module in, a whole paralever program out.
 :::
 
-# What a refusal returns
+# A race, and what the checker returns
+
+%%%
+state := "race"
+%%%
 
 ```html
-<div class="nd mono plain wide">2:T1         write [9] &#8592; 2  pending
-2:T0         read [9]       pending
-Parallel aborts at Step 2. Reason: T0, T1 access: {9}.
-Parallel:   9&#8614;2, T0 reads 2
-Sequential: 9&#8614;2, T0 reads 0<em>paralever race &#8212; a read-after-write race</em></div>
+<div class="dgm top">
+  <div class="nd mono prl">buf x[1]
+buf log[2]
+
+parallel {
+  log[0] := 1
+  x[0] := 7
+} | {
+  log[1] := 1
+  x[0] := 9
+}<em>Examples/Language/race.prl</em></div>
+  <div class="figwrap" style="flex:1">
+  <svg viewBox="0 0 440 230" role="img" aria-label="the program tree: one par with two arms, whose last writes both target cell x of 0">
+    <g font-family="var(--mono)" font-size="12.5" text-anchor="middle" fill="#0f172a">
+      <rect x="160" y="8" width="120" height="28" rx="6" fill="#eff6ff" stroke="#0073a3" stroke-width="2"/><text x="220" y="27">par</text>
+      <rect x="30"  y="88" width="150" height="26" rx="5" fill="#f8fafc" stroke="#94a3b8"/><text x="105" y="106">log[0] := 1</text>
+      <rect x="260" y="88" width="150" height="26" rx="5" fill="#f8fafc" stroke="#94a3b8"/><text x="335" y="106">log[1] := 1</text>
+      <rect x="30"  y="146" width="150" height="26" rx="5" fill="rgba(220,38,38,0.09)" stroke="#dc2626" stroke-width="2"/><text x="105" y="164">x[0] := 7</text>
+      <rect x="260" y="146" width="150" height="26" rx="5" fill="rgba(220,38,38,0.09)" stroke="#dc2626" stroke-width="2"/><text x="335" y="164">x[0] := 9</text>
+    </g>
+    <g stroke="#94a3b8" stroke-width="1.6" fill="none">
+      <path d="M 190 36 L 105 88"/><path d="M 250 36 L 335 88"/>
+      <path d="M 105 114 L 105 146"/><path d="M 335 114 L 335 146"/>
+    </g>
+    <path d="M 180 159 L 260 159" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 4" fill="none"/>
+    <text x="220" y="200" font-size="12.5" font-family="var(--sans)" fill="#dc2626" text-anchor="middle">W₁ ∩ W₂ = {x[0]} — clause C1 fails</text>
+    <text x="220" y="220" font-size="12.5" font-family="var(--sans)" fill="#16a34a" text-anchor="middle">log[0], log[1] disjoint — not the problem</text>
+  </svg>
+  </div>
+</div>
 ```
 
+```html
+<div class="trace">
+<table class="dgmt ruled-table">
+<thead><tr><th>step</th><th>thread</th><th>action</th><th>heap after</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>T0</td><td>write log[0] ← 1</td><td>log ↦ [1, 0], x ↦ [0]</td></tr>
+<tr><td>1</td><td>T1</td><td>write log[1] ← 1</td><td>log ↦ [1, 1], x ↦ [0]</td></tr>
+<tr class="racing"><td>2</td><td>T1</td><td>write x[0] ← 9</td><td>pending</td></tr>
+<tr class="racing"><td>2</td><td>T0</td><td>write x[0] ← 7</td><td>pending</td></tr>
+</tbody>
+</table>
+<div class="verdict">
+  <div class="refusal">aborts at step 2 — <b>T0, T1 write to {x[0]}</b></div>
+  <div class="readings"><span class="reading">parallel <b>x[0] ↦ 7</b></span><span class="reading">sequential <b>x[0] ↦ 9</b></span></div>
+  <em>paralever race Examples/Language/race.prl</em>
+</div>
+</div>
+```
+
+# How the schedule is found
+
+%%%
+state := "sched"
+%%%
+
+:::::hstack
+```html
+<div class="map"><pre>findWrongFrom fuel p σ:                      -- phase 1
+  sites ← raceSites p σ                      every par node failing Bernstein,
+  if sites = [] then none                     measured along the canonical run
+  else findWrongGuided (targetsOf sites) fuel (run p σ)
+
+findWrongGuided targets fuel c:               -- phase 2
+  if 0 then none
+  if some successor of c is wrong then [its index]
+  else let (keep, hold) = partition (successors of c)
+         by "does this step move a thread PAST a flagged cell?"
+       first i in keep ++ hold with
+         findWrongGuided targets (fuel-1) c′ = some s  ⇒  i :: s</pre></div>
+```
+
+```html
+<div class="dgm">
+  <div class="figwrap">
+  <svg viewBox="0 0 620 160" role="img" aria-label="the search tree, with target-consuming branches tried last">
+    <g font-family="var(--sans)" font-size="12" text-anchor="middle" fill="#475569">
+      <circle cx="310" cy="20" r="9" fill="#eff6ff" stroke="#0073a3" stroke-width="2"/>
+      <circle cx="170" cy="75" r="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+      <circle cx="310" cy="75" r="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+      <circle cx="470" cy="75" r="8" fill="#f8fafc" stroke="#cbd5e1"/>
+      <circle cx="170" cy="132" r="9" fill="rgba(220,38,38,0.12)" stroke="#dc2626" stroke-width="2"/>
+      <circle cx="300" cy="132" r="8" fill="#f8fafc" stroke="#cbd5e1"/>
+      <circle cx="470" cy="132" r="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    </g>
+    <g stroke="#94a3b8" stroke-width="1.5" fill="none">
+      <path d="M 300 29 L 175 66"/><path d="M 310 29 L 310 66"/><path d="M 322 29 L 462 66"/>
+      <path d="M 170 83 L 170 123"/><path d="M 310 83 L 301 123"/><path d="M 470 83 L 470 123"/>
+    </g>
+    <g font-family="var(--sans)" font-size="12" fill="#475569">
+      <text x="110" y="52" fill="#16a34a">tried first: keeps its position</text>
+      <text x="486" y="52" fill="#94a3b8">tried last: consumes a target</text>
+      <text x="112" y="156" fill="#dc2626">wrong</text>
+    </g>
+  </svg>
+  </div>
+</div>
+```
+:::::
+
 :::class "steps"
-* The two heaps agree. The divergence is what `T0` *observes*, which a heap comparison would miss.
-* A found schedule is replayed against the semantics and turned into a `Reaches` proof by
-  `follow_sound`, so a counterexample is checked, never believed.
-* The search is two-phase: scan for conflicting sites, then aim the schedule search at them.
+* Phase 1 names the cells; phase 2 is depth-first over `step`'s successor list, trying last any
+  step that moves a thread *past* one of them — a reordering, so nothing becomes unfindable.
+* Whatever comes back is re-run by `follow` and turned into a `Reaches` proof by `follow_sound`,
+  so the counterexample is checked rather than trusted.
 :::
 
 # MLIR in, paralever out
+
+%%%
+state := "mlir"
+%%%
 
 ```html
 <div class="two-col">
 ```
 
 ```html
-<div class="nd mono plain wide">memref.global "private" @A : memref&lt;3xi64&gt; = dense&lt;[2, 3, 4]&gt;
+<div class="nd mono plain wide mlir">memref.global "private" @A : memref&lt;3xi64&gt; = dense&lt;[2, 3, 4]&gt;
 func.func @main() {
   %A = memref.get_global @A : memref&lt;3xi64&gt;
   affine.parallel (%i) = (0) to (3) {
@@ -894,11 +1186,11 @@ func.func @main() {
     affine.store %1, %A[%i] : memref&lt;3xi64&gt;
   }
   return
-}<em>square-no.mlir &#8212; the whole module</em></div>
+}<em>square-no.mlir — the whole module</em></div>
 ```
 
 ```html
-<div class="nd mono plain wide blue">buf A[3] = 2, 3, 4
+<div class="nd mono plain wide blue prl">buf A[3] = 2, 3, 4
 
 parallel {
   %0 := A[0]
@@ -909,14 +1201,14 @@ parallel {
 } | {
   %0 := A[2]
   A[2] := (%0 * %0)
-}<em>paralever to-prl &#8212; the whole program</em></div>
+}<em>paralever to-prl — the whole program</em></div>
 ```
 
 ```html
 </div>
 ```
 
-```leanLibCode Examples.Mlir.Files (package := paralever) (startLine := 155) (endLine := 157) -stretch
+```leanLibCode Examples.Mlir.Files (package := paralever) (decl := Paralever.Examples.Mlir.square_par_seq_eq) -stretch
 -- and the theorem the verdict stands for, on the program the deck prints
 theorem square_par_seq_eq (ρ : Regs) (σ : State) :
     ParSeqEq (Lang.ParProg.execPar square.prog ρ) (Lang.ParProg.execSeq square.prog ρ) σ :=
@@ -928,70 +1220,116 @@ iterations become three threads of one fork. Nine labelled pilots are `#guard`ed
 matrix — `tp = 3, fp = 0, fn = 0, tn = 4` over the seven generic-form ones — and emitting the
 program back as MLIR compares memory, footprint, verdict and heap.
 
-# 8 · Cost and limits
+# Performance of Paralever
 
 %%%
 state := "section"
 %%%
 
-:::class "ahead"
-* What parallelizing buys, and the size the check reaches.
-* What the method does not cover, and what was built.
+:::class "steps"
+* How long the check takes on matrix multiply, and the speedup it certifies.
+* A program with no structure: the pass runs, and finds almost nothing.
+* A counterexample at the very bottom of a run, and what reaching it costs.
 :::
 
-# Cost and scale
-
-```leanLibCode Lang.Core.Cost (package := paralever) (startLine := 103) (endLine := 104) -stretch
-theorem time_le {s : ParProg} (h : wfB s = true) (ρ : Regs) (σ : State) :
-    time (execPar s ρ) σ ≤ time (execSeq s ρ) σ := time_execPar_le_all.1 s ρ σ h
-```
+# Matrix multiply: the check, and the speedup it certifies
 
 ```html
-<table class="dgmt">
-<thead><tr><th>shape</th><th>points</th><th>rolled nest</th><th>written out</th></tr></thead>
+<table class="dgmt ruled-table">
+<thead><tr><th><code>n</code></th><th>cells</th><th>threads</th><th>rounds par</th><th>rounds seq</th><th>speedup</th><th>check</th></tr></thead>
 <tbody>
-<tr><td><code>elemwise</code> 12&#178;</td><td>144</td><td><b>0.85 s</b></td><td>6.40 s</td></tr>
-<tr><td><code>elemwise</code> 20&#178;</td><td>400</td><td><b>0.85 s</b></td><td><b>49.4 s</b></td></tr>
-<tr><td><code>gemm</code> 10&#179;</td><td>1 000</td><td><b>0.89 s</b></td><td>16.9 s</td></tr>
-<tr class="gap"><td><code>gemm</code> 1000&#179;</td><td>10&#8313;</td><td><b>0.89 s</b></td><td>over the ceiling</td></tr>
+<tr><td>2</td><td>12</td><td>2</td><td>10</td><td>20</td><td><b>2×</b></td><td>0 ms</td></tr>
+<tr><td>4</td><td>48</td><td>4</td><td>36</td><td>144</td><td><b>4×</b></td><td>0 ms</td></tr>
+<tr><td>8</td><td>192</td><td>8</td><td>136</td><td>1 088</td><td><b>8×</b></td><td>20 ms</td></tr>
+<tr><td>12</td><td>432</td><td>12</td><td>300</td><td>3 600</td><td><b>12×</b></td><td>120 ms</td></tr>
+<tr><td>16</td><td>768</td><td>16</td><td>528</td><td>8 448</td><td><b>16×</b></td><td>520 ms</td></tr>
+<tr><td>20</td><td>1 200</td><td>20</td><td>820</td><td>16 400</td><td><b>20×</b></td><td>1 600 ms</td></tr>
 </tbody>
 </table>
 ```
-
-Parallelism reorders memory operations and removes none, so `work` is identical and only `time`
-falls — from the same `Bool`. Rolling a nest makes the certificate a check on three subscript maps
-instead of on the iteration space: flat from 64 points to 10⁹, against 58× at the largest size both
-can be measured.
-
-# What the method does not cover
-
-```html
-<table class="dgmt">
-<thead><tr><th>boundary</th><th>why</th><th>what happens instead</th></tr></thead>
-<tbody>
-<tr><td>non-terminating programs</td><td><code>ParM</code> is inductive; Lean has no coinductive types</td><td>unrepresentable; <code>whileAtMost</code> is the only <code>while</code></td></tr>
-<tr><td>locks, atomics, <code>critical</code></td><td>no such constructor exists</td><td>out of scope by construction, and reported as such</td></tr>
-<tr><td>computed addresses <code>A[B[i]]</code></td><td>the syntactic footprint must claim all of <code>A</code></td><td>refused by <code>wfB</code>; the exact per-heap check still decides it</td></tr>
-<tr><td>mirror-image branches</td><td><code>ifElse</code> widens to both arms</td><td><i>inconclusive</i> after 11 probed heaps, not a false claim</td></tr>
-<tr class="gap"><td>a solver's <code>unsat</code></td><td>an external solver is not the Lean kernel</td><td>reported as <i>discharged by</i> z3 or cvc5, never as proved</td></tr>
-</tbody>
-</table>
-```
-
-Every refusal above is a *precision* loss, never a soundness one: across 28 labelled kernels the
-false-acceptance cell is zero, and that is a build-failing gate.
-
-# What was built
 
 :::class "steps"
-* One metatheorem — Bernstein independence at every fork implies equality of reachable outcomes under
-  every schedule — proved once, over a program model where `par` is a constructor and races are
-  absorbing.
-* Two front ends over it: a surface language with a checker, a prover and a race explainer, and an
-  MLIR reader that answers on a compiler's own representation.
-* Programs discharge the obligation by `decide` on footprints, by a size-free kernel lemma, or by one
-  certificate over subscript maps that is flat to 10⁹ iteration points.
+* The verdict is *every heap · Proved: Yes* at every size: `wfB` accepts, so the threads'
+  footprints are pairwise independent whatever the heap holds.
+* The speedup is exactly `n`, the thread count, and it is certified rather than measured —
+  these are the two `time` values the cost theorem orders, not a wall clock.
+* The check grows with the iteration space it writes out, not with the speedup: `n = 20` is 1 200
+  cells and 1.6 s.
 :::
+
+# A program with no structure
+
+:::class "steps"
+* `equiv.prl` — 36 lines, 224 sequential rounds, a serial chain of dependences rather than a
+  loop nest.
+* `autopar` takes *1.63 s* and returns 2 threads at *196* parallel rounds: a speedup of
+  *1.14×*, against 4× on `phases.prl`, which is the same length and *does* split.
+* The pass is sound either way. Where the dependences forbid a split it finds nothing, and says so,
+  rather than reporting a parallelism that is not there.
+:::
+
+```html
+<div class="dgm">
+  <div class="nd mono">phases.prl<em>16 seq rounds → 4 threads, 4 par · <b>4×</b></em></div>
+  <div class="nd mono bad">equiv.prl<em>224 seq rounds → 2 threads, 196 par · <b>1.14×</b></em></div>
+  <div class="nd mono bad">tally.prl, strength.prl<em>loop-carried → no split at all · <b>1×</b></em></div>
+</div>
+```
+
+# A counterexample at the bottom
+
+:::class "steps"
+* Two arms each do `k` independent writes, then both write one shared cell: the only race is the
+  very last statement either arm runs, at step `2k`.
+* The search reaches it in every case — it replays the schedule against the semantics rather
+  than guessing, so the depth is the cost.
+:::
+
+```html
+<table class="dgmt ruled-table">
+<thead><tr><th><code>k</code></th><th>race at step</th><th>found</th><th>search</th></tr></thead>
+<tbody>
+<tr><td>2</td><td>4</td><td>yes</td><td>0 ms</td></tr>
+<tr><td>8</td><td>16</td><td>yes</td><td>0 ms</td></tr>
+<tr><td>32</td><td>64</td><td>yes</td><td>0 ms</td></tr>
+<tr><td>128</td><td>256</td><td>yes</td><td>80 ms</td></tr>
+<tr><td>512</td><td>1 024</td><td>yes</td><td>3 420 ms</td></tr>
+</tbody>
+</table>
+```
+
+:::class "notation"
+On `race.prl` the two readings are separated as well as refused: parallel leaves `x[0] ↦ 7`,
+sequential leaves `x[0] ↦ 9`, and the refusal names the cells and the threads —
+`T0, T1 write to: {x[0]}`.
+:::
+
+# Limitations
+
+%%%
+state := "section"
+%%%
+
+:::class "steps"
+* *Non-terminating programs are unrepresentable.*
+  * `ParM` is an inductive type, so every program it can express terminates.
+* *Locks and atomics are out of scope.*
+  * The semantics sends a race to `wrong` and leaves it there, which is what makes the atomic grain irrelevant; a lock would make it relevant again.
+* *A computed address widens the footprint.*
+  * `A[B[i]]` has a subscript the text does not determine, so the syntactic footprint might claim all of `A`.
+* *A solver's `unsat` is not a proof.*
+  * z3 and cvc5 are not the Lean kernel, and neither is a build dependency.
+  * It is reported as *discharged by* the named solver. A `sat` is recomputed in Lean before it is
+    believed.
+:::
+
+# Thank you
+
+%%%
+state := "thanks"
+%%%
+
+Any questions?
 
 :::class "refs"
 * Bernstein, *Analysis of Programs for Parallel Processing*, IEEE TEC 1966.

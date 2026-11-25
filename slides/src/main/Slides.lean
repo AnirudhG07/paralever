@@ -18,7 +18,6 @@ e.g. "21 July 2026" — invoke as `{timeDay}`·``. It re-runs whenever this file
 fresh `lake build` / `lake exe slides` refreshes it. -/
 open Verso Doc Elab ArgParse in
 open Lean Elab Widget in
-open Lean.Doc.Syntax in
 @[role]
 meta def timeDay : RoleExpanderOf Unit
   | (), _ => do
@@ -68,7 +67,7 @@ IISc Bengaluru · ISP-I · 4th-year BTech
   %2 := [2]; %3 := [3];
   [4] := %2 + %3
 }<em>nine statements, one core</em></div>
-  <div class="arr lbl2">&#8594;<small>parallelize</small></div>
+  <div class="arr lbl2">→<small>parallelize</small></div>
   <div class="nd mono blue">paralever {
   [0] := 3; [1] := 4;
   parallel { %0 := [0]; [2] := %0 * %0 }
@@ -105,8 +104,8 @@ One run of each agrees. A parallel program has many runs, and the question is ab
 
 ```html
 <div class="dgm tight">
-  <div class="nd key">1 &#183; the <code>parallel</code> you wrote &#8212; is <code>par</code> = <code>seq</code>?<em><code>par p q &#8801; seqPair p q</code>, under every schedule</em></div>
-  <div class="nd key">2 &#183; the one you did not &#8212; is the program parallelizable, and is <i>that</i> fork correct?<em><code>autoPar</code> proposes it; <code>rewrite_sound</code> proves it with no hypothesis</em></div>
+  <div class="nd key">1 · the <code>parallel</code> you wrote — is <code>par</code> = <code>seq</code>?<em><code>par p q ≡ seqPair p q</code>, under every schedule</em></div>
+  <div class="nd key">2 · the one you did not — is the program parallelizable, and is <i>that</i> fork correct?<em><code>autoPar</code> proposes it; <code>rewrite_sound</code> proves it with no hypothesis</em></div>
 </div>
 ```
 
@@ -123,16 +122,16 @@ One run of each agrees. A parallel program has many runs, and the question is ab
 
 ```html
 <div class="dgm tight">
-  <div class="nd mono">C&#8321; : [p] := 5; y := [p]<em>write to [p], then read it back</em></div>
-  <div class="nd mono">C&#8322; : [p] := 8<em>write to the same [p]</em></div>
+  <div class="nd mono">C₁ : [p] := 5; y := [p]<em>write to [p], then read it back</em></div>
+  <div class="nd mono">C₂ : [p] := 8<em>write to the same [p]</em></div>
 </div>
 ```
 
 ```html
 <div class="fan">
-  <div class="nd good">{true} C&#8321; {y = 5}</div>
-  <div class="nd good">{true} C&#8322; {true}</div>
-  <div class="nd bad">{true} C&#8321; &#8741; C&#8322; {y = 5}<em>false &#183; a schedule runs C&#8322; between the write and the read, leaving y = 8</em></div>
+  <div class="nd good">{true} C₁ {y = 5}</div>
+  <div class="nd good">{true} C₂ {true}</div>
+  <div class="nd bad">{true} C₁ ∥ C₂ {y = 5}<em>false · a schedule runs C₂ between the write and the read, leaving y = 8</em></div>
 </div>
 ```
 
@@ -151,10 +150,10 @@ One run of each agrees. A parallel program has many runs, and the question is ab
 
 ```html
 <div class="rulewrap"><div class="rule">
-  <div class="prem">{P} C {Q} &nbsp;&nbsp;&nbsp; {P&#8242;} C&#8242; {Q&#8242;}</div>
+  <div class="prem">{P} C {Q} &nbsp;&nbsp;&nbsp; {P′} C′ {Q′}</div>
   <div class="bar"></div>
-  <div class="conc">{P &#8727; P&#8242;} &nbsp; C &#8741; C&#8242; &nbsp; {Q &#8727; Q&#8242;}</div>
-  <div class="side">O'Hearn, CONCUR 2004 &#183; <code>P &#8727; P&#8242;</code> asserts the heap <b>splits</b> into two disjoint-domain pieces</div>
+  <div class="conc">{P ∗ P′} &nbsp; C ∥ C′ &nbsp; {Q ∗ Q′}</div>
+  <div class="side">O'Hearn, CONCUR 2004 · <code>P ∗ P′</code> asserts the heap <b>splits</b> into two disjoint-domain pieces</div>
 </div></div>
 ```
 
@@ -163,11 +162,11 @@ One run of each agrees. A parallel program has many runs, and the question is ab
   <div class="nd mono">thread (i, j):
   %s := 0
   for k in n { %s += A[i,k] * B[k,j] }
-  C[i,j] := %s<em>n&#178; threads of a matrix multiply</em></div>
-  <div class="arr lbl2">&#8594;<small>which check?</small></div>
+  C[i,j] := %s<em>n² threads of a matrix multiply</em></div>
+  <div class="arr lbl2">→<small>which check?</small></div>
   <div class="dgm col tight">
-    <div class="nd bad">&#8727;-disjointness &#183; <span class="vd no">REJECTS</span><em>threads (0,0) and (0,1) both read row A[0, &#183;]</em></div>
-    <div class="nd good">Bernstein &#183; <span class="vd ok">ACCEPTS</span><em>the shared cells are read by both and written by neither</em></div>
+    <div class="nd bad">∗-disjointness · <span class="vd no">REJECTS</span><em>threads (0,0) and (0,1) both read row A[0, ·]</em></div>
+    <div class="nd good">Bernstein · <span class="vd ok">ACCEPTS</span><em>the shared cells are read by both and written by neither</em></div>
   </div>
 </div>
 ```
@@ -186,10 +185,10 @@ a serialization of exactly the reads a matmul wants to run at once.
 
 ```html
 <div class="dgm col tight">
-  <div class="nd">iris-lean, added as a dependency to answer one question<em>can <code>Indep</code> be an instance of a bunched-implications <code>&#8727;</code>?</em></div>
-  <div class="nd good">the BI instance costs <b>nothing</b><em>non-step-indexed, <code>&#9655; := id</code>, a discrete COFE &#183; the step-indexing risk never arrived</em></div>
-  <div class="nd bad">its <code>&#8727;</code> is <b>exclusive</b> separation<em>the state splits into disjoint-domain pieces, so a shared read is not expressible</em></div>
-  <div class="nd bad">its carrier is a <b>partial</b> map<em><code>Core.State</code> is total &#183; a restriction or an embedding before a triple can be stated</em></div>
+  <div class="nd">iris-lean, added as a dependency to answer one question<em>can <code>Indep</code> be an instance of a bunched-implications <code>∗</code>?</em></div>
+  <div class="nd good">the BI instance costs <b>nothing</b><em>non-step-indexed, <code>▷ := id</code>, a discrete COFE · the step-indexing risk never arrived</em></div>
+  <div class="nd bad">its <code>∗</code> is <b>exclusive</b> separation<em>the state splits into disjoint-domain pieces, so a shared read is not expressible</em></div>
+  <div class="nd bad">its carrier is a <b>partial</b> map<em><code>Core.State</code> is total · a restriction or an embedding before a triple can be stated</em></div>
 </div>
 ```
 
@@ -219,7 +218,7 @@ def update (σ : State) (l : Loc) (v : Val) : State :=
 <div class="figwrap">
 <svg viewBox="0 0 860 180" role="img" aria-label="a heap as a row of cells, and an update changing exactly one of them">
   <g font-family="ui-monospace, monospace" font-size="15" text-anchor="middle">
-    <text x="36" y="46" font-size="16" fill="#0f172a">&#963;</text>
+    <text x="36" y="46" font-size="16" fill="#0f172a">σ</text>
     <g fill="#0f172a">
       <rect x="60"  y="26" width="58" height="30" fill="#f8fafc" stroke="#94a3b8"/><text x="89"  y="47">3</text>
       <rect x="118" y="26" width="58" height="30" fill="#f8fafc" stroke="#94a3b8"/><text x="147" y="47">4</text>
@@ -232,9 +231,9 @@ def update (σ : State) (l : Loc) (v : Val) : State :=
       <text x="89" y="70">0</text><text x="147" y="70">1</text><text x="205" y="70">2</text>
       <text x="263" y="70">3</text><text x="321" y="70">4</text><text x="379" y="70">5</text>
     </g>
-    <text x="440" y="70" font-size="13" fill="#64748b" font-family="var(--sans)">&#8230; total: every address holds something</text>
+    <text x="440" y="70" font-size="13" fill="#64748b" font-family="var(--sans)">… total: every address holds something</text>
 
-    <text x="24" y="136" font-size="15" fill="#0f172a" text-anchor="start">&#963;[2 &#8614; 9]</text>
+    <text x="24" y="136" font-size="15" fill="#0f172a" text-anchor="start">σ[2 ↦ 9]</text>
     <g fill="#0f172a">
       <rect x="60"  y="116" width="58" height="30" fill="#f8fafc" stroke="#94a3b8"/><text x="89"  y="137">3</text>
       <rect x="118" y="116" width="58" height="30" fill="#f8fafc" stroke="#94a3b8"/><text x="147" y="137">4</text>
@@ -245,8 +244,8 @@ def update (σ : State) (l : Loc) (v : Val) : State :=
     </g>
   </g>
   <g font-size="13.5" font-style="italic" fill="#475569" font-family="var(--sans)">
-    <text x="440" y="124" text-anchor="start">one cell differs &#8212; and that is a <tspan font-weight="700" fill="#15803d">theorem</tspan>, not a convention:</text>
-    <text x="440" y="146" text-anchor="start" font-family="ui-monospace, monospace" font-size="14" fill="#0f172a">k &#8800; l &#8594; &#963;[l &#8614; v] k = &#963; k</text>
+    <text x="440" y="124" text-anchor="start">one cell differs — and that is a <tspan font-weight="700" fill="#15803d">theorem</tspan>, not a convention:</text>
+    <text x="440" y="146" text-anchor="start" font-family="ui-monospace, monospace" font-size="14" fill="#0f172a">k ≠ l → σ[l ↦ v] k = σ k</text>
   </g>
 </svg>
 </div>
@@ -286,12 +285,12 @@ inductive ParM : Type → Type 1 where
   </defs>
   <g font-family="ui-monospace, monospace" font-size="14" text-anchor="middle" fill="#0f172a">
     <rect x="320" y="12" width="180" height="32" rx="7" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/>
-    <text x="410" y="33" fill="#312e81">par &#928;[ p q ] k</text>
+    <text x="410" y="33" fill="#312e81">par Π[ p q ] k</text>
 
     <rect x="120" y="100" width="210" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/>
     <text x="225" y="121">write 5 1</text>
     <rect x="400" y="100" width="300" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="550" y="121">read 7 (&#955;v. write 8 v)</text>
+    <text x="550" y="121">read 7 (λv. write 8 v)</text>
 
     <rect x="120" y="178" width="210" height="32" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
     <text x="225" y="199">pure ()</text>
@@ -348,11 +347,11 @@ def runSeq {τ : Type} : ParM τ → State → τ × State
   </defs>
   <g font-family="ui-monospace, monospace" font-size="14.5" text-anchor="middle">
     <rect x="20"  y="60" width="150" height="38" rx="7" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="95" y="84" fill="#0f172a">&#963;&#8320;</text>
+    <text x="95" y="84" fill="#0f172a">σ₀</text>
     <rect x="250" y="60" width="150" height="38" rx="7" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="325" y="84" fill="#0f172a">&#963;&#8321; = &#963;&#8320;[5 &#8614; 1]</text>
+    <text x="325" y="84" fill="#0f172a">σ₁ = σ₀[5 ↦ 1]</text>
     <rect x="480" y="60" width="210" height="38" rx="7" fill="#f8fafc" stroke="#94a3b8"/>
-    <text x="585" y="84" fill="#0f172a">&#963;&#8322; = &#963;&#8321;[8 &#8614; &#963;&#8321; 7]</text>
+    <text x="585" y="84" fill="#0f172a">σ₂ = σ₁[8 ↦ σ₁ 7]</text>
   </g>
   <g stroke="#2563eb" stroke-width="1.8" fill="none" marker-end="url(#rq)">
     <path d="M 170 79 L 247 79"/>
@@ -365,7 +364,7 @@ def runSeq {τ : Type} : ParM τ → State → τ × State
   <g font-size="13" font-style="italic" fill="#475569" font-family="var(--sans)">
     <text x="208" y="128">write 5 1</text>
     <text x="438" y="128">read 7, write 8</text>
-    <text x="440" y="172" text-anchor="middle">a total function on a finite tree &#8212; no schedule, no choice, no partiality</text>
+    <text x="440" y="172" text-anchor="middle">a total function on a finite tree — no schedule, no choice, no partiality</text>
   </g>
 </svg>
 </div>
@@ -390,9 +389,9 @@ def childFootprints {αs : List Type} : Childs ParM αs → State → List Footp
 ```
 
 ```html
-<div class="nd mono plain wide">childFootprints &#928;[ p q ] &#963;&#8320;
+<div class="nd mono plain wide">childFootprints Π[ p q ] σ₀
   = [ (reads [], writes [5]),
-      (reads [7], writes [8]) ]<em>the second entry was measured at &#963;&#8321;, not at &#963;&#8320;</em></div>
+      (reads [7], writes [8]) ]<em>the second entry was measured at σ₁, not at σ₀</em></div>
 ```
 :::
 
@@ -406,20 +405,20 @@ def childFootprints {αs : List Type} : Childs ParM αs → State → List Footp
   </defs>
   <g font-family="ui-monospace, monospace" font-size="14" text-anchor="middle">
     <rect x="40" y="26" width="300" height="34" rx="7" fill="#eff6ff" stroke="#2563eb" stroke-width="2.2"/>
-    <text x="190" y="49" fill="#0f172a">q measured at &#963;&#8321;</text>
+    <text x="190" y="49" fill="#0f172a">q measured at σ₁</text>
     <rect x="40" y="128" width="300" height="34" rx="7" fill="#fef2f2" stroke="#dc2626" stroke-width="2.2"/>
-    <text x="190" y="151" fill="#0f172a">q actually runs at &#963;&#8320;</text>
+    <text x="190" y="151" fill="#0f172a">q actually runs at σ₀</text>
   </g>
   <g font-size="13.5" font-style="italic" fill="#475569" font-family="var(--sans)" text-anchor="start">
-    <text x="366" y="42" fill="#1d4ed8">the hypothesis is stated here &#8212; after p finished</text>
-    <text x="366" y="60">so the value read from cell 7 is <tspan font-family="ui-monospace, monospace">&#963;&#8321; 7</tspan></text>
+    <text x="366" y="42" fill="#1d4ed8">the hypothesis is stated here — after p finished</text>
+    <text x="366" y="60">so the value read from cell 7 is <tspan font-family="ui-monospace, monospace">σ₁ 7</tspan></text>
     <text x="366" y="144" fill="#b91c1c">the machine is free to step q first</text>
-    <text x="366" y="162">so the value read from cell 7 is <tspan font-family="ui-monospace, monospace">&#963;&#8320; 7</tspan></text>
+    <text x="366" y="162">so the value read from cell 7 is <tspan font-family="ui-monospace, monospace">σ₀ 7</tspan></text>
   </g>
   <g stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#sg)" stroke-dasharray="5 4">
     <path d="M 190 60 L 190 125"/>
   </g>
-  <text x="440" y="196" text-anchor="middle" font-size="15" font-style="italic" fill="#0f172a">two different heaps &#8212; and nothing so far says the two readings agree</text>
+  <text x="440" y="196" text-anchor="middle" font-size="15" font-style="italic" fill="#0f172a">two different heaps — and nothing so far says the two readings agree</text>
 </svg>
 </div>
 ```
@@ -437,15 +436,15 @@ def Indep (f₁ f₂ : Footprint) : Prop :=
 
 ```html
 <div class="dgm col tight">
-  <div class="nd bad">W&#8321; &#8745; W&#8322; = &#8709;<em>C1 &#183; no cell written twice</em></div>
-  <div class="nd bad">W&#8321; &#8745; R&#8322; = &#8709;<em>C2 &#183; nothing written then read</em></div>
-  <div class="nd bad">W&#8322; &#8745; R&#8321; = &#8709;<em>C3 &#183; nor the other way round</em></div>
-  <div class="nd good">R&#8321; &#8745; R&#8322; &#183; unconstrained<em>there is no fourth clause, and that is the point</em></div>
+  <div class="nd bad">W₁ ∩ W₂ = ∅<em>C1 · no cell written twice</em></div>
+  <div class="nd bad">W₁ ∩ R₂ = ∅<em>C2 · nothing written then read</em></div>
+  <div class="nd bad">W₂ ∩ R₁ = ∅<em>C3 · nor the other way round</em></div>
+  <div class="nd good">R₁ ∩ R₂ · unconstrained<em>there is no fourth clause, and that is the point</em></div>
 </div>
 ```
 :::
 
-```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 235) (endLine := 241) -stretch
+```leanLibCode Paralever.Core.Access (package := paralever) (startLine := 236) (endLine := 242) -stretch
 def WellFormed {τ : Type} : ParM τ → State → Prop
   | .pure _,      _ => True
   | .read l k,    σ => WellFormed (k (σ l)) σ
@@ -491,7 +490,7 @@ inductive Reaches {α : Type} : Conf α → Conf α → Prop where
 ```html
 <div class="dgm col tight">
   <div class="nd">a `par` offers <b>every</b> ready child<em>so every interleaving is a <code>Reaches</code> path</em></div>
-  <div class="nd bad">two ready accesses collide &#8594; <code>wrong</code><em>absorbing: a racy program reaches no answer at all</em></div>
+  <div class="nd bad">two ready accesses collide → <code>wrong</code><em>absorbing: a racy program reaches no answer at all</em></div>
 </div>
 ```
 :::
@@ -502,7 +501,7 @@ how coarsely a write is implemented.
 
 # Canonical outcomes
 
-```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1462) (endLine := 1464) -stretch
+```leanLibCode Paralever.Theory.WellFormedCanonical (package := paralever) (startLine := 1464) (endLine := 1466) -stretch
 theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
     ∀ σ r σ', WellFormed p σ → (Reaches (.run p σ) (.run (.pure r) σ') ↔ (r, σ') = runSeq p σ) :=
   wellFormed_canonical_all.1 p
@@ -518,15 +517,15 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
   </defs>
   <g font-family="ui-monospace, monospace" font-size="13.5" text-anchor="middle" fill="#0f172a">
     <rect x="20"  y="92" width="140" height="34" rx="7" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.8"/>
-    <text x="90" y="114">p, &#963;</text>
+    <text x="90" y="114">p, σ</text>
 
-    <rect x="290" y="16"  width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="37">P&#8321;, &#963;&#8321;</text>
-    <rect x="290" y="62"  width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="83">P&#8322;, &#963;&#8322;</text>
-    <rect x="290" y="126" width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="147">P&#8323;, &#963;&#8323;</text>
-    <rect x="290" y="172" width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="193">P&#8324;, &#963;&#8324;</text>
+    <rect x="290" y="16"  width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="37">P₁, σ₁</text>
+    <rect x="290" y="62"  width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="83">P₂, σ₂</text>
+    <rect x="290" y="126" width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="147">P₃, σ₃</text>
+    <rect x="290" y="172" width="150" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="365" y="193">P₄, σ₄</text>
 
     <rect x="600" y="92" width="250" height="34" rx="7" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.6"/>
-    <text x="725" y="114" fill="#312e81">pure r, &#963;&#8242;</text>
+    <text x="725" y="114" fill="#312e81">pure r, σ′</text>
   </g>
   <g stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#cn)">
     <path d="M 160 109 L 220 109 L 220 31 L 287 31"/>
@@ -540,7 +539,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
   </g>
   <g font-size="13" font-style="italic" fill="#475569" font-family="var(--sans)" text-anchor="middle">
     <text x="365" y="214">different schedules visit different configurations</text>
-    <text x="725" y="146" fill="#4f46e5">and <tspan font-family="ui-monospace, monospace">(r, &#963;&#8242;) = runSeq p &#963;</tspan></text>
+    <text x="725" y="146" fill="#4f46e5">and <tspan font-family="ui-monospace, monospace">(r, σ′) = runSeq p σ</tspan></text>
   </g>
 </svg>
 </div>
@@ -558,9 +557,9 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
 
 ```html
 <div class="dgm col tight">
-  <div class="nd bad wide">1 &#183; induct on steps, comparing the two machines<em>false &#8212; after one step the parallel machine has done q's read and the sequential one p's write: there is no step-by-step correspondence</em></div>
-  <div class="nd bad wide">2 &#183; enumerate the schedules<em>hopeless &#8212; two children of n and m steps give C(n+m, n) interleavings, and children nest</em></div>
-  <div class="nd key wide">3 &#183; find a quantity that never changes<em>computable at any configuration, invariant under stepping, and equal to the answer at the end</em></div>
+  <div class="nd bad wide">1 · induct on steps, comparing the two machines<em>false — after one step the parallel machine has done q's read and the sequential one p's write: there is no step-by-step correspondence</em></div>
+  <div class="nd bad wide">2 · enumerate the schedules<em>hopeless — two children of n and m steps give C(n+m, n) interleavings, and children nest</em></div>
+  <div class="nd key wide">3 · find a quantity that never changes<em>computable at any configuration, invariant under stepping, and equal to the answer at the end</em></div>
 </div>
 ```
 
@@ -579,7 +578,7 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
 
 ```html
 <div class="dgm tight">
-  <div class="nd mono plain wide">p = write 5 1 &#183;        q = read 7 (&#955;v. write 8 v)        at &#963;&#8320;<em>the tail steps first: q performs its read <b>at &#963;&#8320;</b>, so q&#8323; = write 8 (&#963;&#8320; 7)</em></div>
+  <div class="nd mono plain wide">p = write 5 1 ·        q = read 7 (λv. write 8 v)        at σ₀<em>the tail steps first: q performs its read <b>at σ₀</b>, so q₃ = write 8 (σ₀ 7)</em></div>
 </div>
 ```
 
@@ -588,18 +587,18 @@ theorem wellFormed_canonical {τ : Type} (p : ParM τ) :
 <svg viewBox="0 0 880 215" role="img" aria-label="the two readings of the same fork, differing only in which heap cell 7 was read from">
   <g font-family="ui-monospace, monospace" font-size="14" text-anchor="start">
     <rect x="20" y="16" width="400" height="88" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
-    <text x="38" y="40" fill="#0f172a" font-size="13">runChilds &#928;[ p q&#8323; ] &#963;&#8320;</text>
-    <text x="38" y="62" fill="#334155" font-size="13">run p &#8594; &#963;&#8321;;  then q&#8323; writes <tspan fill="#b91c1c">&#963;&#8320; 7</tspan> into 8</text>
-    <text x="38" y="88" fill="#0f172a" font-size="14">&#963;&#8321;[8 &#8614; <tspan fill="#b91c1c">&#963;&#8320; 7</tspan>]</text>
+    <text x="38" y="40" fill="#0f172a" font-size="13">runChilds Π[ p q₃ ] σ₀</text>
+    <text x="38" y="62" fill="#334155" font-size="13">run p → σ₁;  then q₃ writes <tspan fill="#b91c1c">σ₀ 7</tspan> into 8</text>
+    <text x="38" y="88" fill="#0f172a" font-size="14">σ₁[8 ↦ <tspan fill="#b91c1c">σ₀ 7</tspan>]</text>
 
     <rect x="460" y="16" width="400" height="88" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
-    <text x="478" y="40" fill="#0f172a" font-size="13">runChilds &#928;[ p q ] &#963;&#8320;</text>
-    <text x="478" y="62" fill="#334155" font-size="13">run p &#8594; &#963;&#8321;;  then q reads 7 &#8212; getting <tspan fill="#1d4ed8">&#963;&#8321; 7</tspan></text>
-    <text x="478" y="88" fill="#0f172a" font-size="14">&#963;&#8321;[8 &#8614; <tspan fill="#1d4ed8">&#963;&#8321; 7</tspan>]</text>
+    <text x="478" y="40" fill="#0f172a" font-size="13">runChilds Π[ p q ] σ₀</text>
+    <text x="478" y="62" fill="#334155" font-size="13">run p → σ₁;  then q reads 7 — getting <tspan fill="#1d4ed8">σ₁ 7</tspan></text>
+    <text x="478" y="88" fill="#0f172a" font-size="14">σ₁[8 ↦ <tspan fill="#1d4ed8">σ₁ 7</tspan>]</text>
   </g>
-  <text x="440" y="136" text-anchor="middle" font-size="15.5" fill="#0f172a">these agree <tspan font-weight="700">if and only if</tspan> <tspan font-family="ui-monospace, monospace">&#963;&#8321; 7 = &#963;&#8320; 7</tspan></text>
-  <text x="440" y="164" text-anchor="middle" font-size="14" fill="#15803d" font-family="ui-monospace, monospace">7 &#8713; writes (accesses p &#963;&#8320;) = {5}</text>
-  <text x="440" y="190" text-anchor="middle" font-size="13.5" font-style="italic" fill="#475569" font-family="var(--sans)">clause C2 of <tspan font-family="ui-monospace, monospace">Indep</tspan>, together with the frame lemma &#8212; and nothing else</text>
+  <text x="440" y="136" text-anchor="middle" font-size="15.5" fill="#0f172a">these agree <tspan font-weight="700">if and only if</tspan> <tspan font-family="ui-monospace, monospace">σ₁ 7 = σ₀ 7</tspan></text>
+  <text x="440" y="164" text-anchor="middle" font-size="14" fill="#15803d" font-family="ui-monospace, monospace">7 ∉ writes (accesses p σ₀) = {5}</text>
+  <text x="440" y="190" text-anchor="middle" font-size="13.5" font-style="italic" fill="#475569" font-family="var(--sans)">clause C2 of <tspan font-family="ui-monospace, monospace">Indep</tspan>, together with the frame lemma — and nothing else</text>
 </svg>
 </div>
 ```
@@ -626,7 +625,7 @@ saying it in general: at `N` children instead of two, and at an arbitrary depth 
     <rect x="240" y="14" width="200" height="74" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
     <text x="340" y="34" font-family="ui-monospace, monospace" font-size="13.5" fill="#0f172a">..._locality</text>
     <text x="340" y="56" fill="#334155">two heaps agreeing where</text>
-    <text x="340" y="74" fill="#334155">it looks &#8658; same run</text>
+    <text x="340" y="74" fill="#334155">it looks ⇒ same run</text>
 
     <rect x="462" y="14" width="200" height="74" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2.4"/>
     <text x="562" y="34" font-family="ui-monospace, monospace" font-size="13.5" fill="#0f172a">..._isolated</text>
@@ -789,12 +788,12 @@ theorem runSeq_invariant_chain {τ : Type} (P : ParM τ) (σ : State) (hwf : Wel
     </marker>
   </defs>
   <g font-family="ui-monospace, monospace" font-size="13" text-anchor="middle" fill="#0f172a">
-    <rect x="20"  y="78" width="120" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="80"  y="98">P, &#963;</text>
-    <rect x="250" y="30" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="310" y="50">P&#8321;, &#963;&#8321;</text>
-    <rect x="250" y="126" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="310" y="146">P&#8321;&#8242;, &#963;&#8321;&#8242;</text>
-    <rect x="480" y="30" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="540" y="50">P&#8322;, &#963;&#8322;</text>
-    <rect x="480" y="126" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="540" y="146">P&#8322;&#8242;, &#963;&#8322;&#8242;</text>
-    <rect x="710" y="78" width="150" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/><text x="785" y="98" fill="#312e81">pure r, &#963;&#8242;</text>
+    <rect x="20"  y="78" width="120" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="80"  y="98">P, σ</text>
+    <rect x="250" y="30" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="310" y="50">P₁, σ₁</text>
+    <rect x="250" y="126" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="310" y="146">P₁′, σ₁′</text>
+    <rect x="480" y="30" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="540" y="50">P₂, σ₂</text>
+    <rect x="480" y="126" width="120" height="30" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="540" y="146">P₂′, σ₂′</text>
+    <rect x="710" y="78" width="150" height="30" rx="6" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/><text x="785" y="98" fill="#312e81">pure r, σ′</text>
   </g>
   <g stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#iv)">
     <path d="M 140 93 L 190 93 L 190 45 L 247 45"/>
@@ -808,7 +807,7 @@ theorem runSeq_invariant_chain {τ : Type} (P : ParM τ) (σ : State) (hwf : Wel
     <text x="80" y="124">WellFormed</text><text x="310" y="76">WellFormed</text><text x="310" y="172">WellFormed</text>
     <text x="540" y="76">WellFormed</text><text x="540" y="172">WellFormed</text><text x="785" y="124">WellFormed</text>
   </g>
-  <text x="440" y="200" text-anchor="middle" font-size="13.5" font-style="italic" fill="#1d4ed8" font-family="var(--sans)">runSeq reads the same (r, &#963;&#8242;) at every one of these configurations</text>
+  <text x="440" y="200" text-anchor="middle" font-size="13.5" font-style="italic" fill="#1d4ed8" font-family="var(--sans)">runSeq reads the same (r, σ′) at every one of these configurations</text>
 </svg>
 </div>
 ```
@@ -823,8 +822,8 @@ shrinking either side.
 
 ```html
 <div class="dgm col tight">
-  <div class="nd good wide">&#8594; &nbsp; apply chaining to the run, at <code>P&#8242; := pure r</code><em><code>runSeq (pure r) &#963;&#8242; = runSeq p &#963;</code>, and the left side is <code>(r, &#963;&#8242;)</code> by definition &#8212; so <code>(r, &#963;&#8242;) = runSeq p &#963;</code></em></div>
-  <div class="nd good wide">&#8592; &nbsp; build the left-to-right schedule<em>run child 1 to completion &#8212; which is this theorem one level down &#8212; then child 2, then step through the join into the continuation</em></div>
+  <div class="nd good wide">→ &nbsp; apply chaining to the run, at <code>P′ := pure r</code><em><code>runSeq (pure r) σ′ = runSeq p σ</code>, and the left side is <code>(r, σ′)</code> by definition — so <code>(r, σ′) = runSeq p σ</code></em></div>
+  <div class="nd good wide">← &nbsp; build the left-to-right schedule<em>run child 1 to completion — which is this theorem one level down — then child 2, then step through the join into the continuation</em></div>
 </div>
 ```
 
@@ -882,11 +881,11 @@ theorem parAll_par_seq_eq {τ : Type} (ps : List (ParM τ)) (σ : State)
 ```html
 <div class="dgm tight">
   <div class="nd mono bad">p = write 5 1
-q&#8242; = read 5 (&#955;v. write 8 v)<em>q&#8242; reads the cell p writes &#183; W&#8321; &#8745; R&#8322; = {5}, so C2 fails</em></div>
-  <div class="arr lbl2">&#8594;<small>two schedules</small></div>
+q′ = read 5 (λv. write 8 v)<em>q′ reads the cell p writes · W₁ ∩ R₂ = {5}, so C2 fails</em></div>
+  <div class="arr lbl2">→<small>two schedules</small></div>
   <div class="dgm col tight">
-    <div class="nd bad">q&#8242; first &#183; cell 8 &#8614; &#963;&#8320; 5<em>reads the old value</em></div>
-    <div class="nd bad">p first &#183; cell 8 &#8614; 1<em>reads the new one</em></div>
+    <div class="nd bad">q′ first · cell 8 ↦ σ₀ 5<em>reads the old value</em></div>
+    <div class="nd bad">p first · cell 8 ↦ 1<em>reads the new one</em></div>
   </div>
 </div>
 ```
@@ -913,9 +912,9 @@ for i in n { … }        parfor i in n { … }        while (c) in n { … }<em
 
 ```html
 <div class="ladder">
-  <div class="tier"><b>literal address</b> &nbsp; <code>[2] := %0</code> &nbsp;&#183;&nbsp; footprint is <i>exact</i></div>
-  <div class="tier"><b>computed address</b> &nbsp; <code>A[B[i]]</code> &nbsp;&#183;&nbsp; footprint is the whole array</div>
-  <div class="tier"><b>branch</b> &nbsp; <code>if c {…} else {…}</code> &nbsp;&#183;&nbsp; footprint is the branch <i>union</i></div>
+  <div class="tier"><b>literal address</b> &nbsp; <code>[2] := %0</code> &nbsp;·&nbsp; footprint is <i>exact</i></div>
+  <div class="tier"><b>computed address</b> &nbsp; <code>A[B[i]]</code> &nbsp;·&nbsp; footprint is the whole array</div>
+  <div class="tier"><b>branch</b> &nbsp; <code>if c {…} else {…}</code> &nbsp;·&nbsp; footprint is the branch <i>union</i></div>
 </div>
 ```
 
@@ -945,19 +944,19 @@ footprint contains every cell actually touched, at every heap. `wfB s = true` im
 <div class="dgm tight">
   <div class="nd mono bad">parallel { [0] := 1 }
          | { %0 := [0]; [1] := %0 }<em>store x on one core, load x on another</em></div>
-  <div class="arr lbl2">&#8594;<small>decide</small></div>
+  <div class="arr lbl2">→<small>decide</small></div>
   <div class="nd key">wfB = false<br/><code>block [·,·]</code> = true<em>the only legal placement is in sequence</em></div>
 </div>
 ```
 
 ```html
 <div class="nd mono plain wide">step:thread  action          state
-0:T0         write [10] &#8592; 1  10&#8614;1, 9&#8614;0, 20&#8614;0
-1:T1         write [20] &#8592; 1  10&#8614;1, 9&#8614;0, 20&#8614;1
-2:T1         write [9] &#8592; 2   pending
-2:T0         write [9] &#8592; 1   pending
-Parallel aborts at Step 2. Reason: T0, T1 write to: &#123;9&#125;.
-Parallel: 9&#8614;1          Sequential: 9&#8614;2<em>`explainProg late σ₀` &#183; the counterexample is an execution, so the report is one</em></div>
+0:T0         write [10] ← 1  10↦1, 9↦0, 20↦0
+1:T1         write [20] ← 1  10↦1, 9↦0, 20↦1
+2:T1         write [9] ← 2   pending
+2:T0         write [9] ← 1   pending
+Parallel aborts at Step 2. Reason: T0, T1 write to: {9}.
+Parallel: 9↦1          Sequential: 9↦2<em>`explainProg late σ₀` · the counterexample is an execution, so the report is one</em></div>
 ```
 
 :::class "steps"
@@ -1024,10 +1023,10 @@ symbolic size. The matmul's is `decide` on a concrete `n`, which is where the ce
   <g font-size="13" text-anchor="middle" fill="#2563eb" font-style="italic">
     <text x="178" y="56">RAW on [0]</text>
     <text x="358" y="56">register flow</text>
-    <text x="630" y="48" fill="#0d9488">no edge &#8212; nothing it touches</text>
+    <text x="630" y="48" fill="#0d9488">no edge — nothing it touches</text>
     <text x="630" y="130" fill="#0d9488">so it may start at round 1</text>
   </g>
-  <text x="370" y="166" text-anchor="middle" font-size="14" font-style="italic" fill="#475569">one pass, O(&#8721; footprints) &#8212; not the O(n&#178;) pairwise scan</text>
+  <text x="370" y="166" text-anchor="middle" font-size="14" font-style="italic" fill="#475569">one pass, O(∑ footprints) — not the O(n²) pairwise scan</text>
 </svg>
 </div>
 ```
@@ -1086,15 +1085,15 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
     </marker>
   </defs>
   <g font-family="ui-monospace, monospace" font-size="14" text-anchor="middle" fill="#0f172a">
-    <rect x="30"  y="14" width="200" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="130" y="34">C / C++ &#8212; cgeist</text>
-    <rect x="300" y="14" width="200" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="400" y="34">Fortran &#8212; flang</text>
+    <rect x="30"  y="14" width="200" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="130" y="34">C / C++ — cgeist</text>
+    <rect x="300" y="14" width="200" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="400" y="34">Fortran — flang</text>
     <rect x="570" y="14" width="220" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="680" y="34">a .mlir by hand</text>
 
     <rect x="250" y="106" width="320" height="34" rx="7" fill="#f1f5f9" stroke="#0d9488" stroke-width="2.2"/>
     <text x="410" y="129">MLIR generic form</text>
 
     <rect x="250" y="196" width="320" height="34" rx="7" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.4"/>
-    <text x="410" y="219" fill="#312e81">Layout &#215; ParProg</text>
+    <text x="410" y="219" fill="#312e81">Layout × ParProg</text>
 
     <rect x="250" y="272" width="320" height="34" rx="7" fill="#eff6ff" stroke="#2563eb" stroke-width="2.2"/>
     <text x="410" y="295">wfB, raceSites, par_seq_eq</text>
@@ -1109,8 +1108,8 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
     <path d="M 410 230 L 410 269"/>
   </g>
   <g font-size="13" font-style="italic">
-    <text x="640" y="98" fill="#475569" text-anchor="middle">stage 1 &#183; off the shelf, a text format</text>
-    <text x="640" y="170" fill="#4f46e5" text-anchor="middle">stage 2 &#183; MLIR/, in Lean &#8212; one artifact to test</text>
+    <text x="640" y="98" fill="#475569" text-anchor="middle">stage 1 · off the shelf, a text format</text>
+    <text x="640" y="170" fill="#4f46e5" text-anchor="middle">stage 2 · MLIR/, in Lean — one artifact to test</text>
     <text x="640" y="292" fill="#2563eb" text-anchor="middle">the verdict</text>
   </g>
 </svg>
@@ -1132,29 +1131,29 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
 
 ```html
 <div class="dgm tight">
-  <div class="nd mono plain">"affine.parallel"() (&#123;
+  <div class="nd mono plain">"affine.parallel"() ({
 ^bb0(%i: index):
-  %0 = "affine.load"(%A, %i) &#123;map = ...&#125;
-  %1 = "affine.load"(%B, %i) &#123;map = ...&#125;
+  %0 = "affine.load"(%A, %i) {map = ...}
+  %1 = "affine.load"(%B, %i) {map = ...}
   %2 = "arith.addi"(%0, %1)
-  "affine.store"(%2, %C, %i) &#123;map = ...&#125;
-&#125;) &#123;upperBoundsMap = ... (8)&#125;<em>C[i] := A[i] + B[i], generic form</em></div>
-  <div class="arr lbl2">&#8594;<small>MLIR.lower</small></div>
-  <div class="nd mono blue">parallel &#123;
-  thread 0 &#123; t0 := M[0]; t1 := M[8];  M[16] := (t0 + t1); &#125;
-  thread 1 &#123; t0 := M[1]; t1 := M[9];  M[17] := (t0 + t1); &#125;
-  &#8230;
-  thread 7 &#123; t0 := M[7]; t1 := M[15]; M[23] := (t0 + t1); &#125;
-&#125;<em>one thread per point of the index box</em></div>
+  "affine.store"(%2, %C, %i) {map = ...}
+}) {upperBoundsMap = ... (8)}<em>C[i] := A[i] + B[i], generic form</em></div>
+  <div class="arr lbl2">→<small>MLIR.lower</small></div>
+  <div class="nd mono blue">parallel {
+  thread 0 { t0 := M[0]; t1 := M[8];  M[16] := (t0 + t1); }
+  thread 1 { t0 := M[1]; t1 := M[9];  M[17] := (t0 + t1); }
+  …
+  thread 7 { t0 := M[7]; t1 := M[15]; M[23] := (t0 + t1); }
+}<em>one thread per point of the index box</em></div>
 </div>
 ```
 
 ```html
 <div class="dgm col tight">
-  <div class="nd mono plain wide">"affine.store"(%v, %A, %i, %j) &#123;map = affine_map&lt;(d0, d1) -&gt; (d0, d1)&gt;&#125;<em>the map applied to (i, j) <b>is</b> the subscript — no analysis, no inference</em></div>
-  <div class="arr">&#9660;</div>
-  <div class="nd mono wide">Layout.at "A" [i, j]  =  A.base + i&#183;cols + j<em>range-checked against its own buffer, because `Layout.at` is total</em></div>
-  <div class="arr">&#9660;</div>
+  <div class="nd mono plain wide">"affine.store"(%v, %A, %i, %j) {map = affine_map&lt;(d0, d1) -&gt; (d0, d1)&gt;}<em>the map applied to (i, j) <b>is</b> the subscript — no analysis, no inference</em></div>
+  <div class="arr">▼</div>
+  <div class="nd mono wide">Layout.at "A" [i, j]  =  A.base + i·cols + j<em>range-checked against its own buffer, because `Layout.at` is total</em></div>
+  <div class="arr">▼</div>
   <div class="nd key wide">wr (i, j) = [that cell]<em>which is exactly what `wfB_parFor_of_lists` asks for</em></div>
 </div>
 ```
@@ -1201,7 +1200,7 @@ theorem rewrite_sound (p : ParProg) (ρ : Regs) (σ : State) :
 :::
 
 ```html
-<div class="links">0 sorries &#183; <a href="https://github.com/AnirudhG07/paralever">github.com/AnirudhG07/paralever</a> &#183; contact@shemeka.in</div>
+<div class="links">0 sorries · <a href="https://github.com/AnirudhG07/paralever">github.com/AnirudhG07/paralever</a> · contact@shemeka.in</div>
 ```
 
 # References

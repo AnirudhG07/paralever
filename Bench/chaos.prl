@@ -90,14 +90,14 @@ synchronize
 synchronize
 
 -- stage 54
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 65
@@ -153,22 +153,22 @@ for i in m {
 synchronize
 
 -- stage 117
-%t := 0
+acc[12] := 0
 for i in m {
   %z := U[i]
-  %t := %t + %z
+  %s := acc[12]
+  acc[12] := %s + %z
 }
-acc[12] := %t
 synchronize
 
 -- stage 126
 %i := acc[12]
-%w := 0
+acc[5] := 0
 while %i in 8 {
-  %w := %w + %i
+  %s := acc[5]
+  acc[5] := %s + %i
   %i := %i - 1
 }
-acc[5] := %w
 synchronize
 
 -- stage 136
@@ -270,14 +270,14 @@ synchronize
 synchronize
 
 -- stage 234
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 245
@@ -333,22 +333,22 @@ for i in m {
 synchronize
 
 -- stage 297
-%t := 0
+acc[12] := 0
 for i in m {
   %z := U[i]
-  %t := %t + %z
+  %s := acc[12]
+  acc[12] := %s + %z
 }
-acc[12] := %t
 synchronize
 
 -- stage 306
 %i := acc[12]
-%w := 0
+acc[5] := 0
 while %i in 8 {
-  %w := %w + %i
+  %s := acc[5]
+  acc[5] := %s + %i
   %i := %i - 1
 }
-acc[5] := %w
 synchronize
 
 -- stage 316
@@ -450,14 +450,14 @@ synchronize
 synchronize
 
 -- stage 414
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 425
@@ -513,22 +513,22 @@ for i in m {
 synchronize
 
 -- stage 477
-%t := 0
+acc[12] := 0
 for i in m {
   %z := U[i]
-  %t := %t + %z
+  %s := acc[12]
+  acc[12] := %s + %z
 }
-acc[12] := %t
 synchronize
 
 -- stage 486
 %i := acc[12]
-%w := 0
+acc[5] := 0
 while %i in 8 {
-  %w := %w + %i
+  %s := acc[5]
+  acc[5] := %s + %i
   %i := %i - 1
 }
-acc[5] := %w
 synchronize
 
 -- stage 496
@@ -630,14 +630,14 @@ synchronize
 synchronize
 
 -- stage 594
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 605
@@ -703,12 +703,12 @@ synchronize
 
 -- stage 666
 %i := acc[12]
-%w := 0
+acc[5] := 0
 while %i in 8 {
-  %w := %w + %i
+  %s := acc[5]
+  acc[5] := %s + %i
   %i := %i - 1
 }
-acc[5] := %w
 synchronize
 
 -- stage 676
@@ -810,14 +810,14 @@ synchronize
 synchronize
 
 -- stage 774
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 785
@@ -873,22 +873,22 @@ for i in m {
 synchronize
 
 -- stage 837
-%t := 0
+acc[12] := 0
 for i in m {
   %z := U[i]
-  %t := %t + %z
+  %s := acc[12]
+  acc[12] := %s + %z
 }
-acc[12] := %t
 synchronize
 
 -- stage 846
 %i := acc[12]
-%w := 0
+acc[5] := 0
 while %i in 8 {
-  %w := %w + %i
+  %s := acc[5]
+  acc[5] := %s + %i
   %i := %i - 1
 }
-acc[5] := %w
 synchronize
 
 -- stage 856
@@ -990,14 +990,14 @@ synchronize
 synchronize
 
 -- stage 954
-%t := 0
+acc[3] := 0
 for i in n {
   for j in n {
     %z := C[i, j]
-    %t := %t + %z
+    %s := acc[3]
+    acc[3] := %s + %z
   }
 }
-acc[3] := %t
 synchronize
 
 -- stage 965

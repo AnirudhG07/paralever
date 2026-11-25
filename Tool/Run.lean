@@ -27,6 +27,8 @@ structure Opts where
   realThreads : Bool := false
   /-- `to-prl`: ANSI colour, in the editor grammar's token classes. -/
   colour  : Bool := false
+  /-- `to-prl`: the same token classes as HTML spans, for a page or a deck. -/
+  html    : Bool := false
   /-- `prove`, `to-mlir`: the subject is the autoparallelized program. -/
   autopar : Bool := false
   /-- `autopar`: rewrite only inside the marked regions. -/
@@ -44,6 +46,9 @@ structure Opts where
   verbose : Bool := true
   /-- `run`: every cell of every buffer, however many there are. -/
   full    : Bool := false
+  /-- `run`: execute this many times under random schedules instead of once in the canonical
+  order, and group the runs by the outcome they left. `0` is off. -/
+  runAgain : Nat := 0
   /-- `check`: the same facts as data. -/
   json    : Bool := false
   /-- Any command: how much processor time it took. -/
@@ -66,7 +71,9 @@ def commands : List String :=
 def options : List String :=
   [ "-o", "--real-threads", "--autopar", "--regions", "--typecheck", "--solve", "--solver"
   , "--timeout", "--assume", "--prove", "--func", "--buffer", "-b", "--quiet", "-q"
-  , "--verbose", "-v", "--full", "--json", "--time", "--color", "--help", "-h", "--version" ]
+  , "--verbose", "-v", "--full", "--run-again", "-ra", "--json", "--time", "--color", "--html"
+  , "--help", "-h"
+  , "--version" ]
 
 /-- Edit distance, capped: used only to name the likely spelling in an error. -/
 private def editDist : List Char → List Char → Nat
@@ -123,6 +130,7 @@ options
   -b, --buffer NAME   run: one buffer, or one cell — --buffer 'C[1, 2]'
   --full              run: every cell, not the first 32 of each buffer
   --real-threads      run: one Task per thread, on real cores
+  -ra, --run-again N  run: N runs under random schedules, grouped by outcome
   --autopar           prove, to-mlir, to-lean: take the parallelized program
   --regions           autopar: rewrite only inside the marked regions
   --typecheck         prove: run lake env lean on the generated file
@@ -133,6 +141,7 @@ options
   --assume nonneg     vc: assume every value read from the heap is at or above zero
   --func NAME         the function to read, for an MLIR module holding several
   --color             to-prl: ANSI colour
+  --html              to-prl: the same token classes as HTML spans
   -h, --help          this
   --version
 
@@ -183,7 +192,18 @@ where
     | "--quiet" :: as,      o => go as { o with verbose := false }
     | "-q" :: as,           o => go as { o with verbose := false }
     | "--full" :: as,       o => go as { o with full := true }
+    | "--run-again" :: v :: as, o =>
+        match v.toNat? with
+        | some n => go as { o with runAgain := n }
+        | none   => .error s!"--run-again: '{v}' is not a number of runs"
+    | "-ra" :: v :: as, o =>
+        match v.toNat? with
+        | some n => go as { o with runAgain := n }
+        | none   => .error s!"-ra: '{v}' is not a number of runs"
+    | "--run-again" :: [], _ => .error "--run-again needs a number of runs, as `--run-again 10`"
+    | "-ra" :: [],         _ => .error "-ra needs a number of runs, as `-ra 10`"
     | "--color" :: as,   o => go as { o with colour := true }
+    | "--html" :: as,    o => go as { o with html := true }
     | a :: as,           o =>
         if a.startsWith "-" then
           match renamed.lookup a with
@@ -387,6 +407,25 @@ def run (o : Opts) (t0 : Nat × Option Nat) : IO UInt32 := do
       let rc ← if o.proof.isSome then prove { o with out := o.proof } c k else pure 0
       pure (if sites.isEmpty && claimHolds c then rc else 1)
   | "run"     => do
+      if o.runAgain > 0 then
+        -- a Task is scheduled by the runtime, so there is no interleaving left to choose
+        if o.realThreads then
+          IO.eprintln "--real-threads and --run-again do not combine: the random schedule is \
+            chosen by the interpreter, and a Task is scheduled by the Lean runtime"
+          return 2
+        -- `print` output belongs to a run, and this report is about several, so it is left out.
+        -- The random walk is `Search/Interleave.lean`'s; `walk_reaches` is why its answers count.
+        let name ← match o.buffer with
+          | none     => pure none
+          | some sel => match splitIdx sel with
+            | .error e      => do IO.eprintln s!"{o.file}: {e}"; return 2
+            | .ok (nm, _)   =>
+              if (c.layout.find? nm).isSome then pure (some nm)
+              else do
+                IO.eprintln s!"{o.file}: -b {sel}: no buffer named '{nm}'"
+                return 2
+        put o.out (interleaveReport c o.runAgain o.full name)
+        return 0
       match o.buffer with
       | none     => do put o.out (runBody o c); pure 0
       | some sel =>
@@ -421,7 +460,7 @@ def run (o : Opts) (t0 : Nat × Option Nat) : IO UInt32 := do
   | "prove"   => prove o c k
   | "to-prl"  => do
       let text := noteLines notes ++ toPrl c
-      put o.out (if o.colour then highlight text else text)
+      put o.out (if o.html then highlightHtml text else if o.colour then highlight text else text)
       pure 0
   | "to-mlir" => toMlir o c
   | "to-lean" => do

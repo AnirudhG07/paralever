@@ -227,6 +227,29 @@ def stripe : Compiled := prl_file "../Examples/Language/stripe.prl"
 -- a run executes and says nothing about the verdict, so a racy program's body is a plain run
 #guard runBody {} race == runReport race false
 
+/-! ## Random schedules
+
+`--run-again` walks `step` choosing a successor at random. What is gated is the claim the report
+makes: a well-formed program leaves one outcome however the children are interleaved, and a racy one
+leaves several. These are `par_seq_eq` and its converse, observed rather than proved — the proof is
+`Theory/Sequentialize.lean`, and `walk_reaches` is what makes these runs executions of the same
+semantics. -- ref: `docs/interleave.md` -/
+
+-- twenty interleavings of a well-formed program, one answer
+#guard distinctOutcomes matmul 20 == 1
+#guard distinctOutcomes sum 20 == 1
+#guard distinctOutcomes stencil 20 == 1
+#guard distinctOutcomes chain 20 == 1
+-- anti-vacuity: the gate above would pass on any program whose schedules are never explored, so a
+-- racy program must give more than one outcome under the same number of runs
+#guard distinctOutcomes race 20 > 1
+-- and the outcomes are outcomes: no run is cut short by the step budget
+#guard (interleavedRuns race 20).all (fun r => !r.stalled)
+#guard (interleavedRuns matmul 20).all (fun r => !r.stalled)
+-- the canonical order is among the outcomes a random walk finds
+#guard ((interleavedRuns matmul 20).any
+          (fun r => r.probe == (arenaCells matmul.layout).map (heapAfter matmul false)))
+
 /-! ## The version
 
 `Paralever/Version.lean` reads `lakefile.toml`, so these gates fail if the declaration is removed

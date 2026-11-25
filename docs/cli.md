@@ -46,6 +46,7 @@ written once.
 | `FILE` (no command) | `check`'s report, then what `print` wrote, then the interleaving if there is one | `Lang.checkReport`, `Lang.outReport` |
 | `check FILE` | memory, reads, writes, thread count, rounds, verdict | `Lang.checkReport` |
 | `run FILE [--buffer NAME]` | what `print` wrote, then the heap after a run, buffer by buffer, or one buffer of it | `Tool.runBody`, `Lang.runCell` |
+| `run FILE --run-again N` | N runs under random schedules, grouped by the outcome each left | `Lang.interleaveReport` |
 | `race FILE` | the interleaving that reaches `wrong`, step by step | `Lang.raceReport` |
 | `autopar FILE` | the parallelized program as `.prl`, with the plan's numbers | `Lang.parReport` |
 | `funcs FILE` | what an MLIR module holds, function by function, and whether the reader takes each | `Tool.funcsReport` |
@@ -58,9 +59,14 @@ written once.
 
 `-o PATH` writes there instead of to standard output. `--real-threads` runs one `Task` per thread of
 every fork rather than the canonical order — the heap is the same one, which is what `runTask_eq`
-says for every program `wfB` accepts. `--autopar` makes `prove`, `to-mlir` and `to-lean` take the
+says for every program `wfB` accepts. `--run-again N` (`-ra N`) is the opposite knob: it runs the
+program N times under *randomly chosen* schedules and groups the runs by outcome, so the schedule
+dependence a program does or does not have becomes visible (`docs/interleave.md`). The two refuse to
+combine, because a `Task`'s order is the runtime's to pick and not the tool's. `--autopar` makes `prove`, `to-mlir` and `to-lean` take the
 parallelized program as their subject. `--color` paints `to-prl`'s output in the editor grammar's
-token classes. `to-lean` writes a snippet rather than a module, so it carries no header: pasting it
+token classes, and `--html` writes those same classes as `<span>` elements for a page or a deck to
+style. Both are folds over one token scan in `Lang/Compile/Print.lean` (`prlTokens`), so the two
+renderings can never disagree about where a token begins; `cssClass` there fixes the class names. `to-lean` writes a snippet rather than a module, so it carries no header: pasting it
 needs `import Lang.Core.Notation`, `import Lang.Core.Layout` and `open Paralever Paralever.Lang`.
 With those three lines every example's Lean form elaborates except a rolled nest, which has no
 surface syntax yet and prints in the library's own vocabulary (`docs/loops.md`). The block is one
@@ -404,6 +410,43 @@ is where `Layout.at "C" [1, 1]` sends that subscript. A name no buffer has, or a
 the shape, is an error naming what the program does declare, and exits 2 rather than printing a
 default. When the program has a race, `--buffer`'s caveat goes to standard error, so the one line on
 standard output stays greppable.
+
+### Many runs, randomly interleaved
+
+`--run-again N` (`-ra N`) walks `step` choosing a successor at random, N times, and groups the runs
+by what they left behind.
+
+```console
+$ paralever run Examples/Language/matmul.prl -ra 10
+10 runs under random schedules, 1 distinct outcome — every schedule agreed.
+
+outcome — 10 runs (seeds 0 1 2 3 4 5 6 7 … +2)
+A [2, 2] @0  [1, 2]
+             [3, 4]
+B [2, 2] @4  [5, 6]
+             [7, 8]
+C [2, 2] @8  [19, 22]
+             [43, 50]
+
+$ paralever run Examples/Language/race.prl -ra 10
+10 runs under random schedules, 3 distinct outcomes — the schedule decides what this program computes.
+
+outcome 1 — 2 runs (seeds 0 7)
+x [1] @0  [7]
+log [2] @1  [1, 1]
+
+outcome 2 — 6 runs (seeds 1 3 4 6 8 9): wrong — this schedule caught a race
+
+outcome 3 — 2 runs (seeds 2 5)
+x [1] @0  [9]
+log [2] @1  [1, 1]
+```
+
+Outcomes are told apart on every cell of the arena and every register the file names, so `--buffer`
+narrows what is printed and never what agreement is claimed on. The seeds are listed because the
+generator is seeded rather than drawn from the operating system: re-running with a seed replays that
+interleaving. This is evidence, not a decision — `check` decides and `prove` proves. See
+`docs/interleave.md`.
 
 A report is read, not elaborated, so none of it is commented out. `check`, `run`, `race` and the
 no-command verdict print plain lines; the `--` prefix is kept for output that is *source* —
